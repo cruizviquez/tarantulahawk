@@ -418,6 +418,7 @@ export default function TarantulaHawkWebsite() {
           </p>
         </div>
       </footer>
+    </div>
 
   {showContact && (
     <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-50 p-6" onClick={() => setShowContact(false)}>
@@ -533,4 +534,6 @@ export default function TarantulaHawkWebsite() {
   {showOnboarding && (
     <OnboardingForm onClose={() => setShowOnboarding(false)} />
   )}
+  </>
+  );
 }
