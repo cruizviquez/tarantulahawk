@@ -420,122 +420,117 @@ export default function TarantulaHawkWebsite() {
       </footer>
 
   {showContact && (
-      {showOnboarding && (
-        <OnboardingForm onClose={() => setShowOnboarding(false)} />
-      )}
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-50 p-6" onClick={() => setShowContact(false)}>
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 max-w-2xl w-full" onClick={(e) => e.stopPropagation()}>
-            {!submitted ? (
-              <>
-                <div className="flex justify-between items-start mb-6">
-                  <div>
-                    <h2 className="text-3xl font-black mb-2">{language === 'en' ? 'Get In Touch' : 'Contactanos'}</h2>
-                    <p className="text-gray-400">
-                      {language === 'en' 
-                        ? 'Contact our AML compliance team for demos, partnerships, or technical questions about our platform'
-                        : 'Contacta a nuestro equipo de cumplimiento AML para demostraciones, asociaciones o preguntas tecnicas sobre nuestra plataforma'}
-                    </p>
-                  </div>
-                  <button onClick={() => setShowContact(false)} className="text-gray-500 hover:text-white text-2xl">×</button>
-                </div>
-
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  <div>
-                    <label htmlFor="name" className="block text-sm font-medium mb-2">
-                      {language === 'en' ? 'Full Name' : 'Nombre Completo'}
-                    </label>
-                    <input
-                      id="name"
-                      name="name"
-                      type="text"
-                      required
-                      className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="email" className="block text-sm font-medium mb-2">
-                      {language === 'en' ? 'Email Address' : 'Correo Electronico'}
-                    </label>
-                    <input
-                      id="email"
-                      name="email"
-                      type="email"
-                      required
-                      className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="company" className="block text-sm font-medium mb-2">
-                      {language === 'en' ? 'Financial Institution / Company (optional)' : 'Institucion Financiera / Empresa (opcional)'}
-                    </label>
-                    <input
-                      id="company"
-                      name="company"
-                      type="text"
-                      className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none"
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="message" className="block text-sm font-medium mb-2">
-                      {language === 'en' ? 'Message' : 'Mensaje'}
-                    </label>
-                    <textarea
-                      id="message"
-                      name="message"
-                      rows={4}
-                      required
-                      className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none resize-none"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="w-full py-4 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-bold hover:from-red-700 hover:to-orange-600 transition flex items-center justify-center gap-2"
-                  >
-                    <Mail className="w-5 h-5" />
-                    {language === 'en' ? 'Send Message' : 'Enviar Mensaje'}
-                  </button>
-                </form>
-              </>
-            ) : (
-              <div className="text-center py-12">
-                <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4 animate-bounce" />
-                <h2 className="text-2xl font-bold mb-2">
-                  {language === 'en' ? 'Thank you!' : 'Gracias!'}
-                </h2>
-                <p className="text-gray-400 mb-6">
-                  {language === 'en'
-                    ? 'Your message has been successfully sent. Our AML compliance team will contact you soon.'
-                    : 'Tu mensaje ha sido enviado correctamente. Nuestro equipo de cumplimiento AML se pondra en contacto pronto.'}
+    <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-50 p-6" onClick={() => setShowContact(false)}>
+      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 max-w-2xl w-full" onClick={(e) => e.stopPropagation()}>
+        {!submitted ? (
+          <>
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <h2 className="text-3xl font-black mb-2">{language === 'en' ? 'Get In Touch' : 'Contactanos'}</h2>
+                <p className="text-gray-400">
+                  {language === 'en' 
+                    ? 'Contact our AML compliance team for demos, partnerships, or technical questions about our platform'
+                    : 'Contacta a nuestro equipo de cumplimiento AML para demostraciones, asociaciones o preguntas tecnicas sobre nuestra plataforma'}
                 </p>
-                <div className="flex gap-4 justify-center">
-                  <button
-                    onClick={() => setSubmitted(false)}
-                    className="px-6 py-3 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-semibold hover:from-red-700 hover:to-orange-600 transition"
-                  >
-                    {language === 'en' ? 'Send another message' : 'Enviar otro mensaje'}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setSubmitted(false);
-                      setShowContact(false);
-                    }}
-                    className="px-6 py-3 border border-gray-700 rounded-lg font-semibold hover:bg-gray-800 transition"
-                  >
-                    {language === 'en' ? 'Close' : 'Cerrar'}
-                  </button>
-                </div>
               </div>
-            )}
+              <button onClick={() => setShowContact(false)} className="text-gray-500 hover:text-white text-2xl">×</button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div>
+                <label htmlFor="name" className="block text-sm font-medium mb-2">
+                  {language === 'en' ? 'Full Name' : 'Nombre Completo'}
+                </label>
+                <input
+                  id="name"
+                  name="name"
+                  type="text"
+                  required
+                  className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium mb-2">
+                  {language === 'en' ? 'Email Address' : 'Correo Electronico'}
+                </label>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  required
+                  className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="company" className="block text-sm font-medium mb-2">
+                  {language === 'en' ? 'Financial Institution / Company (optional)' : 'Institucion Financiera / Empresa (opcional)'}
+                </label>
+                <input
+                  id="company"
+                  name="company"
+                  type="text"
+                  className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="message" className="block text-sm font-medium mb-2">
+                  {language === 'en' ? 'Message' : 'Mensaje'}
+                </label>
+                <textarea
+                  id="message"
+                  name="message"
+                  rows={4}
+                  required
+                  className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none resize-none"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="w-full py-4 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-bold hover:from-red-700 hover:to-orange-600 transition flex items-center justify-center gap-2"
+              >
+                <Mail className="w-5 h-5" />
+                {language === 'en' ? 'Send Message' : 'Enviar Mensaje'}
+              </button>
+            </form>
+          </>
+        ) : (
+          <div className="text-center py-12">
+            <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4 animate-bounce" />
+            <h2 className="text-2xl font-bold mb-2">
+              {language === 'en' ? 'Thank you!' : 'Gracias!'}
+            </h2>
+            <p className="text-gray-400 mb-6">
+              {language === 'en'
+                ? 'Your message has been successfully sent. Our AML compliance team will contact you soon.'
+                : 'Tu mensaje ha sido enviado correctamente. Nuestro equipo de cumplimiento AML se pondra en contacto pronto.'}
+            </p>
+            <div className="flex gap-4 justify-center">
+              <button
+                onClick={() => setSubmitted(false)}
+                className="px-6 py-3 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-semibold hover:from-red-700 hover:to-orange-600 transition"
+              >
+                {language === 'en' ? 'Send another message' : 'Enviar otro mensaje'}
+              </button>
+              <button
+                onClick={() => {
+                  setSubmitted(false);
+                  setShowContact(false);
+                }}
+                className="px-6 py-3 border border-gray-700 rounded-lg font-semibold hover:bg-gray-800 transition"
+              >
+                {language === 'en' ? 'Close' : 'Cerrar'}
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
-    {showOnboarding && (
-      <OnboardingForm onClose={() => setShowOnboarding(false)} />
-    )}
-  </>);
+  )}
+  {showOnboarding && (
+    <OnboardingForm onClose={() => setShowOnboarding(false)} />
+  )}
 }
