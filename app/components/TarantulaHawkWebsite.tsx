@@ -82,12 +82,18 @@ export default function TarantulaHawkWebsite() {
                 <a href="#services" className="text-gray-300 hover:text-white transition">
                   {language === 'en' ? 'Services' : 'Servicios'}
                 </a>
+                <a href="#how-it-works" className="text-gray-300 hover:text-white transition">
+                  {language === 'en' ? 'How It Works' : 'Cómo Funciona'}
+                </a>
                 <a href="#about" className="text-gray-300 hover:text-white transition">
                   {language === 'en' ? 'About' : 'Acerca de'}
                 </a>
                 <button onClick={() => setShowContact(true)} className="text-gray-300 hover:text-white transition">
                   {language === 'en' ? 'Contact' : 'Contacto'}
                 </button>
+                <a href="#" className="text-gray-300 hover:text-white transition border-l border-gray-700 pl-6">
+                  {language === 'en' ? 'Login' : 'Ingresar'}
+                </a>
               </nav>
               
               <div className="flex items-center gap-4">
@@ -165,7 +171,7 @@ export default function TarantulaHawkWebsite() {
       </section>
 
       {/* How It Works - Simple 3-Step Process */}
-      <section className="py-20 px-6 bg-gray-900/50">
+      <section id="how-it-works" className="py-20 px-6 bg-gray-900/50">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-black mb-4">
@@ -182,12 +188,12 @@ export default function TarantulaHawkWebsite() {
                 <span className="text-2xl font-black text-white">1</span>
               </div>
               <h3 className="text-2xl font-bold mb-4">
-                {language === 'en' ? 'Upload Transactions' : 'Cargar Transacciones'}
+                {language === 'en' ? 'Connect Your Data' : 'Conecta Tus Datos'}
               </h3>
               <p className="text-gray-400">
                 {language === 'en' 
-                  ? 'Simply upload your transaction data in any format. Our AI agent processes it instantly.'
-                  : 'Simplemente carga tus datos de transacciones en cualquier formato. Nuestro agente IA los procesa al instante.'}
+                  ? 'Upload transaction files or connect directly through our secure API. Deploy on your own servers for maximum security.'
+                  : 'Carga archivos de transacciones o conéctate directamente a través de nuestra API segura. Despliega en tus propios servidores para máxima seguridad.'}
               </p>
             </div>
 
@@ -243,9 +249,14 @@ export default function TarantulaHawkWebsite() {
           <div className="text-center mb-16">
             <h2 className="text-4xl font-black mb-4">
               <span className="bg-gradient-to-r from-red-500 to-teal-400 bg-clip-text text-transparent">
-                {language === 'en' ? 'Advanced AI/ML Capabilities' : 'Capacidades Avanzadas de IA/ML'}
+                {language === 'en' ? 'Solutions for Every Business Size' : 'Soluciones para Cada Tamaño de Empresa'}
               </span>
             </h2>
+            <p className="text-xl text-gray-400 max-w-4xl mx-auto mb-12">
+              {language === 'en' 
+                ? 'From small fintechs to large corporations, access our market-leading AI models through secure API integration running on your own servers. The most powerful AML detection technology available.'
+                : 'Desde pequeñas fintechs hasta grandes corporaciones, accede a nuestros modelos de IA líderes del mercado a través de integración API segura ejecutándose en tus propios servidores. La tecnología de detección AML más poderosa disponible.'}
+            </p>
           </div>
         </div>
       </section>
@@ -256,13 +267,13 @@ export default function TarantulaHawkWebsite() {
           <div className="text-center mb-16">
             <h2 className="text-4xl font-black mb-4">
               <span className="bg-gradient-to-r from-red-500 to-teal-400 bg-clip-text text-transparent">
-                {language === 'en' ? 'Three-Layer AI Architecture' : 'Arquitectura de IA de Tres Capas'}
+                {language === 'en' ? 'Market-Leading AI Models' : 'Modelos de IA Líderes del Mercado'}
               </span>
             </h2>
             <p className="text-xl text-gray-400">
               {language === 'en' 
-                ? 'The only AML platform combining supervised, unsupervised, and reinforcement learning'
-                : 'La única plataforma AML que combina aprendizaje supervisado, no supervisado y por refuerzo'}
+                ? 'Our trained models are the most powerful in the market. The only AML platform combining supervised, unsupervised, and reinforcement learning for unmatched detection accuracy.'
+                : 'Nuestros modelos entrenados son los más potentes del mercado. La única plataforma AML que combina aprendizaje supervisado, no supervisado y por refuerzo para precisión de detección inigualable.'}
             </p>
           </div>
 
@@ -533,6 +544,7 @@ export default function TarantulaHawkWebsite() {
       <div className="bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-2xl p-8 max-w-2xl w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
         {!submitted ? (
           <>
+            <TarantulaHawkLogo className="w-10 h-10 mb-4 mx-auto" />
             <div className="flex justify-between items-start mb-6">
               <div>
                 <h2 className="text-3xl font-black mb-2 bg-gradient-to-r from-red-500 to-teal-400 bg-clip-text text-transparent">{language === 'en' ? 'Get In Touch' : 'Contactanos'}</h2>
@@ -565,7 +577,8 @@ export default function TarantulaHawkWebsite() {
               <input
                 name="company"
                 type="text"
-                placeholder={language === 'en' ? 'Financial Institution / Company (optional)' : 'Institución Financiera / Empresa (opcional)'}
+                placeholder={language === 'en' ? 'Financial Institution / Company' : 'Institución Financiera / Empresa'}
+                required
                 className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none"
               />
 

@@ -85,7 +85,7 @@ export default function OnboardingForm({ onClose }: OnboardingFormProps) {
             <input type="text" placeholder="Full Name" value={name} onChange={e => setName(e.target.value)} required className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none" />
             <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none" />
             <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none" />
-            <input type="text" placeholder="Company (optional)" value={company} onChange={e => setCompany(e.target.value)} className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none" />
+            <input type="text" placeholder="Company" value={company} onChange={e => setCompany(e.target.value)} required className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none" />
             <button type="submit" disabled={loading} className="w-full py-4 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-bold hover:from-red-700 hover:to-orange-600 transition flex items-center justify-center gap-2">
               {loading ? 'Signing Up...' : 'Start Free Trial'}
             </button>
