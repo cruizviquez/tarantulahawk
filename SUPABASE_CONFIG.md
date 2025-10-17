@@ -21,12 +21,40 @@
         .content { background: #1a1a1a; padding: 30px; border-radius: 0 0 8px 8px; }
         .button { background: linear-gradient(135deg, #dc2626, #ea580c); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: bold; margin: 20px 0; }
         .footer { text-align: center; margin-top: 30px; color: #888; font-size: 12px; }
+        .logo { width: 120px; height: auto; margin-bottom: 10px; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1 style="margin: 0; color: white;">🕷️🦅 TarantulaHawk</h1>
+            <svg class="logo" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <linearGradient id="orangeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" style="stop-color: #CC3300" />
+                        <stop offset="50%" style="stop-color: #FF4500" />
+                        <stop offset="100%" style="stop-color: #FF6B00" />
+                    </linearGradient>
+                    <linearGradient id="tealGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" style="stop-color: #00CED1" />
+                        <stop offset="50%" style="stop-color: #20B2AA" />
+                        <stop offset="100%" style="stop-color: #48D1CC" />
+                    </linearGradient>
+                </defs>
+                <circle cx="200" cy="200" r="190" fill="none" stroke="url(#tealGrad)" stroke-width="3" opacity="0.4"/>
+                <ellipse cx="200" cy="230" rx="35" ry="85" fill="#0A0A0A"/>
+                <ellipse cx="200" cy="170" rx="18" ry="20" fill="#0F0F0F"/>
+                <ellipse cx="200" cy="145" rx="32" ry="35" fill="#0F0F0F"/>
+                <ellipse cx="200" cy="110" rx="22" ry="20" fill="#0A0A0A"/>
+                <ellipse cx="200" cy="215" rx="32" ry="10" fill="url(#orangeGrad)" opacity="0.95"/>
+                <ellipse cx="200" cy="245" rx="30" ry="9" fill="url(#orangeGrad)" opacity="0.9"/>
+                <ellipse cx="200" cy="270" rx="27" ry="8" fill="url(#orangeGrad)" opacity="0.85"/>
+                <path d="M 168 135 Q 95 90 82 125 Q 75 160 115 170 Q 148 175 168 158 Z" fill="url(#orangeGrad)" opacity="0.9"/>
+                <path d="M 232 135 Q 305 90 318 125 Q 325 160 285 170 Q 252 175 232 158 Z" fill="url(#orangeGrad)" opacity="0.9"/>
+                <path d="M 200 305 L 197 330 L 200 350 L 203 330 Z" fill="url(#orangeGrad)"/>
+                <ellipse cx="188" cy="108" rx="5" ry="4" fill="#00CED1"/>
+                <ellipse cx="212" cy="108" rx="5" ry="4" fill="#00CED1"/>
+            </svg>
+            <h1 style="margin: 10px 0 0 0; color: white; font-size: 28px;">TarantulaHawk</h1>
             <p style="margin: 5px 0 0 0; color: #ffedd5;">AI-Powered AML Detection</p>
         </div>
         <div class="content">
@@ -203,12 +231,40 @@ CREATE TRIGGER validate_email_domain
         .header { background: linear-gradient(135deg, #dc2626, #ea580c); padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }
         .content { background: #1a1a1a; padding: 30px; border-radius: 0 0 8px 8px; text-align: center; }
         .code { background: #2a2a2a; border: 2px solid #ea580c; padding: 20px; border-radius: 8px; font-size: 32px; font-weight: bold; letter-spacing: 8px; margin: 20px 0; color: #ea580c; }
+        .logo { width: 80px; height: auto; margin-bottom: 10px; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1 style="margin: 0; color: white;">🔐 TarantulaHawk</h1>
+            <svg class="logo" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
+                <defs>
+                    <linearGradient id="orangeGradMFA" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" style="stop-color: #CC3300" />
+                        <stop offset="50%" style="stop-color: #FF4500" />
+                        <stop offset="100%" style="stop-color: #FF6B00" />
+                    </linearGradient>
+                    <linearGradient id="tealGradMFA" x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" style="stop-color: #00CED1" />
+                        <stop offset="50%" style="stop-color: #20B2AA" />
+                        <stop offset="100%" style="stop-color: #48D1CC" />
+                    </linearGradient>
+                </defs>
+                <circle cx="200" cy="200" r="190" fill="none" stroke="url(#tealGradMFA)" stroke-width="3" opacity="0.4"/>
+                <ellipse cx="200" cy="230" rx="35" ry="85" fill="#0A0A0A"/>
+                <ellipse cx="200" cy="170" rx="18" ry="20" fill="#0F0F0F"/>
+                <ellipse cx="200" cy="145" rx="32" ry="35" fill="#0F0F0F"/>
+                <ellipse cx="200" cy="110" rx="22" ry="20" fill="#0A0A0A"/>
+                <ellipse cx="200" cy="215" rx="32" ry="10" fill="url(#orangeGradMFA)" opacity="0.95"/>
+                <ellipse cx="200" cy="245" rx="30" ry="9" fill="url(#orangeGradMFA)" opacity="0.9"/>
+                <ellipse cx="200" cy="270" rx="27" ry="8" fill="url(#orangeGradMFA)" opacity="0.85"/>
+                <path d="M 168 135 Q 95 90 82 125 Q 75 160 115 170 Q 148 175 168 158 Z" fill="url(#orangeGradMFA)" opacity="0.9"/>
+                <path d="M 232 135 Q 305 90 318 125 Q 325 160 285 170 Q 252 175 232 158 Z" fill="url(#orangeGradMFA)" opacity="0.9"/>
+                <path d="M 200 305 L 197 330 L 200 350 L 203 330 Z" fill="url(#orangeGradMFA)"/>
+                <ellipse cx="188" cy="108" rx="5" ry="4" fill="#00CED1"/>
+                <ellipse cx="212" cy="108" rx="5" ry="4" fill="#00CED1"/>
+            </svg>
+            <h1 style="margin: 10px 0 0 0; color: white; font-size: 24px;">TarantulaHawk</h1>
             <p style="margin: 5px 0 0 0; color: #ffedd5;">Código de Verificación</p>
         </div>
         <div class="content">
