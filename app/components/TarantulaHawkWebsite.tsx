@@ -36,30 +36,7 @@ const TarantulaHawkLogo = ({ className = "w-12 h-12" }) => (
 
 export default function TarantulaHawkWebsite() {
   const [language, setLanguage] = useState('en');
-  const [showContact, setShowContact] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const form = e.target as HTMLFormElement;
-    const data = new FormData(form);
-
-    fetch('https://formspree.io/f/mdkwywre', {
-      method: 'POST',
-      body: data,
-      headers: {
-        Accept: 'application/json',
-      },
-    }).then((response) => {
-      if (response.ok) {
-        setSubmitted(true);
-        form.reset();
-      } else {
-        alert(language === 'en' ? 'Error sending message. Please try again later.' : 'Error al enviar el mensaje. Intenta mas tarde.');
-      }
-    });
-  };
 
   return (
     <>
@@ -88,12 +65,9 @@ export default function TarantulaHawkWebsite() {
                 <a href="#about" className="text-gray-300 hover:text-white transition">
                   {language === 'en' ? 'About' : 'Acerca de'}
                 </a>
-                <button onClick={() => setShowContact(true)} className="text-gray-300 hover:text-white transition">
+                <button onClick={() => {}} className="text-gray-300 hover:text-white transition">
                   {language === 'en' ? 'Contact' : 'Contacto'}
                 </button>
-                <a href="#" className="text-gray-300 hover:text-white transition border-l border-gray-700 pl-6">
-                  {language === 'en' ? 'Login' : 'Ingresar'}
-                </a>
               </nav>
               
               <div className="flex items-center gap-4">
@@ -103,6 +77,12 @@ export default function TarantulaHawkWebsite() {
                 >
                   <Globe className="w-4 h-4" />
                   <span className="text-sm">{language === 'en' ? 'ES' : 'EN'}</span>
+                </button>
+                <button
+                  className="px-4 py-2 border border-gray-700 rounded-lg font-semibold hover:bg-gray-800 transition"
+                  onClick={() => window.open('#', '_blank')}
+                >
+                  {language === 'en' ? 'Login' : 'Ingresar'}
                 </button>
                 <button
                   className="px-6 py-2 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-semibold hover:from-red-700 hover:to-orange-600 transition"
@@ -141,10 +121,10 @@ export default function TarantulaHawkWebsite() {
                 className="px-8 py-4 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-bold text-lg hover:from-red-700 hover:to-orange-600 transition"
                 onClick={() => setShowOnboarding(true)}
               >
-                {language === 'en' ? 'Upload & Get Started' : 'Cargar y Comenzar'}
+                {language === 'en' ? 'Start Free Trial' : 'Comenzar Prueba Gratis'}
               </button>
-              <button onClick={() => setShowContact(true)} className="px-8 py-4 border-2 border-teal-500 rounded-lg font-bold text-lg hover:bg-teal-500/10 transition">
-                {language === 'en' ? 'Request Demo' : 'Solicitar Demo'}
+              <button onClick={() => {}} className="px-8 py-4 border-2 border-teal-500 rounded-lg font-bold text-lg hover:bg-teal-500/10 transition">
+                {language === 'en' ? 'Ask AI Assistant' : 'Preguntar a IA'}
               </button>
             </div>
           </div>
@@ -539,9 +519,16 @@ export default function TarantulaHawkWebsite() {
       </footer>
     </div>
 
-  {showContact && (
+    <AIChat language={language} />
+    
+    {showOnboarding && (
+      <OnboardingForm onClose={() => setShowOnboarding(false)} />
+    )}
+    </>
+  );
+}
     <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-50 p-6" onClick={() => setShowContact(false)}>
-      <div className="bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-2xl p-8 max-w-2xl w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-2xl p-8 max-w-md w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
         {!submitted ? (
           <>
             <TarantulaHawkLogo className="w-10 h-10 mb-4 mx-auto" />
