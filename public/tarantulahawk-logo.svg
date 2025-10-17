@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="200" height="60" viewBox="0 0 200 60" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Brand gradient -->
+    <linearGradient id="brandGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#dc2626;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ea580c;stop-opacity:1" />
+    </linearGradient>
+    
+    <!-- Shadow gradient -->
+    <linearGradient id="shadowGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#7c2d12;stop-opacity:0.3" />
+      <stop offset="100%" style="stop-color:#431407;stop-opacity:0.1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background circle for logo mark -->
+  <circle cx="30" cy="30" r="25" fill="url(#shadowGradient)" opacity="0.2"/>
+  
+  <!-- Stylized Tarantula/Hawk hybrid symbol -->
+  <g transform="translate(30, 30)">
+    <!-- Central body -->
+    <ellipse cx="0" cy="0" rx="8" ry="6" fill="url(#brandGradient)"/>
+    
+    <!-- Wings (hawk element) -->
+    <path d="M -8,-2 Q -18,-8 -22,-4 Q -20,2 -8,2 Z" fill="url(#brandGradient)" opacity="0.8"/>
+    <path d="M 8,-2 Q 18,-8 22,-4 Q 20,2 8,2 Z" fill="url(#brandGradient)" opacity="0.8"/>
+    
+    <!-- Legs (tarantula element) -->
+    <g stroke="url(#brandGradient)" stroke-width="2" fill="none" opacity="0.9">
+      <!-- Left legs -->
+      <path d="M -6,-4 Q -12,-8 -16,-6"/>
+      <path d="M -6,-1 Q -14,-2 -18,0"/>
+      <path d="M -6,2 Q -14,4 -18,6"/>
+      <path d="M -6,5 Q -12,10 -16,8"/>
+      
+      <!-- Right legs -->
+      <path d="M 6,-4 Q 12,-8 16,-6"/>
+      <path d="M 6,-1 Q 14,-2 18,0"/>
+      <path d="M 6,2 Q 14,4 18,6"/>
+      <path d="M 6,5 Q 12,10 16,8"/>
+    </g>
+    
+    <!-- Eyes/head -->
+    <circle cx="-3" cy="-3" r="1.5" fill="#ffffff" opacity="0.9"/>
+    <circle cx="3" cy="-3" r="1.5" fill="#ffffff" opacity="0.9"/>
+    <circle cx="-3" cy="-3" r="0.8" fill="#1f2937"/>
+    <circle cx="3" cy="-3" r="0.8" fill="#1f2937"/>
+  </g>
+  
+  <!-- Company name -->
+  <g transform="translate(70, 20)">
+    <!-- TARANTULA -->
+    <text x="0" y="0" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="url(#brandGradient)">
+      TARANTULA
+    </text>
+    
+    <!-- HAWK -->
+    <text x="0" y="20" font-family="Inter, Arial, sans-serif" font-size="16" font-weight="700" fill="url(#brandGradient)">
+      HAWK
+    </text>
+    
+    <!-- Tagline -->
+    <text x="0" y="35" font-family="Inter, Arial, sans-serif" font-size="8" font-weight="400" fill="#6b7280" opacity="0.8">
+      AI-POWERED AML DETECTION
+    </text>
+  </g>
+</svg>

@@ -45,25 +45,65 @@ export default function OnboardingForm({ onClose }: OnboardingFormProps) {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
 
+  // Validar email corporativo
+  const validateCorporateEmail = (email: string): boolean => {
+    const personalDomains = [
+      'gmail.com', 'outlook.com', 'hotmail.com', 'yahoo.com', 'icloud.com',
+      'aol.com', 'protonmail.com', 'live.com', 'msn.com', 'mail.com',
+      'yandex.com', 'zoho.com', 'tutanota.com', 'fastmail.com'
+    ];
+    
+    const domain = email.split('@')[1]?.toLowerCase();
+    return !personalDomains.includes(domain);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     setSuccess(false);
-    const { data, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { name, company, trial: true },
-      },
-    });
-    if (signUpError) {
-      setError(signUpError.message);
+
+    // Validar email corporativo
+    if (!validateCorporateEmail(email)) {
+      setError('Solo se permiten emails corporativos. No se aceptan cuentas personales como Gmail, Outlook, etc.');
       setLoading(false);
       return;
     }
-    setSuccess(true);
-    setLoading(false);
+
+    // Validar que la empresa no esté vacía
+    if (!company.trim()) {
+      setError('El campo empresa es obligatorio para cuentas corporativas.');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { 
+            name: name.trim(), 
+            company: company.trim(), 
+            trial: true,
+            email_domain: email.split('@')[1]
+          },
+          emailRedirectTo: `${window.location.origin}/auth/callback`
+        },
+      });
+
+      if (signUpError) {
+        setError(signUpError.message);
+        setLoading(false);
+        return;
+      }
+
+      setSuccess(true);
+      setLoading(false);
+    } catch (error) {
+      setError('Error al crear la cuenta. Por favor intenta de nuevo.');
+      setLoading(false);
+    }
   };
 
   return (
@@ -75,19 +115,81 @@ export default function OnboardingForm({ onClose }: OnboardingFormProps) {
         <p className="text-gray-400 text-center mb-6">Create your account to access the AML platform. No credit card required.</p>
         {success ? (
           <div className="text-center py-12">
-            <h2 className="text-2xl font-bold mb-2 text-green-400">Account Created!</h2>
-            <p className="text-gray-400 mb-6">Check your email to verify your account and start your free trial.</p>
-            <button onClick={onClose} className="px-6 py-3 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-semibold hover:from-red-700 hover:to-orange-600 transition">Close</button>
+            <div className="text-green-500 text-5xl mb-4">📧</div>
+            <h2 className="text-2xl font-bold mb-2 text-green-400">¡Cuenta Creada!</h2>
+            <p className="text-gray-400 mb-4">Hemos enviado un email de verificación a:</p>
+            <p className="text-white font-semibold mb-6 bg-gray-800 rounded-lg p-3">{email}</p>
+            <p className="text-gray-500 text-sm mb-6">Revisa tu bandeja de entrada y haz clic en el enlace de verificación para activar tu trial gratuito de TarantulaHawk.</p>
+            <button onClick={onClose} className="px-6 py-3 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-semibold hover:from-red-700 hover:to-orange-600 transition">Cerrar</button>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-5">
-            {error && <div className="text-red-500 mb-2 text-center font-semibold">{error}</div>}
-            <input type="text" placeholder="Full Name" value={name} onChange={e => setName(e.target.value)} required className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none" />
-            <input type="email" placeholder="Email" value={email} onChange={e => setEmail(e.target.value)} required className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none" />
-            <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} required className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none" />
-            <input type="text" placeholder="Company" value={company} onChange={e => setCompany(e.target.value)} required className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none" />
-            <button type="submit" disabled={loading} className="w-full py-4 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-bold hover:from-red-700 hover:to-orange-600 transition flex items-center justify-center gap-2">
-              {loading ? 'Signing Up...' : 'Start Free Trial'}
+            {error && (
+              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-red-400 text-center text-sm">
+                <div className="font-semibold mb-1">❌ Error</div>
+                {error}
+              </div>
+            )}
+            
+            <div>
+              <input 
+                type="text" 
+                placeholder="Nombre Completo" 
+                value={name} 
+                onChange={e => setName(e.target.value)} 
+                required 
+                className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none" 
+              />
+            </div>
+            
+            <div>
+              <input 
+                type="email" 
+                placeholder="Email Corporativo" 
+                value={email} 
+                onChange={e => setEmail(e.target.value)} 
+                required 
+                className={`w-full rounded-md bg-gray-800 border text-white p-3 outline-none transition ${
+                  email && !validateCorporateEmail(email) 
+                    ? 'border-red-500 focus:border-red-500' 
+                    : 'border-gray-700 focus:border-orange-500'
+                }`}
+              />
+              {email && !validateCorporateEmail(email) && (
+                <p className="text-red-400 text-xs mt-1">⚠️ Solo emails corporativos (no Gmail, Outlook, etc.)</p>
+              )}
+            </div>
+            
+            <div>
+              <input 
+                type="password" 
+                placeholder="Contraseña (mín. 6 caracteres)" 
+                value={password} 
+                onChange={e => setPassword(e.target.value)} 
+                required 
+                minLength={6}
+                className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none" 
+              />
+            </div>
+            
+            <div>
+              <input 
+                type="text" 
+                placeholder="Empresa / Organización" 
+                value={company} 
+                onChange={e => setCompany(e.target.value)} 
+                required 
+                className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none" 
+              />
+              <p className="text-gray-500 text-xs mt-1">💼 Solo para uso empresarial</p>
+            </div>
+            
+            <button 
+              type="submit" 
+              disabled={loading || (email && !validateCorporateEmail(email))} 
+              className="w-full py-4 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-bold hover:from-red-700 hover:to-orange-600 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loading ? 'Creando Cuenta...' : 'Iniciar Trial Gratuito'}
             </button>
           </form>
         )}
