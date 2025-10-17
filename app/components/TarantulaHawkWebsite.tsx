@@ -115,14 +115,10 @@ export default function TarantulaHawkWebsite() {
           <div className="text-center">
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-red-600/10 border border-red-600/20 rounded-full mb-8">
               <Zap className="w-4 h-4 text-red-500" />
-              <span className="text-sm text-red-400">{language === 'en' ? 'AI Agent • Pay-as-you-go • Instant Reports' : 'Agente IA • Pago por uso • Reportes instantáneos'}</span>
+              <span className="text-sm text-red-400">{language === 'en' ? 'AI-Detection • Pay-as-you-go • Instant Reports' : 'IA-Detección • Pago por uso • Reportes instantáneos'}</span>
             </div>
             
             <h1 className="text-5xl md:text-7xl font-black mb-6">
-              <span className="bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
-                {language === 'en' ? "Upload. Analyze. Comply." : 'Cargar. Analizar. Cumplir.'}
-              </span>
-              <br />
               <span className="bg-gradient-to-r from-red-500 via-orange-500 to-teal-400 bg-clip-text text-transparent">
                 {language === 'en' ? 'AI-Powered AML Compliance Platform' : 'Plataforma de Cumplimiento AML con IA'}
               </span>
@@ -200,12 +196,12 @@ export default function TarantulaHawkWebsite() {
                 <span className="text-2xl font-black text-white">2</span>
               </div>
               <h3 className="text-2xl font-bold mb-4">
-                {language === 'en' ? 'AI Analysis' : 'Análisis con IA'}
+                {language === 'en' ? 'AI-Detection' : 'IA-Detección'}
               </h3>
               <p className="text-gray-400">
                 {language === 'en' 
-                  ? 'Advanced AI algorithms analyze patterns, flag suspicious activities, and generate compliance reports.'
-                  : 'Algoritmos avanzados de IA analizan patrones, marcan actividades sospechosas y generan reportes de cumplimiento.'}
+                  ? 'Advanced AI algorithms detect suspicious patterns, flag risky activities, and generate compliance reports in real-time.'
+                  : 'Algoritmos avanzados de IA detectan patrones sospechosos, marcan actividades riesgosas y generan reportes de cumplimiento en tiempo real.'}
               </p>
             </div>
 
@@ -250,6 +246,68 @@ export default function TarantulaHawkWebsite() {
                 {language === 'en' ? 'Advanced AI/ML Capabilities' : 'Capacidades Avanzadas de IA/ML'}
               </span>
             </h2>
+          </div>
+        </div>
+      </section>
+
+      {/* 3 AI Models Section */}
+      <section className="py-20 px-6">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-black mb-4">
+              <span className="bg-gradient-to-r from-red-500 to-teal-400 bg-clip-text text-transparent">
+                {language === 'en' ? 'Three-Layer AI Architecture' : 'Arquitectura de IA de Tres Capas'}
+              </span>
+            </h2>
+            <p className="text-xl text-gray-400">
+              {language === 'en' 
+                ? 'The only AML platform combining supervised, unsupervised, and reinforcement learning'
+                : 'La única plataforma AML que combina aprendizaje supervisado, no supervisado y por refuerzo'}
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8">
+            <div className="bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-2xl p-8 text-center">
+              <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-500 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                <span className="text-2xl font-black text-white">S</span>
+              </div>
+              <h3 className="text-2xl font-bold mb-4 text-blue-400">
+                {language === 'en' ? 'Supervised Learning' : 'Aprendizaje Supervisado'}
+              </h3>
+              <p className="text-gray-400">
+                {language === 'en' 
+                  ? 'Trained on known money laundering patterns to identify similar suspicious activities with high accuracy.'
+                  : 'Entrenado en patrones conocidos de lavado de dinero para identificar actividades sospechosas similares con alta precisión.'}
+              </p>
+            </div>
+
+            <div className="bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-2xl p-8 text-center">
+              <div className="w-16 h-16 bg-gradient-to-r from-green-600 to-teal-500 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                <span className="text-2xl font-black text-white">U</span>
+              </div>
+              <h3 className="text-2xl font-bold mb-4 text-green-400">
+                {language === 'en' ? 'Unsupervised Learning' : 'Aprendizaje No Supervisado'}
+              </h3>
+              <p className="text-gray-400">
+                {language === 'en' 
+                  ? 'Discovers new and evolving money laundering schemes by detecting anomalies in transaction patterns.'
+                  : 'Descubre esquemas de lavado de dinero nuevos y evolutivos detectando anomalías en patrones de transacciones.'}
+              </p>
+            </div>
+
+            <div className="bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-2xl p-8 text-center">
+              <div className="w-16 h-16 bg-gradient-to-r from-red-600 to-orange-500 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                <span className="text-2xl font-black text-white">R</span>
+              </div>
+              <h3 className="text-2xl font-bold mb-4 text-orange-400">
+                {language === 'en' ? 'Reinforcement Learning' : 'Aprendizaje por Refuerzo'}
+              </h3>
+              <p className="text-gray-400">
+                {language === 'en' 
+                  ? 'Continuously improves detection accuracy by learning from investigator feedback and regulatory updates.'
+                  : 'Mejora continuamente la precisión de detección aprendiendo de comentarios de investigadores y actualizaciones regulatorias.'}
+              </p>
+            </div>
           </div>
         </div>
       </section>
@@ -472,12 +530,12 @@ export default function TarantulaHawkWebsite() {
 
   {showContact && (
     <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-50 p-6" onClick={() => setShowContact(false)}>
-      <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 max-w-2xl w-full" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-2xl p-8 max-w-2xl w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
         {!submitted ? (
           <>
             <div className="flex justify-between items-start mb-6">
               <div>
-                <h2 className="text-3xl font-black mb-2">{language === 'en' ? 'Get In Touch' : 'Contactanos'}</h2>
+                <h2 className="text-3xl font-black mb-2 bg-gradient-to-r from-red-500 to-teal-400 bg-clip-text text-transparent">{language === 'en' ? 'Get In Touch' : 'Contactanos'}</h2>
                 <p className="text-gray-400">
                   {language === 'en' 
                     ? 'Contact our AML compliance team for demos, partnerships, or technical questions about our platform'
@@ -487,57 +545,37 @@ export default function TarantulaHawkWebsite() {
               <button onClick={() => setShowContact(false)} className="text-gray-500 hover:text-white text-2xl">×</button>
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div>
-                <label htmlFor="name" className="block text-sm font-medium mb-2">
-                  {language === 'en' ? 'Full Name' : 'Nombre Completo'}
-                </label>
-                <input
-                  id="name"
-                  name="name"
-                  type="text"
-                  required
-                  className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none"
-                />
-              </div>
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <input
+                name="name"
+                type="text"
+                placeholder={language === 'en' ? 'Full Name' : 'Nombre Completo'}
+                required
+                className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none"
+              />
+              
+              <input
+                name="email"
+                type="email"
+                placeholder={language === 'en' ? 'Email Address' : 'Correo Electrónico'}
+                required
+                className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none"
+              />
+              
+              <input
+                name="company"
+                type="text"
+                placeholder={language === 'en' ? 'Financial Institution / Company (optional)' : 'Institución Financiera / Empresa (opcional)'}
+                className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none"
+              />
 
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium mb-2">
-                  {language === 'en' ? 'Email Address' : 'Correo Electronico'}
-                </label>
-                <input
-                  id="email"
-                  name="email"
-                  type="email"
-                  required
-                  className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="company" className="block text-sm font-medium mb-2">
-                  {language === 'en' ? 'Financial Institution / Company (optional)' : 'Institucion Financiera / Empresa (opcional)'}
-                </label>
-                <input
-                  id="company"
-                  name="company"
-                  type="text"
-                  className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="message" className="block text-sm font-medium mb-2">
-                  {language === 'en' ? 'Message' : 'Mensaje'}
-                </label>
-                <textarea
-                  id="message"
-                  name="message"
-                  rows={4}
-                  required
-                  className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none resize-none"
-                />
-              </div>
+              <textarea
+                name="message"
+                rows={4}
+                placeholder={language === 'en' ? 'Message' : 'Mensaje'}
+                required
+                className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none"
+              />
 
               <button
                 type="submit"
