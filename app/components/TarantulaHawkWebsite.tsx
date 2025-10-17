@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import OnboardingForm from './OnboardingForm';
+import AIChat from './AIChat';
 import { Globe, Shield, Zap, TrendingUp, CheckCircle, Brain, Mail } from 'lucide-react';
 
 const TarantulaHawkLogo = ({ className = "w-12 h-12" }) => (
@@ -525,103 +526,5 @@ export default function TarantulaHawkWebsite() {
       <OnboardingForm onClose={() => setShowOnboarding(false)} />
     )}
     </>
-  );
-}
-    <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-50 p-6" onClick={() => setShowContact(false)}>
-      <div className="bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-2xl p-8 max-w-md w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        {!submitted ? (
-          <>
-            <TarantulaHawkLogo className="w-10 h-10 mb-4 mx-auto" />
-            <div className="flex justify-between items-start mb-6">
-              <div>
-                <h2 className="text-3xl font-black mb-2 bg-gradient-to-r from-red-500 to-teal-400 bg-clip-text text-transparent">{language === 'en' ? 'Get In Touch' : 'Contactanos'}</h2>
-                <p className="text-gray-400">
-                  {language === 'en' 
-                    ? 'Contact our AML compliance team for demos, partnerships, or technical questions about our platform'
-                    : 'Contacta a nuestro equipo de cumplimiento AML para demostraciones, asociaciones o preguntas tecnicas sobre nuestra plataforma'}
-                </p>
-              </div>
-              <button onClick={() => setShowContact(false)} className="text-gray-500 hover:text-white text-2xl">×</button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-5">
-              <input
-                name="name"
-                type="text"
-                placeholder={language === 'en' ? 'Full Name' : 'Nombre Completo'}
-                required
-                className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none"
-              />
-              
-              <input
-                name="email"
-                type="email"
-                placeholder={language === 'en' ? 'Email Address' : 'Correo Electrónico'}
-                required
-                className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none"
-              />
-              
-              <input
-                name="company"
-                type="text"
-                placeholder={language === 'en' ? 'Financial Institution / Company' : 'Institución Financiera / Empresa'}
-                required
-                className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none"
-              />
-
-              <textarea
-                name="message"
-                rows={4}
-                placeholder={language === 'en' ? 'Message' : 'Mensaje'}
-                required
-                className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none"
-              />
-
-              <button
-                type="submit"
-                className="w-full py-4 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-bold hover:from-red-700 hover:to-orange-600 transition flex items-center justify-center gap-2"
-              >
-                <Mail className="w-5 h-5" />
-                {language === 'en' ? 'Send Message' : 'Enviar Mensaje'}
-              </button>
-            </form>
-          </>
-        ) : (
-          <div className="text-center py-12">
-            <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4 animate-bounce" />
-            <h2 className="text-2xl font-bold mb-2">
-              {language === 'en' ? 'Thank you!' : 'Gracias!'}
-            </h2>
-            <p className="text-gray-400 mb-6">
-              {language === 'en'
-                ? 'Your message has been successfully sent. Our AML compliance team will contact you soon.'
-                : 'Tu mensaje ha sido enviado correctamente. Nuestro equipo de cumplimiento AML se pondra en contacto pronto.'}
-            </p>
-            <div className="flex gap-4 justify-center">
-              <button
-                onClick={() => setSubmitted(false)}
-                className="px-6 py-3 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-semibold hover:from-red-700 hover:to-orange-600 transition"
-              >
-                {language === 'en' ? 'Send another message' : 'Enviar otro mensaje'}
-              </button>
-              <button
-                onClick={() => {
-                  setSubmitted(false);
-                  setShowContact(false);
-                }}
-                className="px-6 py-3 border border-gray-700 rounded-lg font-semibold hover:bg-gray-800 transition"
-              >
-                {language === 'en' ? 'Close' : 'Cerrar'}
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  )}
-  {showOnboarding && (
-    <OnboardingForm onClose={() => setShowOnboarding(false)} />
-  )}
-  </>
   );
 }
