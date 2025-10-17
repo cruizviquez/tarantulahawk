@@ -9,7 +9,7 @@ interface Message {
 }
 
 interface AIChatProps {
-  language: 'en' | 'es';
+  language: string;
 }
 
 export default function AIChat({ language }: AIChatProps) {
