@@ -74,51 +74,64 @@ export default function TarantulaHawkWebsite() {
               </span>
             </div>
 
-            <div className="flex items-center gap-4">
-              <button onClick={() => setShowContact(true)} className="text-gray-300 hover:text-white transition">
-                {language === 'en' ? 'Contact' : 'Contacto'}
-              </button>
-              <button 
-                onClick={() => setLanguage(language === 'en' ? 'es' : 'en')}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-700 hover:border-teal-500 transition"
-              >
-                <Globe className="w-4 h-4" />
-                <span className="text-sm">{language === 'en' ? 'ES' : 'EN'}</span>
-              </button>
-              <button className="text-gray-300 hover:text-white transition">{language === 'en' ? 'Login' : 'Ingresar'}</button>
-              <button
-                className="px-6 py-2 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-semibold hover:from-red-700 hover:to-orange-600 transition"
-                onClick={() => setShowOnboarding(true)}
-              >
-                {language === 'en' ? 'Get Started' : 'Comenzar'}
-              </button>
+            <div className="flex items-center gap-8">
+              <nav className="hidden md:flex items-center gap-6">
+                <a href="#solutions" className="text-gray-300 hover:text-white transition">
+                  {language === 'en' ? 'Solutions' : 'Soluciones'}
+                </a>
+                <a href="#services" className="text-gray-300 hover:text-white transition">
+                  {language === 'en' ? 'Services' : 'Servicios'}
+                </a>
+                <a href="#about" className="text-gray-300 hover:text-white transition">
+                  {language === 'en' ? 'About' : 'Acerca de'}
+                </a>
+                <button onClick={() => setShowContact(true)} className="text-gray-300 hover:text-white transition">
+                  {language === 'en' ? 'Contact' : 'Contacto'}
+                </button>
+              </nav>
+              
+              <div className="flex items-center gap-4">
+                <button 
+                  onClick={() => setLanguage(language === 'en' ? 'es' : 'en')}
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-700 hover:border-teal-500 transition"
+                >
+                  <Globe className="w-4 h-4" />
+                  <span className="text-sm">{language === 'en' ? 'ES' : 'EN'}</span>
+                </button>
+                <button
+                  className="px-6 py-2 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-semibold hover:from-red-700 hover:to-orange-600 transition"
+                  onClick={() => setShowOnboarding(true)}
+                >
+                  {language === 'en' ? 'Try Free' : 'Probar Gratis'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
       </nav>
 
-      <section className="pt-32 pb-20 px-6">
+      <section id="hero" className="pt-32 pb-20 px-6">
         <div className="max-w-7xl mx-auto">
           <div className="text-center">
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-red-600/10 border border-red-600/20 rounded-full mb-8">
               <Zap className="w-4 h-4 text-red-500" />
-              <span className="text-sm text-red-400">Powered by Advanced AI/ML</span>
+              <span className="text-sm text-red-400">{language === 'en' ? 'AI Agent • Pay-as-you-go • Instant Reports' : 'Agente IA • Pago por uso • Reportes instantáneos'}</span>
             </div>
             
             <h1 className="text-5xl md:text-7xl font-black mb-6">
               <span className="bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
-                {language === 'en' ? "The Most Advanced AI" : 'La IA Más Avanzado del Mundo'}
+                {language === 'en' ? "Upload. Analyze. Comply." : 'Cargar. Analizar. Cumplir.'}
               </span>
               <br />
               <span className="bg-gradient-to-r from-red-500 via-orange-500 to-teal-400 bg-clip-text text-transparent">
-                {language === 'en' ? 'AML, Compliance & Risk Platform' : 'Plataforma de Cumplimiento, Riesgos & Anti-Lavado de Dinero'}
+                {language === 'en' ? 'AI-Powered AML Compliance Platform' : 'Plataforma de Cumplimiento AML con IA'}
               </span>
             </h1>
             
             <p className="text-xl text-gray-400 max-w-3xl mx-auto mb-12">
               {language === 'en' 
-                ? 'AI-powered anti-money laundering platform combining supervised, unsupervised, and reinforcement learning for FinCEN BSA and Mexico LFPIORPI compliance'
-                : 'Plataforma de anti lavado de dinero impulsado por IA que combina aprendizaje supervisado, no supervisado y por refuerzo para cumplimiento FinCEN BSA y LFPIORPI de México'}
+                ? 'Simply upload your transactions and get instant AML compliance reports. Pay-as-you-go pricing perfect for fintechs and small businesses. AI-powered dashboard with real-time alerts.'
+                : 'Simplemente carga tus transacciones y obtén reportes de cumplimiento AML al instante. Precios por uso perfecto para fintechs y pequeñas empresas. Panel con IA y alertas en tiempo real.'}
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -126,7 +139,7 @@ export default function TarantulaHawkWebsite() {
                 className="px-8 py-4 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-bold text-lg hover:from-red-700 hover:to-orange-600 transition"
                 onClick={() => setShowOnboarding(true)}
               >
-                {language === 'en' ? 'Start Free Trial' : 'Prueba Gratuita'}
+                {language === 'en' ? 'Upload & Get Started' : 'Cargar y Comenzar'}
               </button>
               <button onClick={() => setShowContact(true)} className="px-8 py-4 border-2 border-teal-500 rounded-lg font-bold text-lg hover:bg-teal-500/10 transition">
                 {language === 'en' ? 'Request Demo' : 'Solicitar Demo'}
@@ -155,56 +168,93 @@ export default function TarantulaHawkWebsite() {
         </div>
       </section>
 
-      <section className="py-20 px-6 bg-gradient-to-b from-black to-gray-900">
+      {/* How It Works - Simple 3-Step Process */}
+      <section className="py-20 px-6 bg-gray-900/50">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-black mb-4">
-              {language === 'en' ? 'AI-Powered AML Detection Technology' : 'Tecnología de Detección Anti-Lavado con IA'}
+            <h2 className="text-4xl font-black mb-4">
+              {language === 'en' ? 'How It Works' : 'Cómo Funciona'}
             </h2>
-            <p className="text-xl text-gray-400">{language === 'en' ? 'Three-Layer Machine Learning Architecture' : 'Arquitectura de Aprendizaje Automatico de Tres Capas'}</p>
+            <p className="text-xl text-gray-400">
+              {language === 'en' ? 'Three simple steps to AML compliance' : 'Tres pasos simples para cumplimiento AML'}
+            </p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-8">
-            <div className="bg-gradient-to-br from-red-900/20 to-black border border-red-800/30 rounded-2xl p-8">
-              <div className="w-12 h-12 bg-red-600/20 rounded-xl flex items-center justify-center mb-6">
-                <Brain className="w-6 h-6 text-red-400" />
+            <div className="text-center group">
+              <div className="w-20 h-20 bg-gradient-to-r from-red-600 to-orange-500 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform">
+                <span className="text-2xl font-black text-white">1</span>
               </div>
-              <h3 className="text-2xl font-bold mb-4">Supervised Learning</h3>
+              <h3 className="text-2xl font-bold mb-4">
+                {language === 'en' ? 'Upload Transactions' : 'Cargar Transacciones'}
+              </h3>
               <p className="text-gray-400">
                 {language === 'en' 
-                  ? 'Advanced pattern recognition from labeled AML data. Identifies known money laundering typologies with over 95% accuracy for BSA and LFPIORPI compliance'
-                  : 'Reconocimiento avanzado de patrones de datos AML etiquetados. Identifica tipologias conocidas de lavado de dinero con mas del 95% de precision para cumplimiento BSA y LFPIORPI'}
+                  ? 'Simply upload your transaction data in any format. Our AI agent processes it instantly.'
+                  : 'Simplemente carga tus datos de transacciones en cualquier formato. Nuestro agente IA los procesa al instante.'}
               </p>
             </div>
 
-            <div className="bg-gradient-to-br from-orange-900/20 to-black border border-orange-800/30 rounded-2xl p-8">
-              <div className="w-12 h-12 bg-orange-600/20 rounded-xl flex items-center justify-center mb-6">
-                <Zap className="w-6 h-6 text-orange-400" />
+            <div className="text-center group">
+              <div className="w-20 h-20 bg-gradient-to-r from-orange-500 to-teal-500 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform">
+                <span className="text-2xl font-black text-white">2</span>
               </div>
-              <h3 className="text-2xl font-bold mb-4">Unsupervised Learning</h3>
+              <h3 className="text-2xl font-bold mb-4">
+                {language === 'en' ? 'AI Analysis' : 'Análisis con IA'}
+              </h3>
               <p className="text-gray-400">
-                {language === 'en'
-                  ? 'Discovers hidden anomalies and emerging money laundering schemes without prior training. Detects zero-day financial crime patterns automatically'
-                  : 'Descubre anomalias ocultas y esquemas emergentes de lavado de dinero sin entrenamiento previo. Detecta automaticamente patrones de delitos financieros de dia cero'}
+                {language === 'en' 
+                  ? 'Advanced AI algorithms analyze patterns, flag suspicious activities, and generate compliance reports.'
+                  : 'Algoritmos avanzados de IA analizan patrones, marcan actividades sospechosas y generan reportes de cumplimiento.'}
               </p>
             </div>
 
-            <div className="bg-gradient-to-br from-teal-900/20 to-black border border-teal-800/30 rounded-2xl p-8">
-              <div className="w-12 h-12 bg-teal-600/20 rounded-xl flex items-center justify-center mb-6">
-                <TrendingUp className="w-6 h-6 text-teal-400" />
+            <div className="text-center group">
+              <div className="w-20 h-20 bg-gradient-to-r from-teal-500 to-blue-500 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform">
+                <span className="text-2xl font-black text-white">3</span>
               </div>
-              <h3 className="text-2xl font-bold mb-4">Reinforcement Learning</h3>
+              <h3 className="text-2xl font-bold mb-4">
+                {language === 'en' ? 'Get Reports & Alerts' : 'Obtener Reportes y Alertas'}
+              </h3>
               <p className="text-gray-400">
-                {language === 'en'
-                  ? 'Self-improving AML system that learns from compliance officer feedback. Gets smarter with every transaction review and investigation'
-                  : 'Sistema AML auto-mejorable que aprende de la retroalimentacion del oficial de cumplimiento. Se vuelve mas inteligente con cada revision de transaccion e investigacion'}
+                {language === 'en' 
+                  ? 'Receive instant compliance reports and real-time alerts through your personalized dashboard.'
+                  : 'Recibe reportes de cumplimiento instantáneos y alertas en tiempo real a través de tu panel personalizado.'}
               </p>
+            </div>
+          </div>
+
+          <div className="mt-16 text-center">
+            <div className="inline-flex items-center gap-4 px-8 py-4 bg-gradient-to-r from-green-600/20 to-teal-600/20 border border-green-600/30 rounded-2xl">
+              <span className="text-2xl">💳</span>
+              <div className="text-left">
+                <div className="font-bold text-green-400">
+                  {language === 'en' ? 'Pay-as-you-go Pricing' : 'Precios por Uso'}
+                </div>
+                <div className="text-sm text-gray-400">
+                  {language === 'en' 
+                    ? 'Perfect for fintechs & small businesses. No setup fees, no minimums.'
+                    : 'Perfecto para fintechs y pequeñas empresas. Sin costos de configuración, sin mínimos.'}
+                </div>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      <section className="py-20 px-6">
+      <section id="solutions" className="py-20 px-6 bg-gradient-to-b from-black to-gray-900">
+        <div className="max-w-7xl mx-auto">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-black mb-4">
+              <span className="bg-gradient-to-r from-red-500 to-teal-400 bg-clip-text text-transparent">
+                {language === 'en' ? 'Advanced AI/ML Capabilities' : 'Capacidades Avanzadas de IA/ML'}
+              </span>
+            </h2>
+          </div>
+        </div>
+      </section>
+
+      <section id="services" className="py-20 px-6">
         <div className="max-w-7xl mx-auto">
           <div className="bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-3xl p-12">
             <div className="text-center mb-12">
