@@ -140,14 +140,42 @@ export default function AIChat({ language }: AIChatProps) {
         : "Servimos banca, fintech, exchanges crypto, servicios de remesas, y plataformas e-commerce. Cada industria tiene patrones AML únicos - nuestra IA se adapta a tus tipos específicos de transacciones y requisitos regulatorios. ¿En qué industria estás?";
     }
     
+    if (words.some(w => ['support', 'help', 'assistance', 'customer', 'service'].includes(w))) {
+      return language === 'en'
+        ? "We provide comprehensive support including: 🔧 Technical integration assistance 📚 Training and onboarding 📞 24/7 customer success team 📈 Performance optimization Our dedicated engineers ensure smooth implementation and ongoing success."
+        : "Proporcionamos soporte integral incluyendo: 🔧 Asistencia técnica de integración 📚 Entrenamiento e incorporación 📞 Equipo de éxito del cliente 24/7 📈 Optimización de rendimiento Nuestros ingenieros dedicados aseguran implementación fluida y éxito continuo.";
+    }
+    
+    if (words.some(w => ['volume', 'transactions', 'scale', 'capacity', 'throughput'].includes(w))) {
+      return language === 'en'
+        ? "Our platform handles any volume: 💳 Small fintech: 1K-10K transactions/day 🏦 Regional banks: 100K-1M transactions/day 🌐 Global institutions: 10M+ transactions/day Auto-scaling ensures consistent performance regardless of volume spikes."
+        : "Nuestra plataforma maneja cualquier volumen: 💳 Fintech pequeño: 1K-10K transacciones/día 🏦 Bancos regionales: 100K-1M transacciones/día 🌐 Instituciones globales: 10M+ transacciones/día Auto-escalado asegura rendimiento consistente sin importar picos de volumen.";
+    }
+    
     // Generate contextual response based on content
     return getRuleBasedFallback(text);
   };
 
   const getRuleBasedFallback = (text: string): string => {
-    return language === 'en'
-      ? "I'd be happy to help! For detailed technical questions, I recommend scheduling a demo with our team. Would you like me to connect you with a specialist?"
-      : "¡Me encantaría ayudarte! Para preguntas técnicas detalladas, recomiendo programar una demo con nuestro equipo. ¿Te gustaría que te conecte con un especialista?";
+    const lowerText = text.toLowerCase();
+    const fallbackResponses = language === 'en' ? [
+      "That's a great question! TarantulaHawk specializes in AI-powered AML detection. Could you be more specific about what aspect interests you most?",
+      "I'd be happy to help with that. Our platform focuses on transaction monitoring and compliance automation. What specific challenge are you trying to solve?",
+      "Interesting question! Our AI technology can help with various AML scenarios. Could you share more context about your use case?",
+      "Thanks for asking! TarantulaHawk offers advanced detection capabilities. What's your main concern - accuracy, speed, or implementation?",
+      "Good point! Our system is designed for modern financial institutions. Would you like to know about our technology, pricing, or see a demo?"
+    ] : [
+      "¡Excelente pregunta! TarantulaHawk se especializa en detección AML con IA. ¿Podrías ser más específico sobre qué aspecto te interesa más?",
+      "Me encantaría ayudarte con eso. Nuestra plataforma se enfoca en monitoreo de transacciones y automatización de cumplimiento. ¿Qué desafío específico tratas de resolver?",
+      "¡Pregunta interesante! Nuestra tecnología IA puede ayudar con varios escenarios AML. ¿Podrías compartir más contexto sobre tu caso de uso?",
+      "¡Gracias por preguntar! TarantulaHawk ofrece capacidades de detección avanzadas. ¿Cuál es tu preocupación principal - precisión, velocidad, o implementación?",
+      "¡Buen punto! Nuestro sistema está diseñado para instituciones financieras modernas. ¿Te gustaría saber sobre nuestra tecnología, precios, o ver una demo?"
+    ];
+    
+    // Select a fallback response based on text content to add variety
+    const textHash = lowerText.split('').reduce((a, b) => { a = ((a << 5) - a) + b.charCodeAt(0); return a & a; }, 0);
+    const responseIndex = Math.abs(textHash) % fallbackResponses.length;
+    return fallbackResponses[responseIndex];
   };
 
   const handleSend = async () => {
