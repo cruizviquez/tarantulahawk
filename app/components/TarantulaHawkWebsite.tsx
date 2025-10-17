@@ -66,8 +66,14 @@ export default function TarantulaHawkWebsite() {
                 <a href="#about" className="text-gray-300 hover:text-white transition">
                   {language === 'en' ? 'About' : 'Acerca de'}
                 </a>
-                <button onClick={() => {}} className="text-gray-300 hover:text-white transition">
-                  {language === 'en' ? 'Contact' : 'Contacto'}
+                <button 
+                  onClick={() => {
+                    const chatButton = document.querySelector('[role="chat-button"]') as HTMLButtonElement;
+                    if (chatButton) chatButton.click();
+                  }} 
+                  className="text-gray-300 hover:text-white transition"
+                >
+                  {language === 'en' ? 'Chat' : 'Chat'}
                 </button>
               </nav>
               
@@ -124,7 +130,14 @@ export default function TarantulaHawkWebsite() {
               >
                 {language === 'en' ? 'Start Free Trial' : 'Comenzar Prueba Gratis'}
               </button>
-              <button onClick={() => {}} className="px-8 py-4 border-2 border-teal-500 rounded-lg font-bold text-lg hover:bg-teal-500/10 transition">
+              <button 
+                onClick={() => {
+                  // Trigger the AI chat to open
+                  const chatButton = document.querySelector('[role="chat-button"]') as HTMLButtonElement;
+                  if (chatButton) chatButton.click();
+                }} 
+                className="px-8 py-4 border-2 border-teal-500 rounded-lg font-bold text-lg hover:bg-teal-500/10 transition"
+              >
                 {language === 'en' ? 'Ask AI Assistant' : 'Preguntar a IA'}
               </button>
             </div>
