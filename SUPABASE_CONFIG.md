@@ -1,13 +1,47 @@
-# 🔧 Configuración de Supabase para TarantulaHawk
+# Supabase Configuration Guide - TarantulaHawk
 
-## 📧 **1. Configurar Emails Personalizados**
+## 🚀 PASOS PARA IMPLEMENTAR EN SUPABASE
 
-### En tu Dashboard de Supabase:
+### 1. CONFIGURAR TABLAS Y FUNCIONES
 
-1. **Ve a Authentication > Email Templates**
-2. **Configura cada template:**
+#### Paso 1: Ejecutar el Script SQL
+1. Ve a tu **Supabase Dashboard**
+2. Navega a **SQL Editor**
+3. Copia y pega todo el contenido de `supabase-setup.sql`
+4. Ejecuta el script completo
 
-#### **Confirm Signup Template:**
+#### Paso 2: Verificar que las tablas se crearon
+```sql
+-- Verifica que las tablas existen
+SELECT table_name FROM information_schema.tables 
+WHERE table_schema = 'public' 
+AND table_name IN ('user_profiles', 'user_activity');
+
+-- Verifica que las funciones existen
+SELECT routine_name FROM information_schema.routines 
+WHERE routine_schema = 'public' 
+AND routine_name IN ('is_trial_active', 'extend_trial', 'log_user_activity');
+```
+
+### 2. CONFIGURAR POLÍTICAS DE CONTRASEÑAS
+
+#### En Supabase Dashboard → Authentication → Settings:
+
+**Password Requirements:**
+- Minimum Password Length: `8`
+- Require Uppercase: `✅ Enabled`
+- Require Lowercase: `✅ Enabled` 
+- Require Numbers: `✅ Enabled`
+- Require Special Characters: `✅ Enabled`
+
+**Security Settings:**
+- Enable Captcha: `✅ Enabled`
+- Enable Email Confirmations: `✅ Enabled`
+- Enable Phone Confirmations: `❌ Disabled`
+
+### 3. CONFIGURAR EMAIL TEMPLATES
+
+#### Confirmation Email Template:
 ```html
 <!DOCTYPE html>
 <html>
@@ -21,44 +55,17 @@
         .content { background: #1a1a1a; padding: 30px; border-radius: 0 0 8px 8px; }
         .button { background: linear-gradient(135deg, #dc2626, #ea580c); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: bold; margin: 20px 0; }
         .footer { text-align: center; margin-top: 30px; color: #888; font-size: 12px; }
-        .logo { width: 120px; height: auto; margin-bottom: 10px; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <svg class="logo" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
-                <defs>
-                    <linearGradient id="orangeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" style="stop-color: #CC3300" />
-                        <stop offset="50%" style="stop-color: #FF4500" />
-                        <stop offset="100%" style="stop-color: #FF6B00" />
-                    </linearGradient>
-                    <linearGradient id="tealGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" style="stop-color: #00CED1" />
-                        <stop offset="50%" style="stop-color: #20B2AA" />
-                        <stop offset="100%" style="stop-color: #48D1CC" />
-                    </linearGradient>
-                </defs>
-                <circle cx="200" cy="200" r="190" fill="none" stroke="url(#tealGrad)" stroke-width="3" opacity="0.4"/>
-                <ellipse cx="200" cy="230" rx="35" ry="85" fill="#0A0A0A"/>
-                <ellipse cx="200" cy="170" rx="18" ry="20" fill="#0F0F0F"/>
-                <ellipse cx="200" cy="145" rx="32" ry="35" fill="#0F0F0F"/>
-                <ellipse cx="200" cy="110" rx="22" ry="20" fill="#0A0A0A"/>
-                <ellipse cx="200" cy="215" rx="32" ry="10" fill="url(#orangeGrad)" opacity="0.95"/>
-                <ellipse cx="200" cy="245" rx="30" ry="9" fill="url(#orangeGrad)" opacity="0.9"/>
-                <ellipse cx="200" cy="270" rx="27" ry="8" fill="url(#orangeGrad)" opacity="0.85"/>
-                <path d="M 168 135 Q 95 90 82 125 Q 75 160 115 170 Q 148 175 168 158 Z" fill="url(#orangeGrad)" opacity="0.9"/>
-                <path d="M 232 135 Q 305 90 318 125 Q 325 160 285 170 Q 252 175 232 158 Z" fill="url(#orangeGrad)" opacity="0.9"/>
-                <path d="M 200 305 L 197 330 L 200 350 L 203 330 Z" fill="url(#orangeGrad)"/>
-                <ellipse cx="188" cy="108" rx="5" ry="4" fill="#00CED1"/>
-                <ellipse cx="212" cy="108" rx="5" ry="4" fill="#00CED1"/>
-            </svg>
             <h1 style="margin: 10px 0 0 0; color: white; font-size: 28px;">TarantulaHawk</h1>
             <p style="margin: 5px 0 0 0; color: #ffedd5;">AI-Powered AML Detection</p>
         </div>
         <div class="content">
             <h2 style="color: #ea580c;">¡Bienvenido a TarantulaHawk!</h2>
+            <p>Hola <strong>{{ .Email }}</strong>,</p>
             <p>Gracias por registrarte para tu trial gratuito de nuestra plataforma de detección AML con IA.</p>
             <p>Para activar tu cuenta y comenzar tu prueba gratuita, haz clic en el siguiente botón:</p>
             
@@ -88,264 +95,184 @@
 </html>
 ```
 
-#### **Configuración del Sender:**
-- **From Email:** `noreply@tarantulahawk.com` 
-- **From Name:** `TarantulaHawk Team`
-- **Reply To:** `support@tarantulahawk.com`
-
-## 🏢 **2. Configurar Dominio Personalizado (Opcional)**
-
-Para emails desde tu propio dominio:
-
-1. **Ve a Settings > Custom Domain**
-2. **Agrega tu dominio:** `tarantulahawk.com`
-3. **Configura los registros DNS:**
-   ```
-   CNAME: mail.tarantulahawk.com → supabase-mail.com
-   TXT: v=spf1 include:supabase.com ~all
-   ```
-
-## ⚙️ **3. Configurar Variables de Entorno**
-
-En tu **Vercel Dashboard** o **.env.local**:
-
-```bash
-# URLs de redirección
-NEXT_PUBLIC_SITE_URL=https://tarantulahawk.vercel.app
-NEXT_PUBLIC_SUPABASE_URL=tu_supabase_url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=tu_supabase_anon_key
-
-# Para emails personalizados
-SUPABASE_SERVICE_ROLE_KEY=tu_service_role_key
-```
-
-## 🔒 **4. Configuración de Seguridad Avanzada**
-
-### **4.1 Políticas de Contraseña en Supabase Dashboard:**
-
-Ve a **Authentication > Settings**:
-
-```json
-{
-  "password_min_length": 8,
-  "password_complexity": {
-    "require_uppercase": true,
-    "require_lowercase": true,
-    "require_numbers": true,
-    "require_special_chars": true
-  }
-}
-```
-
-### **4.2 Configurar MFA (Multi-Factor Authentication):**
-
-En **Authentication > Settings > Multi-Factor Authentication**:
-- ✅ **Habilitar TOTP (Time-based OTP)**
-- ✅ **Habilitar Email OTP como fallback**
-- ✅ **Requerir MFA para nuevos usuarios**
-
-### **4.3 Políticas de Seguridad (RLS):**
-
-En **SQL Editor** de Supabase:
-
-```sql
--- Tabla para datos adicionales de usuario con seguridad mejorada
-CREATE TABLE user_profiles (
-    id UUID REFERENCES auth.users(id) PRIMARY KEY,
-    name TEXT NOT NULL,
-    company TEXT NOT NULL,
-    email_domain TEXT NOT NULL,
-    trial_expires_at TIMESTAMP WITH TIME ZONE DEFAULT (NOW() + INTERVAL '14 days'),
-    mfa_enabled BOOLEAN DEFAULT TRUE,
-    password_last_changed TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    login_attempts INTEGER DEFAULT 0,
-    locked_until TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Función para actualizar timestamp
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
-$$ language 'plpgsql';
-
--- Trigger para auto-update
-CREATE TRIGGER update_user_profiles_updated_at 
-    BEFORE UPDATE ON user_profiles 
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
--- Políticas de seguridad
-CREATE POLICY "Users can read own profile" ON user_profiles
-    FOR SELECT USING (auth.uid() = id);
-
-CREATE POLICY "Users can insert own profile" ON user_profiles
-    FOR INSERT WITH CHECK (auth.uid() = id);
-
-CREATE POLICY "Users can update own profile" ON user_profiles
-    FOR UPDATE USING (auth.uid() = id);
-
--- Función para validar email corporativo
-CREATE OR REPLACE FUNCTION validate_corporate_email()
-RETURNS TRIGGER AS $$
-BEGIN
-    IF NEW.email_domain IN ('gmail.com', 'outlook.com', 'hotmail.com', 'yahoo.com', 'icloud.com') THEN
-        RAISE EXCEPTION 'Personal email domains not allowed';
-    END IF;
-    RETURN NEW;
-END;
-$$ language 'plpgsql';
-
--- Trigger para validar email
-CREATE TRIGGER validate_email_domain 
-    BEFORE INSERT OR UPDATE ON user_profiles 
-    FOR EACH ROW EXECUTE FUNCTION validate_corporate_email();
-```
-
-### **4.4 Configuración de Cifrado:**
-
-**Nota Importante:** Supabase maneja automáticamente:
-- ✅ **Cifrado AES-256** para contraseñas
-- ✅ **Hashing bcrypt** con salt
-- ✅ **Cifrado en tránsito** (TLS 1.3)
-- ✅ **Cifrado en reposo** (AES-256)
-
-**No necesitas configurar cifrado manualmente** - está integrado por defecto.
-
-## � **5. Configuración MFA Post-Registro**
-
-### **5.1 Template de Email MFA:**
-
+#### Password Reset Email Template:
 ```html
 <!DOCTYPE html>
 <html>
 <head>
     <meta charset="utf-8">
-    <title>Código de Verificación TarantulaHawk</title>
+    <title>Restablecer contraseña - TarantulaHawk</title>
     <style>
         body { font-family: Arial, sans-serif; background: #0f0f0f; color: #ffffff; }
         .container { max-width: 600px; margin: 0 auto; padding: 20px; }
         .header { background: linear-gradient(135deg, #dc2626, #ea580c); padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }
-        .content { background: #1a1a1a; padding: 30px; border-radius: 0 0 8px 8px; text-align: center; }
-        .code { background: #2a2a2a; border: 2px solid #ea580c; padding: 20px; border-radius: 8px; font-size: 32px; font-weight: bold; letter-spacing: 8px; margin: 20px 0; color: #ea580c; }
-        .logo { width: 80px; height: auto; margin-bottom: 10px; }
+        .content { background: #1a1a1a; padding: 30px; border-radius: 0 0 8px 8px; }
+        .button { background: linear-gradient(135deg, #dc2626, #ea580c); color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; display: inline-block; font-weight: bold; margin: 20px 0; }
+        .footer { text-align: center; margin-top: 30px; color: #888; font-size: 12px; }
+        .warning { background: #1f2937; border-left: 4px solid #ea580c; padding: 15px; margin: 20px 0; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <svg class="logo" viewBox="0 0 400 400" xmlns="http://www.w3.org/2000/svg">
-                <defs>
-                    <linearGradient id="orangeGradMFA" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" style="stop-color: #CC3300" />
-                        <stop offset="50%" style="stop-color: #FF4500" />
-                        <stop offset="100%" style="stop-color: #FF6B00" />
-                    </linearGradient>
-                    <linearGradient id="tealGradMFA" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" style="stop-color: #00CED1" />
-                        <stop offset="50%" style="stop-color: #20B2AA" />
-                        <stop offset="100%" style="stop-color: #48D1CC" />
-                    </linearGradient>
-                </defs>
-                <circle cx="200" cy="200" r="190" fill="none" stroke="url(#tealGradMFA)" stroke-width="3" opacity="0.4"/>
-                <ellipse cx="200" cy="230" rx="35" ry="85" fill="#0A0A0A"/>
-                <ellipse cx="200" cy="170" rx="18" ry="20" fill="#0F0F0F"/>
-                <ellipse cx="200" cy="145" rx="32" ry="35" fill="#0F0F0F"/>
-                <ellipse cx="200" cy="110" rx="22" ry="20" fill="#0A0A0A"/>
-                <ellipse cx="200" cy="215" rx="32" ry="10" fill="url(#orangeGradMFA)" opacity="0.95"/>
-                <ellipse cx="200" cy="245" rx="30" ry="9" fill="url(#orangeGradMFA)" opacity="0.9"/>
-                <ellipse cx="200" cy="270" rx="27" ry="8" fill="url(#orangeGradMFA)" opacity="0.85"/>
-                <path d="M 168 135 Q 95 90 82 125 Q 75 160 115 170 Q 148 175 168 158 Z" fill="url(#orangeGradMFA)" opacity="0.9"/>
-                <path d="M 232 135 Q 305 90 318 125 Q 325 160 285 170 Q 252 175 232 158 Z" fill="url(#orangeGradMFA)" opacity="0.9"/>
-                <path d="M 200 305 L 197 330 L 200 350 L 203 330 Z" fill="url(#orangeGradMFA)"/>
-                <ellipse cx="188" cy="108" rx="5" ry="4" fill="#00CED1"/>
-                <ellipse cx="212" cy="108" rx="5" ry="4" fill="#00CED1"/>
-            </svg>
-            <h1 style="margin: 10px 0 0 0; color: white; font-size: 24px;">TarantulaHawk</h1>
-            <p style="margin: 5px 0 0 0; color: #ffedd5;">Código de Verificación</p>
+            <h1 style="margin: 10px 0 0 0; color: white; font-size: 28px;">TarantulaHawk</h1>
+            <p style="margin: 5px 0 0 0; color: #ffedd5;">Restablecer Contraseña</p>
         </div>
         <div class="content">
-            <h2 style="color: #ea580c;">Código de Autenticación</h2>
-            <p>Tu código de verificación de 6 dígitos es:</p>
+            <h2 style="color: #ea580c;">Solicitud de Restablecimiento</h2>
+            <p>Hola <strong>{{ .Email }}</strong>,</p>
+            <p>Recibimos una solicitud para restablecer la contraseña de tu cuenta TarantulaHawk.</p>
             
-            <div class="code">{{ .Token }}</div>
+            <a href="{{ .ConfirmationURL }}" class="button">Restablecer Contraseña</a>
             
-            <p><strong>⏰ Este código expira en 10 minutos</strong></p>
-            <p>Si no solicitaste este código, ignora este email.</p>
+            <div class="warning">
+                <p><strong>⚠️ Importante:</strong></p>
+                <ul>
+                    <li>Este enlace expira en 1 hora</li>
+                    <li>Solo puede usarse una vez</li>
+                    <li>Si no solicitaste este cambio, ignora este email</li>
+                </ul>
+            </div>
             
-            <hr style="border: 1px solid #333; margin: 30px 0;">
-            <p style="color: #888; font-size: 12px;">Por tu seguridad, nunca compartas este código con nadie.</p>
+            <p>Por tu seguridad, asegúrate de:</p>
+            <ul>
+                <li>✅ Usar una contraseña segura (mínimo 8 caracteres)</li>
+                <li>✅ Incluir mayúsculas, minúsculas y números</li>
+                <li>✅ No compartir tu contraseña con nadie</li>
+            </ul>
+        </div>
+        <div class="footer">
+            <p>&copy; 2025 TarantulaHawk. Todos los derechos reservados.</p>
         </div>
     </div>
 </body>
 </html>
 ```
 
-### **5.2 Configuración de Sesiones:**
+### 4. CONFIGURAR SMTP
 
-En **Authentication > Settings**:
-```json
-{
-  "session_timeout": 86400,
-  "refresh_token_rotation": true,
-  "security": {
-    "enable_captcha": true,
-    "max_password_length": 72,
-    "password_required_characters": ["uppercase", "lowercase", "number", "special"]
-  }
-}
+#### En Authentication → Settings → SMTP Settings:
+```
+SMTP Host: smtp.gmail.com
+SMTP Port: 587
+SMTP User: tu-email@gmail.com
+SMTP Pass: tu-app-password
+Sender Email: noreply@tarantulahawk.com
+Sender Name: TarantulaHawk
 ```
 
-## �📊 **6. Dashboard de Administración**
+### 5. CONFIGURAR VARIABLES DE ENTORNO
 
-Para monitorear registros y seguridad:
+#### En Vercel Dashboard → Project Settings → Environment Variables:
+```
+NEXT_PUBLIC_SUPABASE_URL=tu-supabase-url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=tu-supabase-anon-key
+SUPABASE_SERVICE_ROLE_KEY=tu-service-role-key
+NEXT_PUBLIC_SITE_URL=https://tarantulahawk.vercel.app
+```
 
+### 6. VERIFICAR CONFIGURACIÓN
+
+#### Ejecutar estas consultas para verificar:
 ```sql
--- Ver usuarios registrados con MFA
-SELECT 
-    email,
-    raw_user_meta_data->>'name' as name,
-    raw_user_meta_data->>'company' as company,
-    raw_user_meta_data->>'mfa_enabled' as mfa_status,
-    created_at,
-    email_confirmed_at,
-    last_sign_in_at
-FROM auth.users 
-WHERE created_at::date = CURRENT_DATE
-ORDER BY created_at DESC;
+-- Ver estadísticas de usuarios
+SELECT * FROM public.user_stats;
 
--- Estadísticas de seguridad
-SELECT 
-    COUNT(*) as total_users,
-    COUNT(CASE WHEN email_confirmed_at IS NOT NULL THEN 1 END) as verified_users,
-    COUNT(CASE WHEN raw_user_meta_data->>'mfa_enabled' = 'true' THEN 1 END) as mfa_enabled_users,
-    ROUND(
-        COUNT(CASE WHEN email_confirmed_at IS NOT NULL THEN 1 END)::numeric / 
-        COUNT(*)::numeric * 100, 2
-    ) as verification_rate
-FROM auth.users;
+-- Ver dominios corporativos
+SELECT * FROM public.corporate_domains;
 
--- Ver dominios corporativos más comunes
-SELECT 
-    SPLIT_PART(email, '@', 2) as domain,
-    COUNT(*) as count,
-    COUNT(CASE WHEN email_confirmed_at IS NOT NULL THEN 1 END) as verified
-FROM auth.users 
-WHERE SPLIT_PART(email, '@', 2) NOT IN ('gmail.com', 'outlook.com', 'hotmail.com', 'yahoo.com')
-GROUP BY SPLIT_PART(email, '@', 2)
-ORDER BY count DESC;
+-- Verificar políticas RLS
+SELECT schemaname, tablename, policyname, permissive, roles, cmd, qual 
+FROM pg_policies 
+WHERE schemaname = 'public';
+
+-- Verificar triggers
+SELECT event_object_table, trigger_name, action_timing, event_manipulation 
+FROM information_schema.triggers 
+WHERE event_object_schema = 'public';
 ```
 
-## 🚀 **Pasos Siguientes:**
+### 7. PROBAR EL FLUJO COMPLETO
 
-1. ✅ **Configura los email templates** en Supabase Dashboard
-2. ✅ **Actualiza las variables de entorno** en Vercel
-3. ✅ **Configura el dominio personalizado** (opcional)
-4. ✅ **Prueba el flujo completo** con un email corporativo
+1. **Registro de usuario**:
+   - Usar email corporativo
+   - Contraseña segura (8+ chars, mayúsculas, minúsculas, números, símbolos)
+   - Verificar que se crea el perfil automáticamente
 
-## 📞 **Soporte:**
+2. **Verificación de email**:
+   - Revisar bandeja de entrada
+   - Hacer clic en enlace de confirmación
+   - Verificar que se actualiza `email_confirmed_at`
 
-Si necesitas ayuda con la configuración, contacta al equipo de Supabase o revisa su documentación oficial sobre email authentication.
+3. **Validaciones**:
+   - Intentar registrarse con Gmail/Outlook (debe fallar)
+   - Intentar contraseña débil (debe fallar)
+   - Verificar que no se permiten dominios personales
+
+### 8. MONITOREO Y MÉTRICAS
+
+#### Consultas útiles para monitorear:
+```sql
+-- Usuarios registrados hoy
+SELECT COUNT(*) as registros_hoy
+FROM auth.users 
+WHERE created_at::date = CURRENT_DATE;
+
+-- Trials activos
+SELECT COUNT(*) as trials_activos
+FROM public.user_profiles 
+WHERE trial_active = true AND trial_expires_at > NOW();
+
+-- Dominios más populares
+SELECT email_domain, COUNT(*) as usuarios
+FROM public.user_profiles 
+GROUP BY email_domain 
+ORDER BY usuarios DESC 
+LIMIT 10;
+
+-- Actividad reciente
+SELECT activity_type, COUNT(*) as total
+FROM public.user_activity 
+WHERE created_at >= NOW() - INTERVAL '24 hours'
+GROUP BY activity_type
+ORDER BY total DESC;
+```
+
+### 9. TROUBLESHOOTING
+
+#### Problemas comunes:
+
+**Error: "Personal email domains not allowed"**
+- ✅ Solución: Está funcionando correctamente, solo permite emails corporativos
+
+**Error: "Company name is required"**
+- ✅ Solución: Está funcionando correctamente, requiere nombre de empresa
+
+**Emails no llegan:**
+- Verificar configuración SMTP
+- Revisar spam/junk folder
+- Comprobar límites de rate limiting
+
+**Contraseñas rechazadas:**
+- Verificar que cumple todos los requisitos
+- Mínimo 8 caracteres
+- Incluir mayúsculas, minúsculas, números y símbolos
+
+### 10. PRÓXIMOS PASOS
+
+1. ✅ Configurar MFA (Multi-Factor Authentication)
+2. ✅ Implementar dashboard de administración
+3. ✅ Configurar alertas de seguridad
+4. ✅ Implementar logging avanzado
+5. ✅ Configurar backup automático
+
+---
+
+## 📞 SOPORTE
+
+Si tienes problemas con la configuración:
+1. Revisa los logs en Supabase Dashboard → Logs
+2. Verifica las políticas RLS en Authentication → Policies
+3. Contacta soporte si necesitas ayuda adicional
+
+¡La configuración está lista para producción con máxima seguridad! 🔒

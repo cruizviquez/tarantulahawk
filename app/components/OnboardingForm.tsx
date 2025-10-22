@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { registerUser, validateCorporateEmail, validatePassword } from '../lib/userService';
 
 // Inline logo for modal consistency
 const TarantulaHawkLogo = ({ className = "w-10 h-10 mb-4 mx-auto" }) => (
@@ -45,57 +45,17 @@ export default function OnboardingForm({ onClose }: OnboardingFormProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
-  const [passwordStrength, setPasswordStrength] = useState({ isValid: false, message: '' });
-
-  // Validar email corporativo
-  const validateCorporateEmail = (email: string): boolean => {
-    const personalDomains = [
-      'gmail.com', 'outlook.com', 'hotmail.com', 'yahoo.com', 'icloud.com',
-      'aol.com', 'protonmail.com', 'live.com', 'msn.com', 'mail.com',
-      'yandex.com', 'zoho.com', 'tutanota.com', 'fastmail.com'
-    ];
-    
-    const domain = email.split('@')[1]?.toLowerCase();
-    return !personalDomains.includes(domain);
-  };
-
-  // Validar fortaleza de contraseña
-  const validatePassword = (pwd: string): { isValid: boolean; message: string; strength: number } => {
-    if (pwd.length < 8) {
-      return { isValid: false, message: 'Mínimo 8 caracteres', strength: 0 };
-    }
-
-    const hasUppercase = /[A-Z]/.test(pwd);
-    const hasLowercase = /[a-z]/.test(pwd);
-    const hasNumbers = /\d/.test(pwd);
-    const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\?]/.test(pwd);
-
-    const requirements = [
-      { met: hasUppercase, text: 'Al menos 1 mayúscula' },
-      { met: hasLowercase, text: 'Al menos 1 minúscula' },
-      { met: hasNumbers, text: 'Al menos 1 número' },
-      { met: hasSpecialChar, text: 'Al menos 1 carácter especial (!@#$%^&*)' }
-    ];
-
-    const metRequirements = requirements.filter(req => req.met).length;
-    const unmetRequirements = requirements.filter(req => !req.met);
-
-    if (metRequirements === 4) {
-      return { isValid: true, message: '✅ Contraseña segura', strength: 100 };
-    }
-
-    const missing = unmetRequirements.map(req => req.text).join(', ');
-    return { 
-      isValid: false, 
-      message: `Faltan: ${missing}`, 
-      strength: (metRequirements / 4) * 100 
-    };
-  };
+  const [passwordStrength, setPasswordStrength] = useState({ isValid: false, message: '', strength: 0 });
 
   // Actualizar validación de contraseña en tiempo real
   const handlePasswordChange = (newPassword: string) => {
     setPassword(newPassword);
-    setPasswordStrength(validatePassword(newPassword));
+    const validation = validatePassword(newPassword);
+    setPasswordStrength({
+      isValid: validation.isValid,
+      message: validation.message,
+      strength: validation.strength
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -134,50 +94,20 @@ export default function OnboardingForm({ onClose }: OnboardingFormProps) {
     }
 
     try {
-      // Registrar usuario con MFA habilitado
-      const { data, error: signUpError } = await supabase.auth.signUp({
+      // Usar el servicio de registro
+      const data = await registerUser({
+        name,
         email,
         password,
-        options: {
-          data: { 
-            name: name.trim(), 
-            company: company.trim(), 
-            trial: true,
-            email_domain: email.split('@')[1],
-            mfa_enabled: true
-          },
-          emailRedirectTo: `${window.location.origin}/auth/callback`
-        },
+        company
       });
 
-      if (signUpError) {
-        if (signUpError.message.includes('already registered')) {
-          setError('Esta dirección de email ya está registrada. ¿Intentas iniciar sesión en su lugar?');
-        } else if (signUpError.message.includes('password')) {
-          setError('Error con la contraseña. Asegúrate de que cumple todos los requisitos de seguridad.');
-        } else {
-          setError(signUpError.message);
-        }
+      if (data) {
+        setSuccess(true);
         setLoading(false);
-        return;
       }
-
-      // Habilitar MFA por email para la cuenta recién creada
-      if (data.user) {
-        try {
-          await supabase.auth.mfa.enroll({
-            factorType: 'totp',
-            friendlyName: `TarantulaHawk MFA - ${company.trim()}`
-          });
-        } catch (mfaError) {
-          console.log('MFA setup will be completed after email verification');
-        }
-      }
-
-      setSuccess(true);
-      setLoading(false);
-    } catch (error) {
-      setError('Error al crear la cuenta. Por favor intenta de nuevo.');
+    } catch (error: any) {
+      setError(error.message || 'Error al crear la cuenta. Por favor intenta de nuevo.');
       setLoading(false);
     }
   };
