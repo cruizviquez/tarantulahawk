@@ -108,19 +108,19 @@ export default function TarantulaHawkWebsite() {
           <div className="text-center">
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-red-600/10 border border-red-600/20 rounded-full mb-8">
               <Zap className="w-4 h-4 text-red-500" />
-              <span className="text-sm text-red-400">{language === 'en' ? 'AI-Detection • Pay-as-you-go • Instant Reports' : 'IA-Detección • Pago por uso • Reportes instantáneos'}</span>
+              <span className="text-sm text-red-400">{language === 'en' ? 'AI-Powered • Pay-as-you-go • Instant Reports' : 'AI-Powered • Pago por uso • Reportes instantáneos'}</span>
             </div>
             
             <h1 className="text-5xl md:text-7xl font-black mb-6">
               <span className="bg-gradient-to-r from-red-500 via-orange-500 to-teal-400 bg-clip-text text-transparent">
-                {language === 'en' ? 'AI-Powered AML Compliance Platform' : 'Plataforma de Cumplimiento AML con IA'}
+                {language === 'en' ? 'AI-Powered AML Compliance Platform' : 'Plataforma de Cumplimiento PLD con IA'}
               </span>
             </h1>
             
             <p className="text-xl text-gray-400 max-w-3xl mx-auto mb-12">
               {language === 'en' 
                 ? 'Simply upload your transactions and get instant AML compliance reports. Or through secure API if you are a large corporation. Pay-as-you-go pricing perfect for fintechs and small businesses. AI-powered dashboard with real-time alerts.'
-                : 'Simplemente sube tus transacciones y obten reportes de cumplimiento AML al instante. O a través de API segura si eres una gran corporación. Precios por uso perfectos para fintechs y pequeñas empresas. Panel con IA y alertas en tiempo real.'}
+                : 'Simplemente sube tus transacciones y obten reportes de cumplimiento PLD al instante. O a través de API segura si eres una gran corporación. Precios por uso perfectos para fintechs y pequeñas empresas. Panel con IA y alertas en tiempo real.'}
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -172,7 +172,7 @@ export default function TarantulaHawkWebsite() {
               {language === 'en' ? 'How It Works' : 'Cómo Funciona'}
             </h2>
             <p className="text-xl text-gray-400">
-              {language === 'en' ? 'Three simple steps to AML compliance' : 'Tres pasos simples para cumplimiento AML'}
+              {language === 'en' ? 'Three simple steps to AML compliance' : 'Tres pasos simples para cumplimiento PLD'}
             </p>
           </div>
 
@@ -196,7 +196,7 @@ export default function TarantulaHawkWebsite() {
                 <span className="text-2xl font-black text-white">2</span>
               </div>
               <h3 className="text-2xl font-bold mb-4">
-                {language === 'en' ? 'AI-Detection' : 'IA-Detección'}
+                {language === 'en' ? 'AI-Powered Analysis' : 'Análisis AI-Powered'}
               </h3>
               <p className="text-gray-400">
                 {language === 'en' 
@@ -249,7 +249,7 @@ export default function TarantulaHawkWebsite() {
             <p className="text-xl text-gray-400 max-w-4xl mx-auto mb-12">
               {language === 'en' 
                 ? 'From small fintechs to large corporations, access our market-leading AI models through secure API integration running on your own servers. The most powerful AML detection technology available.'
-                : 'Desde pequeñas fintechs hasta grandes corporaciones, accede a nuestros modelos de IA líderes del mercado a través de integración API segura ejecutándose en tus propios servidores. La tecnología de detección AML más poderosa disponible.'}
+                : 'Desde pequeñas fintechs hasta grandes corporaciones, accede a nuestros modelos de IA líderes del mercado a través de integración API segura ejecutándose en tus propios servidores. La tecnología de detección PLD más poderosa disponible.'}
             </p>
           </div>
         </div>
@@ -267,7 +267,7 @@ export default function TarantulaHawkWebsite() {
             <p className="text-xl text-gray-400">
               {language === 'en' 
                 ? 'Our trained models are the most powerful in the market. The only AML platform combining supervised, unsupervised, and reinforcement learning for unmatched detection accuracy.'
-                : 'Nuestros modelos entrenados son los más potentes del mercado. La única plataforma AML que combina aprendizaje supervisado, no supervisado y por refuerzo para precisión de detección inigualable.'}
+                : 'Nuestros modelos entrenados son los más potentes del mercado. La única plataforma PLD que combina aprendizaje supervisado, no supervisado y por refuerzo para precisión de detección inigualable.'}
             </p>
           </div>
 
@@ -322,7 +322,7 @@ export default function TarantulaHawkWebsite() {
           <div className="text-center mb-16">
             <Shield className="w-16 h-16 text-teal-400 mx-auto mb-6" />
             <h2 className="text-4xl font-black mb-4">
-              {language === 'en' ? 'AML Compliance Services' : 'Servicios de Cumplimiento AML'}
+              {language === 'en' ? 'AML Compliance Services' : 'Servicios de Cumplimiento PLD'}
             </h2>
           </div>
 
@@ -330,7 +330,7 @@ export default function TarantulaHawkWebsite() {
             {/* US AML Section */}
             <div className="bg-gradient-to-br from-blue-900/20 to-blue-800/10 border border-blue-800/30 rounded-2xl p-8">
               <h3 className="text-3xl font-bold mb-6 text-blue-400">
-                {language === 'en' ? 'US AML Compliance' : 'Cumplimiento AML Estados Unidos'}
+                {language === 'en' ? 'US AML Compliance' : 'Cumplimiento PLD Estados Unidos'}
               </h3>
               <div className="space-y-4">
                 <div className="flex items-start gap-3">
@@ -580,10 +580,10 @@ export default function TarantulaHawkWebsite() {
               { num: 'V', titleEN: 'Facilitate SHCP Verification', titleES: 'Facilitar Verificacion SHCP', descEN: 'Pre-built audit reports, document packages for SHCP inspections', descES: 'Reportes de auditoria, paquetes de documentos para inspecciones SHCP', color: 'blue' },
               { num: 'VI', titleEN: 'Present Avisos & Reports to SHCP', titleES: 'Presentar Avisos e Informes a SHCP', descEN: 'XML generation for SHCP, automated submission if allowed', descES: 'Generacion XML para SHCP, envio automatizado si permitido', color: 'green' },
               { num: 'VII', titleEN: 'Risk Assessment & EBR Analysis', titleES: 'Evaluacion de Riesgo y Analisis EBR', descEN: 'Core platform: ML-powered risk scoring and classification', descES: 'Funcion principal: scoring de riesgo con ML y clasificacion', color: 'green' },
-              { num: 'VIII', titleEN: 'AML Policy Manual Management', titleES: 'Gestion de Manual de Politicas AML', descEN: 'Template library, version control, FI customization', descES: 'Biblioteca de plantillas, control de versiones, personalizacion IF', color: 'gray' },
-              { num: 'IX', titleEN: 'Personnel Training & Certification', titleES: 'Capacitacion y Certificacion de Personal', descEN: 'Online AML courses, materials, LMS with certification tracking', descES: 'Cursos AML online, materiales, LMS con seguimiento de certificaciones', color: 'gray' },
+              { num: 'VIII', titleEN: 'AML Policy Manual Management', titleES: 'Gestión de Manual de Políticas PLD', descEN: 'Template library, version control, FI customization', descES: 'Biblioteca de plantillas, control de versiones, personalización IF', color: 'gray' },
+              { num: 'IX', titleEN: 'Personnel Training & Certification', titleES: 'Capacitación y Certificación de Personal', descEN: 'Online AML courses, materials, LMS with certification tracking', descES: 'Cursos PLD online, materiales, LMS con seguimiento de certificaciones', color: 'gray' },
               { num: 'X', titleEN: 'Automated Transaction Monitoring', titleES: 'Monitoreo Automatizado de Transacciones', descEN: 'Core platform: Real-time 3-layer ML monitoring, alerts', descES: 'Funcion principal: Monitoreo ML de 3 capas en tiempo real, alertas', color: 'green' },
-              { num: 'XI', titleEN: 'AML Audit Management & Reporting', titleES: 'Gestion de Auditorias AML e Informes', descEN: 'Compliance reports, audit dashboards, KPI tracking', descES: 'Reportes de cumplimiento, dashboards de auditoria, seguimiento KPIs', color: 'green' },
+              { num: 'XI', titleEN: 'AML Audit Management & Reporting', titleES: 'Gestión de Auditorías PLD e Informes', descEN: 'Compliance reports, audit dashboards, KPI tracking', descES: 'Reportes de cumplimiento, dashboards de auditoría, seguimiento KPIs', color: 'green' },
             ].map((item, idx) => (
               <div key={idx} className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
                 <div className="flex items-start gap-4 mb-4">
@@ -618,7 +618,7 @@ export default function TarantulaHawkWebsite() {
             <p className="text-sm text-gray-300 leading-relaxed">
               {language === 'en'
                 ? 'TarantulaHawk is an AML technology platform that facilitates compliance processes for financial institutions. The Financial Institution remains fully and solely responsible for compliance with LFPIORPI, BSA, and all regulatory obligations in US and Mexico. This platform does not provide legal advice and does not assume liability for regulatory compliance outcomes. Always consult with qualified legal counsel and compliance experts for AML matters.'
-                : 'TarantulaHawk es una plataforma tecnológica de Anti-Lavado que facilita procesos de cumplimiento para instituciones financieras. La Institución Financiera permanece total y únicamente responsable del cumplimiento con LFPIORPI, BSA y todas las obligaciones regulatorias en Estados Unidos y México. Esta plataforma no proporciona asesoría legal y no asume responsabilidad por resultados de cumplimiento regulatorio. Siempre consulte con asesoría legal calificada y expertos en cumplimiento para asuntos de Anti-Lavado de Dinero.'}
+                : 'TarantulaHawk es una plataforma tecnológica de PLD que facilita procesos de cumplimiento para instituciones financieras. La Institución Financiera permanece total y únicamente responsable del cumplimiento con LFPIORPI, BSA y todas las obligaciones regulatorias en Estados Unidos y México. Esta plataforma no proporciona asesoría legal y no asume responsabilidad por resultados de cumplimiento regulatorio. Siempre consulte con asesoría legal calificada y expertos en cumplimiento para asuntos de Prevención de Lavado de Dinero.'}
             </p>
           </div>
         </div>
@@ -689,10 +689,10 @@ export default function TarantulaHawkWebsite() {
         <div className="max-w-7xl mx-auto text-center text-gray-500">
           <p>{language === 'en' ? '2025 TarantulaHawk, Inc. All rights reserved.' : '2025 TarantulaHawk, Inc. Todos los derechos reservados.'}</p>
           <p className="mt-2 text-sm">
-            {language === 'en' ? 'US-Based AML Technology Platform | Secure Data Centers in US and Mexico' : 'Plataforma Tecnológica AML con Sede en Estados Unidos | Centros de Datos Seguros en Estados Unidos y México'}
+            {language === 'en' ? 'US-Based AML Technology Platform | Secure Data Centers in US and Mexico' : 'Plataforma Tecnológica PLD con Sede en Estados Unidos | Centros de Datos Seguros en Estados Unidos y México'}
           </p>
           <p className="mt-1 text-sm">
-            {language === 'en' ? 'Compliant with BSA (USA) and LFPIORPI (Mexico) | Anti-Money Laundering Platform' : 'Cumple con BSA (Estados Unidos) y LFPIORPI (México) | Plataforma Anti-Lavado de Dinero'}
+            {language === 'en' ? 'Compliant with BSA (USA) and LFPIORPI (Mexico) | Anti-Money Laundering Platform' : 'Cumple con BSA (Estados Unidos) y LFPIORPI (México) | Plataforma de Prevención de Lavado de Dinero'}
           </p>
         </div>
       </footer>
