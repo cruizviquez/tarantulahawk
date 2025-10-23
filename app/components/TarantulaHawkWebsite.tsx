@@ -342,15 +342,7 @@ export default function TarantulaHawkWebsite() {
                     </p>
                   </div>
                 </div>
-                <div className="flex items-start gap-3">
-                  <div className="w-2 h-2 bg-blue-400 rounded-full mt-2 flex-shrink-0"></div>
-                  <div>
-                    <h4 className="font-semibold text-white mb-2">FinCEN Regulations</h4>
-                    <p className="text-gray-300 text-sm">
-                      {language === 'en' ? 'Financial Crimes Enforcement Network reporting and suspicious activity monitoring.' : 'Reportes de la Red de Cumplimiento de Delitos Financieros y monitoreo de actividad sospechosa.'}
-                    </p>
-                  </div>
-                </div>
+
                 <div className="flex items-start gap-3">
                   <div className="w-2 h-2 bg-blue-400 rounded-full mt-2 flex-shrink-0"></div>
                   <div>
@@ -536,25 +528,13 @@ export default function TarantulaHawkWebsite() {
                 <div className="flex items-center gap-3">
                   <div className="w-3 h-3 bg-green-500 rounded-full"></div>
                   <span className="text-gray-300">
-                    {language === 'en' ? 'Full Automation - Platform handles end-to-end' : 'Automatizacion Total - Plataforma maneja todo'}
-                  </span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
-                  <span className="text-gray-300">
-                    {language === 'en' ? 'Partial Support - Platform assists, FI completes' : 'Soporte Parcial - Plataforma asiste, IF completa'}
-                  </span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                  <span className="text-gray-300">
-                    {language === 'en' ? 'Advisory/Tools - We guide, FI executes' : 'Consultoria/Herramientas - Guiamos, IF ejecuta'}
+                    {language === 'en' ? 'TH Platform AI-Model Solution' : 'Solución IA-Modelo Plataforma TH'}
                   </span>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="w-3 h-3 bg-gray-500 rounded-full"></div>
                   <span className="text-gray-300">
-                    {language === 'en' ? 'FI Manual Process - Outside platform scope' : 'Proceso Manual IF - Fuera del alcance'}
+                    {language === 'en' ? 'Manual Process or Solved outside TH Platform' : 'Proceso Manual o Resuelto fuera de Plataforma TH'}
                   </span>
                 </div>
               </div>
@@ -563,18 +543,18 @@ export default function TarantulaHawkWebsite() {
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
             {[
-              { num: 'I', titleEN: 'Customer ID & KYC Verification', titleES: 'Identificacion de Clientes y Verificacion KYC', descEN: 'Document storage, OCR extraction, API validation (INE/RENAPO)', descES: 'Almacenamiento de docs, extraccion OCR, validacion API (INE/RENAPO)', color: 'yellow' },
-              { num: 'II', titleEN: 'Business Relationship Data Management', titleES: 'Gestion de Datos de Relacion Comercial', descEN: 'Activity data storage, SAT RFC lookup integration', descES: 'Almacenamiento de datos de actividad, consulta RFC SAT', color: 'yellow' },
-              { num: 'III', titleEN: 'Beneficial Ownership Identification', titleES: 'Identificacion de Beneficiario Controlador', descEN: 'Corporate structure visualization, ownership analysis tools', descES: 'Visualizacion de estructura corporativa, herramientas de analisis', color: 'blue' },
-              { num: 'IV', titleEN: '10-Year Document Custody & Retention', titleES: 'Custodia y Retencion de Documentos 10 Anos', descEN: 'Encrypted cloud storage, automatic retention, audit trails', descES: 'Almacenamiento encriptado en nube, retencion automatica, trazabilidad', color: 'green' },
+              { num: 'I', titleEN: 'Customer ID & KYC Verification', titleES: 'Identificacion de Clientes y Verificacion KYC', descEN: 'Document storage, OCR extraction, API validation (INE/RENAPO)', descES: 'Almacenamiento de docs, extraccion OCR, validacion API (INE/RENAPO)', color: 'gray' },
+              { num: 'II', titleEN: 'Business Relationship Data Management', titleES: 'Gestion de Datos de Relacion Comercial', descEN: 'Activity data storage, SAT RFC lookup integration', descES: 'Almacenamiento de datos de actividad, consulta RFC SAT', color: 'gray' },
+              { num: 'III', titleEN: 'Beneficial Ownership Identification', titleES: 'Identificacion de Beneficiario Controlador', descEN: 'Corporate structure visualization, ownership analysis tools', descES: 'Visualizacion de estructura corporativa, herramientas de analisis', color: 'gray' },
+              { num: 'IV', titleEN: '10-Year Document Custody & Retention', titleES: 'Custodia y Retencion de Documentos 10 Anos', descEN: 'Encrypted cloud storage, automatic retention, audit trails', descES: 'Almacenamiento encriptado en nube, retencion automatica, trazabilidad', color: 'gray' },
               { num: 'IV Bis', titleEN: 'Registry in Padron SAT', titleES: 'Registro en Padron SAT', descEN: 'Checklist and guide provided, FI registers with SAT directly', descES: 'Lista de verificacion y guia, IF se registra directamente con SAT', color: 'gray' },
-              { num: 'V', titleEN: 'Facilitate SHCP Verification', titleES: 'Facilitar Verificacion SHCP', descEN: 'Pre-built audit reports, document packages for SHCP inspections', descES: 'Reportes de auditoria, paquetes de documentos para inspecciones SHCP', color: 'blue' },
-              { num: 'VI', titleEN: 'Present Avisos & Reports to SHCP', titleES: 'Presentar Avisos e Informes a SHCP', descEN: 'XML generation for SHCP, automated submission if allowed', descES: 'Generacion XML para SHCP, envio automatizado si permitido', color: 'yellow' },
+              { num: 'V', titleEN: 'Facilitate SHCP Verification', titleES: 'Facilitar Verificacion SHCP', descEN: 'Pre-built audit reports, document packages for SHCP inspections', descES: 'Reportes de auditoria, paquetes de documentos para inspecciones SHCP', color: 'gray' },
+              { num: 'VI', titleEN: 'Present Avisos & Reports to SHCP', titleES: 'Presentar Avisos e Informes a SHCP', descEN: 'XML generation for SHCP, automated submission if allowed', descES: 'Generacion XML para SHCP, envio automatizado si permitido', color: 'gray' },
               { num: 'VII', titleEN: 'Risk Assessment & EBR Analysis', titleES: 'Evaluacion de Riesgo y Analisis EBR', descEN: 'Core platform: ML-powered risk scoring and classification', descES: 'Funcion principal: scoring de riesgo con ML y clasificacion', color: 'green' },
-              { num: 'VIII', titleEN: 'AML Policy Manual Management', titleES: 'Gestion de Manual de Politicas AML', descEN: 'Template library, version control, FI customization', descES: 'Biblioteca de plantillas, control de versiones, personalizacion IF', color: 'blue' },
-              { num: 'IX', titleEN: 'Personnel Training & Certification', titleES: 'Capacitacion y Certificacion de Personal', descEN: 'Online AML courses, materials, LMS with certification tracking', descES: 'Cursos AML online, materiales, LMS con seguimiento de certificaciones', color: 'yellow' },
+              { num: 'VIII', titleEN: 'AML Policy Manual Management', titleES: 'Gestion de Manual de Politicas AML', descEN: 'Template library, version control, FI customization', descES: 'Biblioteca de plantillas, control de versiones, personalizacion IF', color: 'green' },
+              { num: 'IX', titleEN: 'Personnel Training & Certification', titleES: 'Capacitacion y Certificacion de Personal', descEN: 'Online AML courses, materials, LMS with certification tracking', descES: 'Cursos AML online, materiales, LMS con seguimiento de certificaciones', color: 'gray' },
               { num: 'X', titleEN: 'Automated Transaction Monitoring', titleES: 'Monitoreo Automatizado de Transacciones', descEN: 'Core platform: Real-time 3-layer ML monitoring, alerts', descES: 'Funcion principal: Monitoreo ML de 3 capas en tiempo real, alertas', color: 'green' },
-              { num: 'XI', titleEN: 'AML Audit Management & Reporting', titleES: 'Gestion de Auditorias AML e Informes', descEN: 'Compliance reports, audit dashboards, KPI tracking', descES: 'Reportes de cumplimiento, dashboards de auditoria, seguimiento KPIs', color: 'blue' },
+              { num: 'XI', titleEN: 'AML Audit Management & Reporting', titleES: 'Gestion de Auditorias AML e Informes', descEN: 'Compliance reports, audit dashboards, KPI tracking', descES: 'Reportes de cumplimiento, dashboards de auditoria, seguimiento KPIs', color: 'green' },
             ].map((item, idx) => (
               <div key={idx} className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
                 <div className="flex items-start gap-4 mb-4">
@@ -591,10 +571,8 @@ export default function TarantulaHawkWebsite() {
                     <div className="flex items-center gap-2">
                       <div className={`w-3 h-3 bg-${item.color}-500 rounded-full`}></div>
                       <span className="text-xs text-gray-400">
-                        {item.color === 'green' ? (language === 'en' ? 'Full Automation' : 'Automatizacion Total') :
-                         item.color === 'yellow' ? (language === 'en' ? 'Partial Support' : 'Soporte Parcial') :
-                         item.color === 'blue' ? (language === 'en' ? 'Advisory/Tools' : 'Consultoria') :
-                         (language === 'en' ? 'FI Manual Process' : 'Proceso Manual IF')}
+                        {item.color === 'green' ? (language === 'en' ? 'TH Platform AI-Model Solution' : 'Solucion IA-Modelo Plataforma TH') :
+                         (language === 'en' ? 'Manual Process or Solved outside TH Platform' : 'Proceso Manual o Resuelto fuera de Plataforma TH')}
                       </span>
                     </div>
                   </div>
@@ -609,23 +587,59 @@ export default function TarantulaHawkWebsite() {
             </h3>
             <p className="text-sm text-gray-300 leading-relaxed">
               {language === 'en'
-                ? 'TarantulaHawk is an AML technology platform that facilitates compliance processes for financial institutions. The Financial Institution remains fully and solely responsible for compliance with LFPIORPI, BSA, FinCEN, and all regulatory obligations in US and Mexico. This platform does not provide legal advice and does not assume liability for regulatory compliance outcomes. Always consult with qualified legal counsel and compliance experts for AML matters.'
-                : 'TarantulaHawk es una plataforma tecnológica de Anti-Lavado que facilita procesos de cumplimiento para instituciones financieras. La Institución Financiera permanece total y únicamente responsable del cumplimiento con LFPIORPI, BSA, FinCEN y todas las obligaciones regulatorias en EEUU y México. Esta plataforma no proporciona asesoría legal y no asume responsabilidad por resultados de cumplimiento regulatorio. Siempre consulte con asesoría legal calificada y expertos en cumplimiento para asuntos de Anti-Lavado de Dinero.'}
+                ? 'TarantulaHawk is an AML technology platform that facilitates compliance processes for financial institutions. The Financial Institution remains fully and solely responsible for compliance with LFPIORPI, BSA, and all regulatory obligations in US and Mexico. This platform does not provide legal advice and does not assume liability for regulatory compliance outcomes. Always consult with qualified legal counsel and compliance experts for AML matters.'
+                : 'TarantulaHawk es una plataforma tecnológica de Anti-Lavado que facilita procesos de cumplimiento para instituciones financieras. La Institución Financiera permanece total y únicamente responsable del cumplimiento con LFPIORPI, BSA y todas las obligaciones regulatorias en EEUU y México. Esta plataforma no proporciona asesoría legal y no asume responsabilidad por resultados de cumplimiento regulatorio. Siempre consulte con asesoría legal calificada y expertos en cumplimiento para asuntos de Anti-Lavado de Dinero.'}
             </p>
           </div>
         </div>
       </section>
 
-      <section className="py-20 px-6">
+      <section id="about" className="py-20 px-6">
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-4xl font-black mb-6">
-            {language === 'en' ? 'US-Based AML Technology Company with DataCenter in US & Mexico for Sovereignty' : 'Empresa Tecnológica con Sede en EEUU con Data Centers en EEUU y México para la Soberania de Datos'}
+            {language === 'en' ? 'About TarantulaHawk' : 'Acerca de TarantulaHawk'}
           </h2>
           <p className="text-xl text-gray-400 mb-12">
             {language === 'en'
-              ? 'TarantulaHawk is a United States-based financial technology and AML software company with secure data centers located in US and Mexico, ensuring full compliance with US and Mexican data sovereignty and privacy requirements under LFPIORPI regulations.'
-              : 'TarantulaHawk es una empresa tecnológica de software para Anti-Lavado de Dinero con sede en Estados Unidos y centros de datos seguros ubicados en EEUU y México, garantizando el total cumplimiento con requisitos de soberanía de datos y privacidad mexicanos bajo regulaciones LFPIORPI.'}
+              ? 'TarantulaHawk is a US-based technology platform that provides an AML AI-powered solution for ensuring full compliance with US and Mexican regulations and authorities.'
+              : 'TarantulaHawk es una plataforma tecnológica con sede en EEUU que proporciona una solución AML potenciada por IA para garantizar el cumplimiento total con las regulaciones y autoridades de EEUU y México.'}
           </p>
+
+          <div className="bg-black border border-gray-800 rounded-2xl p-8">
+            <h3 className="text-2xl font-bold mb-6">{language === 'en' ? 'What Makes TarantulaHawk Unique for AML' : 'Lo Que Hace Único a TarantulaHawk para AML'}</h3>
+            <div className="grid md:grid-cols-2 gap-6">
+              <div className="flex items-start gap-3 text-left">
+                <CheckCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-1" />
+                <span className="text-gray-300">
+                  {language === 'en' 
+                    ? 'Only AML platform combining supervised, unsupervised, and reinforcement learning models'
+                    : 'Única plataforma AML que combina modelos de aprendizaje supervisado, no supervisado y por refuerzo'}
+                </span>
+              </div>
+              <div className="flex items-start gap-3 text-left">
+                <CheckCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-1" />
+                <span className="text-gray-300">
+                  {language === 'en'
+                    ? 'Dual compliance for US (BSA) and Mexico (LFPIORPI, SHCP, CNBV)'
+                    : 'Cumplimiento dual para US (BSA) y México (LFPIORPI, SHCP, CNBV)'}
+                </span>
+              </div>
+              <div className="flex items-start gap-3 text-left">
+                <CheckCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-1" />
+                <span className="text-gray-300">
+                  {language === 'en' ? 'Sub-100 millisecond real-time transaction risk scoring and AML monitoring' : 'Scoring de riesgo de transacciones en tiempo real en menos de 100 milisegundos y monitoreo AML'}
+                </span>
+              </div>
+              <div className="flex items-start gap-3 text-left">
+                <CheckCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-1" />
+                <span className="text-gray-300">
+                  {language === 'en' ? 'Self-improving AI system that continuously learns from compliance investigations' : 'Sistema de IA auto-mejorable que aprende continuamente de investigaciones de cumplimiento'}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
 
           <div className="bg-black border border-gray-800 rounded-2xl p-8">
             <h3 className="text-2xl font-bold mb-6">{language === 'en' ? 'What Makes TarantulaHawk Unique for AML' : 'Lo Que Hace Unico a TarantulaHawk para AML'}</h3>
@@ -635,15 +649,15 @@ export default function TarantulaHawkWebsite() {
                 <span className="text-gray-300">
                   {language === 'en' 
                     ? 'Only AML platform combining supervised, unsupervised, and reinforcement learning models'
-                    : 'Unica plataforma AML que combina modelos de aprendizaje supervisado, no supervisado y por refuerzo'}
+                    : 'Única plataforma AML que combina modelos de aprendizaje supervisado, no supervisado y por refuerzo'}
                 </span>
               </div>
               <div className="flex items-start gap-3 text-left">
                 <CheckCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-1" />
                 <span className="text-gray-300">
                   {language === 'en'
-                    ? 'Dual compliance for US (BSA, FinCEN) and Mexico (LFPIORPI, SHCP, CNBV)'
-                    : 'Cumplimiento dual para US (BSA, FinCEN) y México (LFPIORPI, SHCP, CNBV)'}
+                    ? 'Dual compliance for US (BSA) and Mexico (LFPIORPI, SHCP, CNBV)'
+                    : 'Cumplimiento dual para US (BSA) y México (LFPIORPI, SHCP, CNBV)'}
                 </span>
               </div>
               <div className="flex items-start gap-3 text-left">
@@ -681,10 +695,10 @@ export default function TarantulaHawkWebsite() {
         <div className="max-w-7xl mx-auto text-center text-gray-500">
           <p>{language === 'en' ? '2025 TarantulaHawk, Inc. All rights reserved.' : '2025 TarantulaHawk, Inc. Todos los derechos reservados.'}</p>
           <p className="mt-2 text-sm">
-            {language === 'en' ? 'US-Based AML Technology Company | Secure Data Centers in US and Mexico' : 'Empresa Tecnológica de Anti-Lavado de Dinero con Sede en EEUU | Centros de Datos Seguros en EEUU y México'}
+            {language === 'en' ? 'US-Based AML Technology Platform | Secure Data Centers in US and Mexico' : 'Plataforma Tecnológica de Anti-Lavado de Dinero con Sede en EEUU | Centros de Datos Seguros en EEUU y México'}
           </p>
           <p className="mt-1 text-sm">
-            {language === 'en' ? 'Compliant with FinCEN BSA (USA) and LFPIORPI (Mexico) | Anti-Money Laundering Software' : 'Cumple con FinCEN BSA (USA) y LFPIORPI (México) | Software Anti Lavado de Dinero'}
+            {language === 'en' ? 'Compliant with BSA (USA) and LFPIORPI (Mexico) | Anti-Money Laundering Platform' : 'Cumple con BSA (USA) y LFPIORPI (México) | Plataforma Anti Lavado de Dinero'}
           </p>
         </div>
       </footer>
