@@ -119,8 +119,8 @@ export default function TarantulaHawkWebsite() {
             
             <p className="text-xl text-gray-400 max-w-3xl mx-auto mb-12">
               {language === 'en' 
-                ? 'Simply upload your transactions and get instant AML compliance reports. Pay-as-you-go pricing perfect for fintechs and small businesses. AI-powered dashboard with real-time alerts.'
-                : 'Simplemente carga tus transacciones y obtén reportes de cumplimiento AML al instante. Precios por uso perfecto para fintechs y pequeñas empresas. Panel con IA y alertas en tiempo real.'}
+                ? 'Simply upload your transactions and get instant AML compliance reports. Or through secure API if you are a large corporation. Pay-as-you-go pricing perfect for fintechs and small businesses. AI-powered dashboard with real-time alerts.'
+                : 'Simplemente carga tus transacciones y obtén reportes de cumplimiento AML al instante. O a través de API segura si eres una gran corporación. Precios por uso perfecto para fintechs y pequeñas empresas. Panel con IA y alertas en tiempo real.'}
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -367,13 +367,13 @@ export default function TarantulaHawkWebsite() {
             {/* Mexico AML Section */}
             <div className="bg-gradient-to-br from-orange-900/20 to-orange-800/10 border border-orange-800/30 rounded-2xl p-8">
               <h3 className="text-3xl font-bold mb-6 text-orange-400">
-                {language === 'en' ? 'Mexico AML Compliance' : 'Cumplimiento AML México'}
+                {language === 'en' ? 'Mexico LFPIORPI Compliance Platform' : 'Plataforma de Cumplimiento LFPIORPI México'}
               </h3>
               <div className="mb-6">
                 <p className="text-gray-300 mb-4">
                   {language === 'en' 
-                    ? 'Complete LFPIORPI Article 18 compliance with automated monitoring and reporting:'
-                    : 'Cumplimiento completo del Artículo 18 LFPIORPI con monitoreo y reportes automatizados:'}
+                    ? 'AI-powered solution for Mexican institutions to fulfill Article 18 obligations under LFPIORPI (reformed July 2025):'
+                    : 'Solución potenciada por IA para instituciones mexicanas para cumplir las obligaciones del Artículo 18 bajo LFPIORPI (reformado julio 2025):'}
                 </p>
               </div>
 
@@ -384,17 +384,17 @@ export default function TarantulaHawkWebsite() {
                   <div className="block md:hidden space-y-4">
                     <div className="bg-gray-800/50 rounded-lg p-4 border-l-4 border-orange-500">
                       <h4 className="font-semibold text-orange-400 mb-2">
-                        {language === 'en' ? 'Operations Monitoring' : 'Monitoreo de operaciones'}
+                        {language === 'en' ? 'Operations AI-powered Monitoring' : 'Monitoreo de operaciones con IA'}
                       </h4>
                       <p className="text-gray-300 text-sm mb-3">
                         {language === 'en' 
-                          ? 'Real-time automated analysis of unusual operations'
-                          : 'Análisis automatizado en tiempo real de operaciones inusuales'}
+                          ? 'Real-time automated analysis'
+                          : 'Análisis automatizado en tiempo real'}
                       </p>
                       <div className="flex items-center gap-2">
                         <span className="text-teal-400 font-bold">✓</span>
                         <span className="text-xs text-gray-400">
-                          {language === 'en' ? 'AI automated detection' : 'Detección automatizada con IA'}
+                          {language === 'en' ? 'Automated' : 'Automatizado'}
                         </span>
                       </div>
                     </div>
@@ -405,13 +405,13 @@ export default function TarantulaHawkWebsite() {
                       </h4>
                       <p className="text-gray-300 text-sm mb-3">
                         {language === 'en' 
-                          ? 'Generate official format reports for SHCP'
-                          : 'Generar reportes en formato oficial para SHCP'}
+                          ? 'Official format-ready for SHCP'
+                          : 'Formato oficial listo para SHCP'}
                       </p>
                       <div className="flex items-center gap-2">
                         <span className="text-teal-400 font-bold">✓</span>
                         <span className="text-xs text-gray-400">
-                          {language === 'en' ? '>95% accuracy' : '>95% precisión'}
+                          {language === 'en' ? 'Automated' : 'Automatizado'}
                         </span>
                       </div>
                     </div>
@@ -422,13 +422,13 @@ export default function TarantulaHawkWebsite() {
                       </h4>
                       <p className="text-gray-300 text-sm mb-3">
                         {language === 'en' 
-                          ? 'Encrypted document retention and audit trails'
-                          : 'Retención de documentos cifrados y trazabilidad'}
+                          ? 'Encrypted retention KPI, reports & audit'
+                          : 'Retención cifrada KPI, reportes y auditoría'}
                       </p>
                       <div className="flex items-center gap-2">
                         <span className="text-teal-400 font-bold">✓</span>
                         <span className="text-xs text-gray-400">
-                          {language === 'en' ? 'Blockchain secured' : 'Asegurado con blockchain'}
+                          {language === 'en' ? 'Automated' : 'Automatizado'}
                         </span>
                       </div>
                     </div>
@@ -453,7 +453,7 @@ export default function TarantulaHawkWebsite() {
                       <tbody>
                         <tr className="bg-gray-800/30 hover:bg-gray-700/50 transition-colors">
                           <td className="px-4 py-3 font-medium text-orange-400 border-l-2 border-orange-500 text-sm">
-                            {language === 'en' ? 'Operations Monitoring' : 'Monitoreo'}
+                            {language === 'en' ? 'Operations AI-powered Monitoring' : 'Monitoreo con IA'}
                           </td>
                           <td className="px-4 py-3 text-gray-300 text-sm">
                             {language === 'en' 
@@ -470,8 +470,8 @@ export default function TarantulaHawkWebsite() {
                           </td>
                           <td className="px-4 py-3 text-gray-300 text-sm">
                             {language === 'en' 
-                              ? 'Official format for SHCP'
-                              : 'Formato oficial para SHCP'}
+                              ? 'Official format-ready for SHCP'
+                              : 'Formato oficial listo para SHCP'}
                           </td>
                           <td className="px-4 py-3 text-center">
                             <span className="text-teal-400 font-bold">✓</span>
@@ -483,8 +483,8 @@ export default function TarantulaHawkWebsite() {
                           </td>
                           <td className="px-4 py-3 text-gray-300 text-sm">
                             {language === 'en' 
-                              ? 'Encrypted retention & audit'
-                              : 'Retención cifrada y auditoría'}
+                              ? 'Encrypted retention KPI, reports & audit'
+                              : 'Retención cifrada KPI, reportes y auditoría'}
                           </td>
                           <td className="px-4 py-3 text-center">
                             <span className="text-teal-400 font-bold">✓</span>
@@ -524,11 +524,17 @@ export default function TarantulaHawkWebsite() {
               <h3 className="text-lg font-bold mb-4 text-white">
                 {language === 'en' ? 'LFPIORPI Article 18 - Platform Capabilities' : 'LFPIORPI Articulo 18 - Capacidades de la Plataforma'}
               </h3>
-              <div className="grid md:grid-cols-2 gap-4 text-sm">
+              <div className="grid md:grid-cols-3 gap-4 text-sm">
                 <div className="flex items-center gap-3">
                   <div className="w-3 h-3 bg-green-500 rounded-full"></div>
                   <span className="text-gray-300">
                     {language === 'en' ? 'TH Platform AI-Model Solution' : 'Solución IA-Modelo Plataforma TH'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+                  <span className="text-gray-300">
+                    {language === 'en' ? 'Partially Automated' : 'Parcialmente Automatizado'}
                   </span>
                 </div>
                 <div className="flex items-center gap-3">
@@ -546,19 +552,19 @@ export default function TarantulaHawkWebsite() {
               { num: 'I', titleEN: 'Customer ID & KYC Verification', titleES: 'Identificacion de Clientes y Verificacion KYC', descEN: 'Document storage, OCR extraction, API validation (INE/RENAPO)', descES: 'Almacenamiento de docs, extraccion OCR, validacion API (INE/RENAPO)', color: 'gray' },
               { num: 'II', titleEN: 'Business Relationship Data Management', titleES: 'Gestion de Datos de Relacion Comercial', descEN: 'Activity data storage, SAT RFC lookup integration', descES: 'Almacenamiento de datos de actividad, consulta RFC SAT', color: 'gray' },
               { num: 'III', titleEN: 'Beneficial Ownership Identification', titleES: 'Identificacion de Beneficiario Controlador', descEN: 'Corporate structure visualization, ownership analysis tools', descES: 'Visualizacion de estructura corporativa, herramientas de analisis', color: 'gray' },
-              { num: 'IV', titleEN: '10-Year Document Custody & Retention', titleES: 'Custodia y Retencion de Documentos 10 Anos', descEN: 'Encrypted cloud storage, automatic retention, audit trails', descES: 'Almacenamiento encriptado en nube, retencion automatica, trazabilidad', color: 'gray' },
+              { num: 'IV', titleEN: '10-Year Document Custody & Retention', titleES: 'Custodia y Retencion de Documentos 10 Anos', descEN: 'Encrypted cloud storage, automatic retention, audit trails', descES: 'Almacenamiento encriptado en nube, retencion automatica, trazabilidad', color: 'blue' },
               { num: 'IV Bis', titleEN: 'Registry in Padron SAT', titleES: 'Registro en Padron SAT', descEN: 'Checklist and guide provided, FI registers with SAT directly', descES: 'Lista de verificacion y guia, IF se registra directamente con SAT', color: 'gray' },
-              { num: 'V', titleEN: 'Facilitate SHCP Verification', titleES: 'Facilitar Verificacion SHCP', descEN: 'Pre-built audit reports, document packages for SHCP inspections', descES: 'Reportes de auditoria, paquetes de documentos para inspecciones SHCP', color: 'gray' },
-              { num: 'VI', titleEN: 'Present Avisos & Reports to SHCP', titleES: 'Presentar Avisos e Informes a SHCP', descEN: 'XML generation for SHCP, automated submission if allowed', descES: 'Generacion XML para SHCP, envio automatizado si permitido', color: 'gray' },
+              { num: 'V', titleEN: 'Facilitate SHCP Verification', titleES: 'Facilitar Verificacion SHCP', descEN: 'Pre-built audit reports, document packages for SHCP inspections', descES: 'Reportes de auditoria, paquetes de documentos para inspecciones SHCP', color: 'blue' },
+              { num: 'VI', titleEN: 'Present Avisos & Reports to SHCP', titleES: 'Presentar Avisos e Informes a SHCP', descEN: 'XML generation for SHCP, automated submission if allowed', descES: 'Generacion XML para SHCP, envio automatizado si permitido', color: 'green' },
               { num: 'VII', titleEN: 'Risk Assessment & EBR Analysis', titleES: 'Evaluacion de Riesgo y Analisis EBR', descEN: 'Core platform: ML-powered risk scoring and classification', descES: 'Funcion principal: scoring de riesgo con ML y clasificacion', color: 'green' },
-              { num: 'VIII', titleEN: 'AML Policy Manual Management', titleES: 'Gestion de Manual de Politicas AML', descEN: 'Template library, version control, FI customization', descES: 'Biblioteca de plantillas, control de versiones, personalizacion IF', color: 'green' },
+              { num: 'VIII', titleEN: 'AML Policy Manual Management', titleES: 'Gestion de Manual de Politicas AML', descEN: 'Template library, version control, FI customization', descES: 'Biblioteca de plantillas, control de versiones, personalizacion IF', color: 'gray' },
               { num: 'IX', titleEN: 'Personnel Training & Certification', titleES: 'Capacitacion y Certificacion de Personal', descEN: 'Online AML courses, materials, LMS with certification tracking', descES: 'Cursos AML online, materiales, LMS con seguimiento de certificaciones', color: 'gray' },
               { num: 'X', titleEN: 'Automated Transaction Monitoring', titleES: 'Monitoreo Automatizado de Transacciones', descEN: 'Core platform: Real-time 3-layer ML monitoring, alerts', descES: 'Funcion principal: Monitoreo ML de 3 capas en tiempo real, alertas', color: 'green' },
               { num: 'XI', titleEN: 'AML Audit Management & Reporting', titleES: 'Gestion de Auditorias AML e Informes', descEN: 'Compliance reports, audit dashboards, KPI tracking', descES: 'Reportes de cumplimiento, dashboards de auditoria, seguimiento KPIs', color: 'green' },
             ].map((item, idx) => (
               <div key={idx} className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
                 <div className="flex items-start gap-4 mb-4">
-                  <div className={`w-12 h-12 bg-gradient-to-br ${item.color === 'green' ? 'from-green-600 to-teal-500' : 'from-red-600 to-orange-500'} rounded-lg flex items-center justify-center flex-shrink-0`}>
+                  <div className={`w-12 h-12 bg-gradient-to-br ${item.color === 'green' ? 'from-green-600 to-teal-500' : item.color === 'blue' ? 'from-blue-600 to-blue-500' : 'from-red-600 to-orange-500'} rounded-lg flex items-center justify-center flex-shrink-0`}>
                     <span className="text-white font-black text-lg">{item.num}</span>
                   </div>
                   <div className="flex-1">
@@ -572,6 +578,7 @@ export default function TarantulaHawkWebsite() {
                       <div className={`w-3 h-3 bg-${item.color}-500 rounded-full`}></div>
                       <span className="text-xs text-gray-400">
                         {item.color === 'green' ? (language === 'en' ? 'TH Platform AI-Model Solution' : 'Solucion IA-Modelo Plataforma TH') :
+                         item.color === 'blue' ? (language === 'en' ? 'Partially Automated' : 'Parcialmente Automatizado') :
                          (language === 'en' ? 'Manual Process or Solved outside TH Platform' : 'Proceso Manual o Resuelto fuera de Plataforma TH')}
                       </span>
                     </div>
@@ -601,8 +608,8 @@ export default function TarantulaHawkWebsite() {
           </h2>
           <p className="text-xl text-gray-400 mb-12">
             {language === 'en'
-              ? 'TarantulaHawk is a US-based technology platform that provides an AML AI-powered solution for ensuring full compliance with US and Mexican regulations and authorities.'
-              : 'TarantulaHawk es una plataforma tecnológica con sede en EEUU que proporciona una solución AML potenciada por IA para garantizar el cumplimiento total con las regulaciones y autoridades de EEUU y México.'}
+              ? 'TarantulaHawk is a technology platform that provides an AML AI-powered solution to assist full compliance with US and Mexican regulations and authorities.'
+              : 'TarantulaHawk es una plataforma tecnológica que proporciona una solución AML potenciada por IA para asistir el cumplimiento total con las regulaciones y autoridades de EEUU y México.'}
           </p>
 
           <div className="bg-black border border-gray-800 rounded-2xl p-8">
