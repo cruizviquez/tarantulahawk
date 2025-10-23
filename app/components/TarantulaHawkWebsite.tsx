@@ -36,7 +36,7 @@ const TarantulaHawkLogo = ({ className = "w-12 h-12" }) => (
 );
 
 export default function TarantulaHawkWebsite() {
-  const [language, setLanguage] = useState('en');
+  const [language, setLanguage] = useState<'en' | 'es'>('es');
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   return (
