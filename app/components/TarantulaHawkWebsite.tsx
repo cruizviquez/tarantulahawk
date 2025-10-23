@@ -120,7 +120,7 @@ export default function TarantulaHawkWebsite() {
             <p className="text-xl text-gray-400 max-w-3xl mx-auto mb-12">
               {language === 'en' 
                 ? 'Simply upload your transactions and get instant AML compliance reports. Or through secure API if you are a large corporation. Pay-as-you-go pricing perfect for fintechs and small businesses. AI-powered dashboard with real-time alerts.'
-                : 'Simplemente carga tus transacciones y obtén reportes de cumplimiento AML al instante. O a través de API segura si eres una gran corporación. Precios por uso perfecto para fintechs y pequeñas empresas. Panel con IA y alertas en tiempo real.'}
+                : 'Simplemente sube tus transacciones y obten reportes de cumplimiento AML al instante. O a través de API segura si eres una gran corporación. Precios por uso perfectos para fintechs y pequeñas empresas. Panel con IA y alertas en tiempo real.'}
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -187,7 +187,7 @@ export default function TarantulaHawkWebsite() {
               <p className="text-gray-400">
                 {language === 'en' 
                   ? 'Upload transaction files or connect directly through our secure API. Deploy on your own servers for maximum security.'
-                  : 'Carga archivos de transacciones o conéctate directamente a través de nuestra API segura. Despliega en tus propios servidores para máxima seguridad.'}
+                  : 'Sube archivos de transacciones o conéctate directamente a través de nuestra API segura. Despliega en tus propios servidores para máxima seguridad.'}
               </p>
             </div>
 
@@ -225,12 +225,12 @@ export default function TarantulaHawkWebsite() {
               <span className="text-2xl">💳</span>
               <div className="text-left">
                 <div className="font-bold text-green-400">
-                  {language === 'en' ? 'Pay-as-you-go Pricing' : 'Precios por Uso'}
+                  {language === 'en' ? 'Pay-as-you-go Pricing' : 'Precios de Pago por Uso'}
                 </div>
                 <div className="text-sm text-gray-400">
                   {language === 'en' 
                     ? 'Perfect for fintechs & small businesses. No setup fees, no minimums.'
-                    : 'Perfecto para fintechs y pequeñas empresas. Sin costos de configuración, sin mínimos.'}
+                    : 'Perfecto para fintechs y pequeñas empresas. Sin tarifas de configuración, sin mínimos.'}
                 </div>
               </div>
             </div>
@@ -296,7 +296,7 @@ export default function TarantulaHawkWebsite() {
               <p className="text-gray-400">
                 {language === 'en' 
                   ? 'Discovers new and evolving money laundering schemes by detecting anomalies in transaction patterns.'
-                  : 'Descubre esquemas de lavado de dinero nuevos y evolutivos detectando anomalías en patrones de transacciones.'}
+                  : 'Descubre esquemas de lavado de dinero nuevos y en evolución detectando anomalías en patrones de transacciones.'}
               </p>
             </div>
 
@@ -310,7 +310,7 @@ export default function TarantulaHawkWebsite() {
               <p className="text-gray-400">
                 {language === 'en' 
                   ? 'Continuously improves detection accuracy by learning from investigator feedback and regulatory updates.'
-                  : 'Mejora continuamente la precisión de detección aprendiendo de comentarios de investigadores y actualizaciones regulatorias.'}
+                  : 'Mejora continuamente la precisión de detección aprendiendo de retroalimentación de investigadores y actualizaciones regulatorias.'}
               </p>
             </div>
           </div>
@@ -537,7 +537,7 @@ export default function TarantulaHawkWebsite() {
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-orange-600/10 border border-orange-600/30 rounded-full mb-8">
               <Shield className="w-4 h-4 text-orange-400" />
               <span className="text-sm text-orange-400">
-                {language === 'en' ? 'Institutions Remain Legally Responsible for the whole process' : 'Las Instituciones Mantienen Responsabilidad Legal por todo el proceso'}
+                {language === 'en' ? 'Institutions Remain Legally Responsible for the whole process' : 'Las Instituciones Mantienen la Responsabilidad Legal de todo el proceso'}
               </span>
             </div>
           </div>
@@ -618,7 +618,7 @@ export default function TarantulaHawkWebsite() {
             <p className="text-sm text-gray-300 leading-relaxed">
               {language === 'en'
                 ? 'TarantulaHawk is an AML technology platform that facilitates compliance processes for financial institutions. The Financial Institution remains fully and solely responsible for compliance with LFPIORPI, BSA, and all regulatory obligations in US and Mexico. This platform does not provide legal advice and does not assume liability for regulatory compliance outcomes. Always consult with qualified legal counsel and compliance experts for AML matters.'
-                : 'TarantulaHawk es una plataforma tecnológica de Anti-Lavado que facilita procesos de cumplimiento para instituciones financieras. La Institución Financiera permanece total y únicamente responsable del cumplimiento con LFPIORPI, BSA y todas las obligaciones regulatorias en EEUU y México. Esta plataforma no proporciona asesoría legal y no asume responsabilidad por resultados de cumplimiento regulatorio. Siempre consulte con asesoría legal calificada y expertos en cumplimiento para asuntos de Anti-Lavado de Dinero.'}
+                : 'TarantulaHawk es una plataforma tecnológica de Anti-Lavado que facilita procesos de cumplimiento para instituciones financieras. La Institución Financiera permanece total y únicamente responsable del cumplimiento con LFPIORPI, BSA y todas las obligaciones regulatorias en Estados Unidos y México. Esta plataforma no proporciona asesoría legal y no asume responsabilidad por resultados de cumplimiento regulatorio. Siempre consulte con asesoría legal calificada y expertos en cumplimiento para asuntos de Anti-Lavado de Dinero.'}
             </p>
           </div>
         </div>
@@ -632,7 +632,7 @@ export default function TarantulaHawkWebsite() {
           <p className="text-xl text-gray-400 mb-12">
             {language === 'en'
               ? 'TarantulaHawk is a technology platform that provides an AML AI-powered solution to assist full compliance with US and Mexican regulations and authorities.'
-              : 'TarantulaHawk es una plataforma tecnológica que proporciona una solución AML potenciada por IA para asistir el cumplimiento total con las regulaciones y autoridades de EEUU y México.'}
+              : 'TarantulaHawk es una plataforma tecnológica que proporciona una solución AML potenciada por IA para asistir en el cumplimiento total con las regulaciones y autoridades de Estados Unidos y México.'}
           </p>
 
           <div className="bg-black border border-gray-800 rounded-2xl p-8">
@@ -689,10 +689,10 @@ export default function TarantulaHawkWebsite() {
         <div className="max-w-7xl mx-auto text-center text-gray-500">
           <p>{language === 'en' ? '2025 TarantulaHawk, Inc. All rights reserved.' : '2025 TarantulaHawk, Inc. Todos los derechos reservados.'}</p>
           <p className="mt-2 text-sm">
-            {language === 'en' ? 'US-Based AML Technology Platform | Secure Data Centers in US and Mexico' : 'Plataforma Tecnológica de Anti-Lavado de Dinero con Sede en EEUU | Centros de Datos Seguros en EEUU y México'}
+            {language === 'en' ? 'US-Based AML Technology Platform | Secure Data Centers in US and Mexico' : 'Plataforma Tecnológica AML con Sede en Estados Unidos | Centros de Datos Seguros en Estados Unidos y México'}
           </p>
           <p className="mt-1 text-sm">
-            {language === 'en' ? 'Compliant with BSA (USA) and LFPIORPI (Mexico) | Anti-Money Laundering Platform' : 'Cumple con BSA (USA) y LFPIORPI (México) | Plataforma Anti Lavado de Dinero'}
+            {language === 'en' ? 'Compliant with BSA (USA) and LFPIORPI (Mexico) | Anti-Money Laundering Platform' : 'Cumple con BSA (Estados Unidos) y LFPIORPI (México) | Plataforma Anti-Lavado de Dinero'}
           </p>
         </div>
       </footer>
