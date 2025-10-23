@@ -249,7 +249,7 @@ export default function TarantulaHawkWebsite() {
             <p className="text-xl text-gray-400 max-w-4xl mx-auto mb-12">
               {language === 'en' 
                 ? 'From small fintechs to large corporations, access our market-leading AI models through secure API integration running on your own servers. The most powerful AML detection technology available.'
-                : 'Desde pequeñas fintechs hasta grandes corporaciones, accede a nuestros modelos de IA líderes del mercado a través de integración API segura ejecutándose en tus propios servidores. La tecnología de detección PLD más poderosa disponible.'}
+                : 'Desde pequeñas fintechs hasta grandes corporaciones, accede a nuestros modelos de IA líderes del mercado con tan sólo subir un archivo de Excel o a través de integración API segura ejecutándose en tus propios servidores. La tecnología de detección PLD más poderosa que existe.'}
             </p>
           </div>
         </div>
@@ -531,8 +531,8 @@ export default function TarantulaHawkWebsite() {
             </h2>
             <p className="text-xl text-gray-400 max-w-4xl mx-auto mb-4">
               {language === 'en'
-                ? 'AI-Powered solution for Mexican institutions to assist in fulfilling Article 18 obligations under LFPIORPI (reformed July 2025), mapping:'
-                : 'Solución potenciada por IA para instituciones mexicanas para asistir en el cumplimiento de las obligaciones del Artículo 18 bajo LFPIORPI (reformado julio 2025), mapeando:'}
+                ? 'AI-powered solution for Mexican institutions to assist in compliance with Article 18 obligations under LFPIORPI (reformed July 2025):'
+                : 'Solución potenciada por IA para instituciones mexicanas para asistir en el cumplimiento de las obligaciones del Artículo 18 bajo LFPIORPI (reformado julio 2025):'}
             </p>
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-orange-600/10 border border-orange-600/30 rounded-full mb-8">
               <Shield className="w-4 h-4 text-orange-400" />
@@ -674,7 +674,7 @@ export default function TarantulaHawkWebsite() {
       <section className="py-20 px-6 bg-gradient-to-b from-black to-gray-900">
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-5xl font-black mb-4">
-            {language === 'en' ? 'Ready to Transform Your AML Compliance?' : 'Listo para Transformar tu Cumplimiento AML?'}
+            {language === 'en' ? 'Ready to Transform Your AML Compliance?' : '¿Listo para Transformar tu Cumplimiento PLD?'}
           </h2>
           <p className="text-xl text-gray-400 mb-8">
             {language === 'en' ? 'Start monitoring transactions and detecting money laundering in minutes' : 'Comienza a monitorear transacciones y detectar lavado de dinero en minutos'}
