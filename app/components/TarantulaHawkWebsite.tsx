@@ -632,18 +632,18 @@ export default function TarantulaHawkWebsite() {
           <p className="text-xl text-gray-400 mb-12">
             {language === 'en'
               ? 'TarantulaHawk is a technology platform that provides an AML AI-powered solution to assist full compliance with US and Mexican regulations and authorities.'
-              : 'TarantulaHawk es una plataforma tecnológica que proporciona una solución AML potenciada por IA para asistir en el cumplimiento total con las regulaciones y autoridades de Estados Unidos y México.'}
+              : 'TarantulaHawk es una plataforma tecnológica que proporciona una solución PLD potenciada por IA para asistir en el cumplimiento total con las regulaciones y autoridades de Estados Unidos y México.'}
           </p>
 
           <div className="bg-black border border-gray-800 rounded-2xl p-8">
-            <h3 className="text-2xl font-bold mb-6">{language === 'en' ? 'What Makes TarantulaHawk Unique for AML' : 'Lo Que Hace Único a TarantulaHawk para AML'}</h3>
+            <h3 className="text-2xl font-bold mb-6">{language === 'en' ? 'What Makes TarantulaHawk Unique for AML' : 'Lo Que Hace Único a TarantulaHawk para PLD'}</h3>
             <div className="grid md:grid-cols-2 gap-6">
               <div className="flex items-start gap-3 text-left">
                 <CheckCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-1" />
                 <span className="text-gray-300">
                   {language === 'en' 
                     ? 'Only AML platform combining supervised, unsupervised, and reinforcement learning models'
-                    : 'Única plataforma AML que combina modelos de aprendizaje supervisado, no supervisado y por refuerzo'}
+                    : 'Única plataforma PLD que combina modelos de aprendizaje supervisado, no supervisado y por refuerzo'}
                 </span>
               </div>
               <div className="flex items-start gap-3 text-left">
@@ -657,7 +657,7 @@ export default function TarantulaHawkWebsite() {
               <div className="flex items-start gap-3 text-left">
                 <CheckCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-1" />
                 <span className="text-gray-300">
-                  {language === 'en' ? 'Sub-100 millisecond real-time transaction risk scoring and AML monitoring' : 'Scoring de riesgo de transacciones en tiempo real en menos de 100 milisegundos y monitoreo AML'}
+                  {language === 'en' ? 'Sub-100 millisecond real-time transaction risk scoring and AML monitoring' : 'Scoring de riesgo de transacciones en tiempo real en menos de 100 milisegundos y monitoreo PLD'}
                 </span>
               </div>
               <div className="flex items-start gap-3 text-left">
@@ -680,7 +680,7 @@ export default function TarantulaHawkWebsite() {
             {language === 'en' ? 'Start monitoring transactions and detecting money laundering in minutes' : 'Comienza a monitorear transacciones y detectar lavado de dinero en minutos'}
           </p>
           <button className="px-12 py-5 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-bold text-xl hover:from-red-700 hover:to-orange-600 transition shadow-2xl shadow-red-500/50">
-            {language === 'en' ? 'Access AML Platform' : 'Acceder a Plataforma AML'}
+            {language === 'en' ? 'Access AML Platform' : 'Acceder a Plataforma PLD'}
           </button>
         </div>
       </section>
