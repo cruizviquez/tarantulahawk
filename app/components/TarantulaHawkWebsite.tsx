@@ -369,13 +369,6 @@ export default function TarantulaHawkWebsite() {
               <h3 className="text-3xl font-bold mb-6 text-orange-400">
                 {language === 'en' ? 'Mexico LFPIORPI Compliance Platform' : 'Plataforma de Cumplimiento LFPIORPI México'}
               </h3>
-              <div className="mb-6">
-                <p className="text-gray-300 mb-4">
-                  {language === 'en' 
-                    ? 'AI-powered solution for Mexican institutions to fulfill Article 18 obligations under LFPIORPI (reformed July 2025):'
-                    : 'Solución potenciada por IA para instituciones mexicanas para cumplir las obligaciones del Artículo 18 bajo LFPIORPI (reformado julio 2025):'}
-                </p>
-              </div>
 
               {/* Responsive Table */}
               <div className="overflow-x-auto">
@@ -384,12 +377,12 @@ export default function TarantulaHawkWebsite() {
                   <div className="block md:hidden space-y-4">
                     <div className="bg-gray-800/50 rounded-lg p-4 border-l-4 border-orange-500">
                       <h4 className="font-semibold text-orange-400 mb-2">
-                        {language === 'en' ? 'Operations AI-powered Monitoring' : 'Monitoreo de operaciones con IA'}
+                        {language === 'en' ? 'Transactions Monitoring' : 'Monitoreo de Transacciones'}
                       </h4>
                       <p className="text-gray-300 text-sm mb-3">
                         {language === 'en' 
-                          ? 'Real-time automated analysis'
-                          : 'Análisis automatizado en tiempo real'}
+                          ? 'AI-Powered Transactions Analysis'
+                          : 'Análisis de Transacciones con IA'}
                       </p>
                       <div className="flex items-center gap-2">
                         <span className="text-teal-400 font-bold">✓</span>
@@ -422,8 +415,25 @@ export default function TarantulaHawkWebsite() {
                       </h4>
                       <p className="text-gray-300 text-sm mb-3">
                         {language === 'en' 
-                          ? 'Encrypted retention KPI, reports & audit'
-                          : 'Retención cifrada KPI, reportes y auditoría'}
+                          ? 'Encrypted retention'
+                          : 'Retención cifrada'}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-teal-400 font-bold">✓</span>
+                        <span className="text-xs text-gray-400">
+                          {language === 'en' ? 'Automated' : 'Automatizado'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="bg-gray-800/50 rounded-lg p-4 border-l-4 border-orange-500">
+                      <h4 className="font-semibold text-orange-400 mb-2">
+                        {language === 'en' ? 'Audit and Reporting' : 'Auditoría y Reportes'}
+                      </h4>
+                      <p className="text-gray-300 text-sm mb-3">
+                        {language === 'en' 
+                          ? 'Dashboards and documents, KPI ready for audit'
+                          : 'Dashboards y documentos, KPI listos para auditoría'}
                       </p>
                       <div className="flex items-center gap-2">
                         <span className="text-teal-400 font-bold">✓</span>
@@ -453,12 +463,12 @@ export default function TarantulaHawkWebsite() {
                       <tbody>
                         <tr className="bg-gray-800/30 hover:bg-gray-700/50 transition-colors">
                           <td className="px-4 py-3 font-medium text-orange-400 border-l-2 border-orange-500 text-sm">
-                            {language === 'en' ? 'Operations AI-powered Monitoring' : 'Monitoreo con IA'}
+                            {language === 'en' ? 'Transactions Monitoring' : 'Monitoreo de Transacciones'}
                           </td>
                           <td className="px-4 py-3 text-gray-300 text-sm">
                             {language === 'en' 
-                              ? 'Real-time automated analysis'
-                              : 'Análisis automatizado en tiempo real'}
+                              ? 'AI-Powered Transactions Analysis'
+                              : 'Análisis de Transacciones con IA'}
                           </td>
                           <td className="px-4 py-3 text-center">
                             <span className="text-teal-400 font-bold">✓</span>
@@ -483,8 +493,21 @@ export default function TarantulaHawkWebsite() {
                           </td>
                           <td className="px-4 py-3 text-gray-300 text-sm">
                             {language === 'en' 
-                              ? 'Encrypted retention KPI, reports & audit'
-                              : 'Retención cifrada KPI, reportes y auditoría'}
+                              ? 'Encrypted retention'
+                              : 'Retención cifrada'}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <span className="text-teal-400 font-bold">✓</span>
+                          </td>
+                        </tr>
+                        <tr className="bg-gray-800/30 hover:bg-gray-700/50 transition-colors">
+                          <td className="px-4 py-3 font-medium text-orange-400 border-l-2 border-orange-500 text-sm">
+                            {language === 'en' ? 'Audit and Reporting' : 'Auditoría y Reportes'}
+                          </td>
+                          <td className="px-4 py-3 text-gray-300 text-sm">
+                            {language === 'en' 
+                              ? 'Dashboards and documents, KPI ready for audit'
+                              : 'Dashboards y documentos, KPI listos para auditoría'}
                           </td>
                           <td className="px-4 py-3 text-center">
                             <span className="text-teal-400 font-bold">✓</span>
@@ -508,8 +531,8 @@ export default function TarantulaHawkWebsite() {
             </h2>
             <p className="text-xl text-gray-400 max-w-4xl mx-auto mb-4">
               {language === 'en'
-                ? 'Complete technology solution for Mexican financial institutions to fulfill Article 18 obligations under LFPIORPI (reformed July 2025)'
-                : 'Solucion tecnologica completa para instituciones financieras mexicanas para cumplir obligaciones del Articulo 18 bajo LFPIORPI (reforma julio 2025)'}
+                ? 'AI-Powered solution for Mexican institutions to assist in fulfilling Article 18 obligations under LFPIORPI (reformed July 2025), mapping:'
+                : 'Solución potenciada por IA para instituciones mexicanas para asistir en el cumplimiento de las obligaciones del Artículo 18 bajo LFPIORPI (reformado julio 2025), mapeando:'}
             </p>
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-orange-600/10 border border-orange-600/30 rounded-full mb-8">
               <Shield className="w-4 h-4 text-orange-400" />
