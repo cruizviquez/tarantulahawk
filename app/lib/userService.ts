@@ -34,7 +34,7 @@ export interface RegistrationData {
   company: string;
 }
 
-// Validar email corporativo
+// Validar email corporativo - Updated for TypeScript strict mode
 export function validateCorporateEmail(email: string): boolean {
   const personalDomains = [
     'gmail.com', 'outlook.com', 'hotmail.com', 'yahoo.com', 'icloud.com',
