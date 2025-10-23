@@ -2,14 +2,8 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   typescript: {
-    // Disable type checking during build if needed
+    // Ensure type checking during build
     ignoreBuildErrors: false,
-  },
-  // Disable build cache to ensure fresh builds
-  experimental: {
-    turbotrace: {
-      memoryLimit: 6000,
-    },
   },
 };
 
