@@ -327,24 +327,120 @@ export default function TarantulaHawkWebsite() {
               </h2>
             </div>
 
-            <div className="grid md:grid-cols-3 gap-8">
-              <div className="text-center">
-                <div className="text-6xl mb-4">🇺🇸</div>
-                <p className="text-gray-300 font-semibold">
-                  {language === 'en' ? 'USA Compliance: BSA, FinCEN, Bank Secrecy Act, PATRIOT Act, SAR Filing' : 'Cumplimiento USA: BSA, FinCEN, Ley de Secreto Bancario, PATRIOT Act, Presentacion SAR'}
-                </p>
+            <div className="mb-8">
+              <h3 className="text-2xl font-bold mb-6 text-center text-teal-400">
+                {language === 'en' ? 'Your AML Obligations & How We Help' : 'Tus Obligaciones AML y Cómo Te Ayudamos'}
+              </h3>
+              
+              <div className="overflow-x-auto">
+                <table className="w-full border-collapse">
+                  <thead>
+                    <tr className="bg-gradient-to-r from-teal-600 to-blue-600">
+                      <th className="px-6 py-4 text-left font-bold text-black rounded-l-lg">
+                        {language === 'en' ? 'Obligation' : 'Obligación'}
+                      </th>
+                      <th className="px-6 py-4 text-left font-bold text-black">
+                        {language === 'en' ? 'Description' : 'Descripción'}
+                      </th>
+                      <th className="px-6 py-4 text-center font-bold text-black rounded-r-lg">
+                        {language === 'en' ? 'TarantulaHawk.ai helps?' : '¿TarantulaHawk.ai te ayuda?'}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="space-y-2">
+                    <tr className="bg-gray-800/50 hover:bg-gray-700/50 transition-colors">
+                      <td className="px-6 py-4 font-semibold text-teal-400 rounded-l-lg border-l-4 border-teal-500">
+                        {language === 'en' ? 'Customer Identification' : 'Identificación del cliente'}
+                      </td>
+                      <td className="px-6 py-4 text-gray-300">
+                        {language === 'en' ? 'Verify identity, RFC and beneficial owner' : 'Verificar identidad, RFC y beneficiario controlador'}
+                      </td>
+                      <td className="px-6 py-4 text-center rounded-r-lg">
+                        <span className="text-orange-500 font-bold">✗</span>
+                        <div className="text-xs text-gray-400 mt-1">
+                          {language === 'en' ? 'Obligated Subject Responsibility' : 'Responsabilidad del sujeto obligado'}
+                        </div>
+                      </td>
+                    </tr>
+                    <tr className="bg-gray-800/50 hover:bg-gray-700/50 transition-colors">
+                      <td className="px-6 py-4 font-semibold text-teal-400 rounded-l-lg border-l-4 border-teal-500">
+                        {language === 'en' ? 'Operations Monitoring' : 'Monitoreo de operaciones'}
+                      </td>
+                      <td className="px-6 py-4 text-gray-300">
+                        {language === 'en' ? 'Analyze unusual, relevant or concerning operations in real-time with automated systems' : 'Analizar operaciones inusuales, relevantes o preocupantes en tiempo real y con sistemas automatizados'}
+                      </td>
+                      <td className="px-6 py-4 text-center rounded-r-lg">
+                        <span className="text-teal-400 font-bold">✓</span>
+                        <div className="text-xs text-gray-400 mt-1">
+                          {language === 'en' ? 'AI detects patterns and risks automatically' : 'IA detecta patrones y riesgos automáticamente'}
+                        </div>
+                      </td>
+                    </tr>
+                    <tr className="bg-gray-800/50 hover:bg-gray-700/50 transition-colors">
+                      <td className="px-6 py-4 font-semibold text-teal-400 rounded-l-lg border-l-4 border-teal-500">
+                        {language === 'en' ? 'Operations Reporting' : 'Reporte de operaciones'}
+                      </td>
+                      <td className="px-6 py-4 text-gray-300">
+                        {language === 'en' ? 'Generate XML reports according to official format' : 'Generar reportes XML conforme formato oficial'}
+                      </td>
+                      <td className="px-6 py-4 text-center rounded-r-lg">
+                        <span className="text-teal-400 font-bold">✓</span>
+                        <div className="text-xs text-gray-400 mt-1">
+                          {language === 'en' ? '>95% precision, reduces false positives' : 'Precisión >95%, reduce falsos positivos'}
+                        </div>
+                      </td>
+                    </tr>
+                    <tr className="bg-gray-800/50 hover:bg-gray-700/50 transition-colors">
+                      <td className="px-6 py-4 font-semibold text-teal-400 rounded-l-lg border-l-4 border-teal-500">
+                        {language === 'en' ? 'File Conservation' : 'Conservación de expedientes'}
+                      </td>
+                      <td className="px-6 py-4 text-gray-300">
+                        {language === 'en' ? 'Maintain inviolable files for 10 years' : 'Mantener archivos inviolables durante 10 años'}
+                      </td>
+                      <td className="px-6 py-4 text-center rounded-r-lg">
+                        <span className="text-teal-400 font-bold">✓</span>
+                        <div className="text-xs text-gray-400 mt-1">
+                          {language === 'en' ? 'Encrypted blockchain, 100% auditable' : 'Blockchain cifrado, 100% auditable'}
+                        </div>
+                      </td>
+                    </tr>
+                    <tr className="bg-gray-800/50 hover:bg-gray-700/50 transition-colors">
+                      <td className="px-6 py-4 font-semibold text-teal-400 rounded-l-lg border-l-4 border-teal-500">
+                        {language === 'en' ? 'Annual Audit' : 'Auditoría anual'}
+                      </td>
+                      <td className="px-6 py-4 text-gray-300">
+                        {language === 'en' ? 'Evidence and total traceability' : 'Evidencias y trazabilidad total'}
+                      </td>
+                      <td className="px-6 py-4 text-center rounded-r-lg">
+                        <span className="text-teal-400 font-bold">✓</span>
+                        <div className="text-xs text-gray-400 mt-1">
+                          {language === 'en' ? 'Visual dashboards with clear metrics' : 'Dashboards visuales con métricas claras'}
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
-              <div className="text-center">
-                <div className="text-6xl mb-4">🇲🇽</div>
-                <p className="text-gray-300 font-semibold">
-                  {language === 'en' ? 'Mexico Compliance: LFPIORPI, SHCP, CNBV, Avisos, Article 18 Obligations' : 'Cumplimiento México: LFPIORPI, SHCP, CNBV, Avisos, Obligaciones Artículo 18'}
-                </p>
-              </div>
-              <div className="text-center">
-                <div className="text-6xl mb-4">🌎</div>
-                <p className="text-gray-300 font-semibold">
-                  {language === 'en' ? 'Cross-border AML monitoring for US-Mexico financial operations and transactions' : 'Monitoreo Anti-Lavado transfronterizo para operaciones y transacciones financieras EEUU-México'}
-                </p>
+              
+              <div className="grid md:grid-cols-3 gap-6 mt-8">
+                <div className="text-center p-4 bg-gray-800/30 rounded-lg">
+                  <div className="text-4xl mb-2">🇺🇸</div>
+                  <p className="text-gray-300 font-semibold text-sm">
+                    {language === 'en' ? 'USA: BSA, FinCEN, Bank Secrecy Act, PATRIOT Act, SAR Filing' : 'USA: BSA, FinCEN, Ley de Secreto Bancario, PATRIOT Act, Presentación SAR'}
+                  </p>
+                </div>
+                <div className="text-center p-4 bg-gray-800/30 rounded-lg">
+                  <div className="text-4xl mb-2">🇲🇽</div>
+                  <p className="text-gray-300 font-semibold text-sm">
+                    {language === 'en' ? 'Mexico: LFPIORPI, SHCP, CNBV, Avisos, Article 18' : 'México: LFPIORPI, SHCP, CNBV, Avisos, Artículo 18'}
+                  </p>
+                </div>
+                <div className="text-center p-4 bg-gray-800/30 rounded-lg">
+                  <div className="text-4xl mb-2">🌎</div>
+                  <p className="text-gray-300 font-semibold text-sm">
+                    {language === 'en' ? 'Cross-border AML monitoring for US-Mexico operations' : 'Monitoreo AML transfronterizo para operaciones EEUU-México'}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
