@@ -367,7 +367,7 @@ export default function TarantulaHawkWebsite() {
             {/* Mexico AML Section */}
             <div className="bg-gradient-to-br from-orange-900/20 to-orange-800/10 border border-orange-800/30 rounded-2xl p-8">
               <h3 className="text-3xl font-bold mb-6 text-orange-400">
-                {language === 'en' ? 'Mexico LFPIORPI Compliance Platform' : 'Plataforma de Cumplimiento LFPIORPI México'}
+                {language === 'en' ? 'Mexico LFPIORPI Compliance' : 'Cumplimiento LFPIORPI México'}
               </h3>
 
               {/* Responsive Table */}
@@ -387,7 +387,7 @@ export default function TarantulaHawkWebsite() {
                       <div className="flex items-center gap-2">
                         <span className="text-teal-400 font-bold">✓</span>
                         <span className="text-xs text-gray-400">
-                          {language === 'en' ? 'Automated' : 'Automatizado'}
+                          {language === 'en' ? 'Solved' : 'Resuelto'}
                         </span>
                       </div>
                     </div>
@@ -404,7 +404,7 @@ export default function TarantulaHawkWebsite() {
                       <div className="flex items-center gap-2">
                         <span className="text-teal-400 font-bold">✓</span>
                         <span className="text-xs text-gray-400">
-                          {language === 'en' ? 'Automated' : 'Automatizado'}
+                          {language === 'en' ? 'Solved' : 'Resuelto'}
                         </span>
                       </div>
                     </div>
@@ -421,7 +421,7 @@ export default function TarantulaHawkWebsite() {
                       <div className="flex items-center gap-2">
                         <span className="text-teal-400 font-bold">✓</span>
                         <span className="text-xs text-gray-400">
-                          {language === 'en' ? 'Automated' : 'Automatizado'}
+                          {language === 'en' ? 'Solved' : 'Resuelto'}
                         </span>
                       </div>
                     </div>
@@ -438,7 +438,7 @@ export default function TarantulaHawkWebsite() {
                       <div className="flex items-center gap-2">
                         <span className="text-teal-400 font-bold">✓</span>
                         <span className="text-xs text-gray-400">
-                          {language === 'en' ? 'Automated' : 'Automatizado'}
+                          {language === 'en' ? 'Solved' : 'Resuelto'}
                         </span>
                       </div>
                     </div>
@@ -450,13 +450,13 @@ export default function TarantulaHawkWebsite() {
                       <thead>
                         <tr className="bg-gradient-to-r from-orange-600 to-red-600">
                           <th className="px-4 py-3 text-left font-bold text-black text-sm rounded-l-lg">
-                            {language === 'en' ? 'Obligation' : 'Obligación'}
+                            {language === 'en' ? 'Law Obligation' : 'Obligación Legal'}
                           </th>
                           <th className="px-4 py-3 text-left font-bold text-black text-sm">
-                            {language === 'en' ? 'Description' : 'Descripción'}
+                            {language === 'en' ? 'TarantulaHawk' : 'TarantulaHawk'}
                           </th>
                           <th className="px-4 py-3 text-center font-bold text-black text-sm rounded-r-lg">
-                            {language === 'en' ? 'Automated' : 'Automatizado'}
+                            {language === 'en' ? 'Solved' : 'Resuelto'}
                           </th>
                         </tr>
                       </thead>
@@ -527,7 +527,7 @@ export default function TarantulaHawkWebsite() {
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12">
             <h2 className="text-4xl md:text-5xl font-black mb-4">
-              {language === 'en' ? 'Mexico LFPIORPI Compliance Platform' : 'Plataforma de Cumplimiento LFPIORPI México'}
+              {language === 'en' ? 'Mexico LFPIORPI Compliance' : 'Cumplimiento LFPIORPI México'}
             </h2>
             <p className="text-xl text-gray-400 max-w-4xl mx-auto mb-4">
               {language === 'en'
@@ -537,7 +537,7 @@ export default function TarantulaHawkWebsite() {
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-orange-600/10 border border-orange-600/30 rounded-full mb-8">
               <Shield className="w-4 h-4 text-orange-400" />
               <span className="text-sm text-orange-400">
-                {language === 'en' ? 'Technology Platform - Financial Institution Remains Legally Responsible' : 'Plataforma Tecnologica - Institucion Financiera Mantiene Responsabilidad Legal'}
+                {language === 'en' ? 'Institutions Remain Legally Responsible for the whole process' : 'Las Instituciones Mantienen Responsabilidad Legal por todo el proceso'}
               </span>
             </div>
           </div>
@@ -545,25 +545,25 @@ export default function TarantulaHawkWebsite() {
           <div className="mb-12 max-w-5xl mx-auto">
             <div className="bg-gray-900/50 border border-gray-700 rounded-xl p-6">
               <h3 className="text-lg font-bold mb-4 text-white">
-                {language === 'en' ? 'LFPIORPI Article 18 - Platform Capabilities' : 'LFPIORPI Articulo 18 - Capacidades de la Plataforma'}
+                {language === 'en' ? 'LFPIORPI Article 18 - TH Solution Capabilities' : 'LFPIORPI Articulo 18 - Capacidades de Solución TH'}
               </h3>
               <div className="grid md:grid-cols-3 gap-4 text-sm">
                 <div className="flex items-center gap-3">
                   <div className="w-3 h-3 bg-green-500 rounded-full"></div>
                   <span className="text-gray-300">
-                    {language === 'en' ? 'TH Platform AI-Model Solution' : 'Solución IA-Modelo Plataforma TH'}
+                    {language === 'en' ? 'TH AI-Powered Solution' : 'Solución IA TH'}
                   </span>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
                   <span className="text-gray-300">
-                    {language === 'en' ? 'Partially Automated' : 'Parcialmente Automatizado'}
+                    {language === 'en' ? 'Partially TH Solved' : 'Parcialmente Resuelto por TH'}
                   </span>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="w-3 h-3 bg-gray-500 rounded-full"></div>
                   <span className="text-gray-300">
-                    {language === 'en' ? 'Manual Process or Solved outside TH Platform' : 'Proceso Manual o Resuelto fuera de Plataforma TH'}
+                    {language === 'en' ? 'Manual Process Institution Responsibility' : 'Proceso Manual Responsabilidad Institución'}
                   </span>
                 </div>
               </div>
@@ -600,9 +600,9 @@ export default function TarantulaHawkWebsite() {
                     <div className="flex items-center gap-2">
                       <div className={`w-3 h-3 bg-${item.color}-500 rounded-full`}></div>
                       <span className="text-xs text-gray-400">
-                        {item.color === 'green' ? (language === 'en' ? 'TH Platform AI-Model Solution' : 'Solucion IA-Modelo Plataforma TH') :
-                         item.color === 'blue' ? (language === 'en' ? 'Partially Automated' : 'Parcialmente Automatizado') :
-                         (language === 'en' ? 'Manual Process or Solved outside TH Platform' : 'Proceso Manual o Resuelto fuera de Plataforma TH')}
+                        {item.color === 'green' ? (language === 'en' ? 'TH AI-Powered Solution' : 'Solución IA TH') :
+                         item.color === 'blue' ? (language === 'en' ? 'Partially TH Solved' : 'Parcialmente Resuelto por TH') :
+                         (language === 'en' ? 'Manual Process Institution Responsibility' : 'Proceso Manual Responsabilidad Institución')}
                       </span>
                     </div>
                   </div>
