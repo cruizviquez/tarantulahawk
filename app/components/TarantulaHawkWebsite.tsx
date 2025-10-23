@@ -641,42 +641,6 @@ export default function TarantulaHawkWebsite() {
         </div>
       </section>
 
-          <div className="bg-black border border-gray-800 rounded-2xl p-8">
-            <h3 className="text-2xl font-bold mb-6">{language === 'en' ? 'What Makes TarantulaHawk Unique for AML' : 'Lo Que Hace Unico a TarantulaHawk para AML'}</h3>
-            <div className="grid md:grid-cols-2 gap-6">
-              <div className="flex items-start gap-3 text-left">
-                <CheckCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-1" />
-                <span className="text-gray-300">
-                  {language === 'en' 
-                    ? 'Only AML platform combining supervised, unsupervised, and reinforcement learning models'
-                    : 'Única plataforma AML que combina modelos de aprendizaje supervisado, no supervisado y por refuerzo'}
-                </span>
-              </div>
-              <div className="flex items-start gap-3 text-left">
-                <CheckCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-1" />
-                <span className="text-gray-300">
-                  {language === 'en'
-                    ? 'Dual compliance for US (BSA) and Mexico (LFPIORPI, SHCP, CNBV)'
-                    : 'Cumplimiento dual para US (BSA) y México (LFPIORPI, SHCP, CNBV)'}
-                </span>
-              </div>
-              <div className="flex items-start gap-3 text-left">
-                <CheckCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-1" />
-                <span className="text-gray-300">
-                  {language === 'en' ? 'Sub-100 millisecond real-time transaction risk scoring and AML monitoring' : 'Scoring de riesgo de transacciones en tiempo real en menos de 100 milisegundos y monitoreo AML'}
-                </span>
-              </div>
-              <div className="flex items-start gap-3 text-left">
-                <CheckCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-1" />
-                <span className="text-gray-300">
-                  {language === 'en' ? 'Self-improving AI system that continuously learns from compliance investigations' : 'Sistema de IA auto-mejorable que aprende continuamente de investigaciones de cumplimiento'}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
       <section className="py-20 px-6 bg-gradient-to-b from-black to-gray-900">
         <div className="max-w-4xl mx-auto text-center">
           <h2 className="text-5xl font-black mb-4">
