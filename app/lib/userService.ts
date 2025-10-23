@@ -43,7 +43,10 @@ export function validateCorporateEmail(email: string): boolean {
   ];
   
   const domain = email.split('@')[1]?.toLowerCase();
-  return Boolean(domain && !personalDomains.includes(domain));
+  if (!domain) {
+    return false;
+  }
+  return !personalDomains.includes(domain);
 }
 
 // Validar fortaleza de contraseña
