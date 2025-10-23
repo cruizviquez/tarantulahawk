@@ -348,23 +348,8 @@ export async function loginUser(email: string, password: string) {
   });
 
   if (error) {
-    // Log intento fallido
-    const profile = await supabase
-      .from('user_profiles')
-      .select('id, login_attempts')
-      .eq('id', data?.user?.id)
-      .single();
-
-    if (profile.data) {
-      await supabase
-        .from('user_profiles')
-        .update({ 
-          login_attempts: (profile.data.login_attempts || 0) + 1,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', profile.data.id);
-    }
-
+    // For failed login attempts, we can't reliably get the user ID
+    // so we'll skip the login attempt tracking in this case
     throw error;
   }
 
