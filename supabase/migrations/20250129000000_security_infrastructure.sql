@@ -4,16 +4,25 @@
 -- ========================================
 -- 1. PROFILES TABLE EXTENSIONS
 -- ========================================
--- Add subscription tier and credits tracking
-ALTER TABLE profiles 
-  ADD COLUMN IF NOT EXISTS subscription_tier TEXT DEFAULT 'free' CHECK (subscription_tier IN ('free', 'paid', 'enterprise')),
-  ADD COLUMN IF NOT EXISTS credits_remaining INTEGER DEFAULT 10,
-  ADD COLUMN IF NOT EXISTS api_access_enabled BOOLEAN DEFAULT FALSE,
-  ADD COLUMN IF NOT EXISTS rate_limit_tier TEXT DEFAULT 'standard' CHECK (rate_limit_tier IN ('standard', 'elevated', 'unlimited'));
+-- Add subscription tier and credits tracking (only if profiles exists)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'profiles'
+  ) THEN
+    ALTER TABLE public.profiles 
+      ADD COLUMN IF NOT EXISTS subscription_tier TEXT DEFAULT 'free' CHECK (subscription_tier IN ('free', 'paid', 'enterprise')),
+      ADD COLUMN IF NOT EXISTS credits_remaining INTEGER DEFAULT 10,
+      ADD COLUMN IF NOT EXISTS api_access_enabled BOOLEAN DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS rate_limit_tier TEXT DEFAULT 'standard' CHECK (rate_limit_tier IN ('standard', 'elevated', 'unlimited'));
 
--- Create index for faster subscription queries
-CREATE INDEX IF NOT EXISTS idx_profiles_subscription_tier ON profiles(subscription_tier);
-CREATE INDEX IF NOT EXISTS idx_profiles_api_access ON profiles(api_access_enabled);
+    -- Create index for faster subscription queries
+    CREATE INDEX IF NOT EXISTS idx_profiles_subscription_tier ON public.profiles(subscription_tier);
+    CREATE INDEX IF NOT EXISTS idx_profiles_api_access ON public.profiles(api_access_enabled);
+  END IF;
+END
+$$;
 
 -- ========================================
 -- 2. AUDIT LOGS TABLE (LFPIORPI COMPLIANCE)
@@ -208,6 +217,28 @@ CREATE TRIGGER update_api_keys_updated_at
 COMMENT ON TABLE audit_logs IS 'LFPIORPI compliance audit trail - logs all user actions for regulatory reporting';
 COMMENT ON TABLE api_keys IS 'Enterprise API keys for programmatic access to TarantulaHawk services';
 COMMENT ON TABLE api_key_usage IS 'Detailed usage tracking for API keys - used for analytics and billing';
-COMMENT ON COLUMN profiles.subscription_tier IS 'User subscription level: free (10 credits), paid (100 credits), enterprise (API access)';
-COMMENT ON COLUMN profiles.credits_remaining IS 'Number of remaining credits for transaction processing';
-COMMENT ON COLUMN profiles.api_access_enabled IS 'Whether user has API access (enterprise tier)';
+DO $$
+BEGIN
+  -- Only add column comments if profiles table/columns exist
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'subscription_tier'
+  ) THEN
+    COMMENT ON COLUMN public.profiles.subscription_tier IS 'User subscription level: free (10 credits), paid (100 credits), enterprise (API access)';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'credits_remaining'
+  ) THEN
+    COMMENT ON COLUMN public.profiles.credits_remaining IS 'Number of remaining credits for transaction processing';
+  END IF;
+
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'api_access_enabled'
+  ) THEN
+    COMMENT ON COLUMN public.profiles.api_access_enabled IS 'Whether user has API access (enterprise tier)';
+  END IF;
+END
+$$;
