@@ -1,0 +1,22 @@
+name: Vercel Scheduled Deploy
+
+on:
+  push:
+    branches: [ main ]
+  schedule:
+    - cron: "0 9 * * *" # Every day at 09:00 UTC
+  workflow_dispatch: {}
+
+jobs:
+  trigger-vercel-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Vercel Deploy Hook
+        env:
+          DEPLOY_HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK_URL }}
+        run: |
+          if [ -z "$DEPLOY_HOOK" ]; then
+            echo "VERCEL_DEPLOY_HOOK_URL secret is not set. Skipping trigger." && exit 0
+          fi
+          curl -s -X POST "$DEPLOY_HOOK" -H 'Content-Type: application/json' -d '{"source":"github-actions"}'
+          echo "Triggered Vercel deploy via Deploy Hook."
