@@ -52,6 +52,28 @@ export default async function AuthCallback({
       );
     }
 
+    // Crear/actualizar perfil con valores por defecto para PAYG
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+      const userId = userData?.user?.id;
+      if (userId) {
+        await supabase.from('profiles').upsert(
+          {
+            id: userId,
+            subscription_tier: 'free',
+            free_reports_used: 0,
+            max_free_reports: 3,
+            tx_limit_free: 500,
+            api_access_enabled: false,
+          },
+          { onConflict: 'id' }
+        );
+      }
+    } catch (e) {
+      // Non-fatal; UI proceeds
+      console.error('Profile initialization error', e);
+    }
+
     // Éxito - redirigir al dashboard o página principal con mensaje de éxito
     return (
       <div className="min-h-screen bg-black flex items-center justify-center p-6">
