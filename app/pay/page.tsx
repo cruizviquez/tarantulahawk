@@ -97,7 +97,7 @@ export default function PayPage() {
             )}
 
             <div className="mt-6 text-sm text-gray-500 text-center">
-              Plan actual: <span className="text-white font-semibold">Free</span> — 3 reportes gratis, máx. 500 transacciones por reporte.
+              Plan actual: <span className="text-white font-semibold">Free</span> — 3 reportes gratis, máx. 1,500 transacciones totales.
             </div>
           </>
         )}

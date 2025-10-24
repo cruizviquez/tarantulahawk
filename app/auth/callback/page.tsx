@@ -63,7 +63,8 @@ export default async function AuthCallback({
             subscription_tier: 'free',
             free_reports_used: 0,
             max_free_reports: 3,
-            tx_limit_free: 500,
+            tx_limit_free: 1500,
+            tx_used_free: 0,
             api_access_enabled: false,
           },
           { onConflict: 'id' }

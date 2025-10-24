@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (!profile || profile.subscription_tier === 'free') {
-      await markFreeReportUsed(userId);
+      await markFreeReportUsed(userId, transactionCount);
     }
 
     await logAuditEvent({

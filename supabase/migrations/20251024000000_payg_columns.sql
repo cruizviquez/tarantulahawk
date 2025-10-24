@@ -2,7 +2,8 @@
 ALTER TABLE profiles 
   ADD COLUMN IF NOT EXISTS free_reports_used INTEGER DEFAULT 0,
   ADD COLUMN IF NOT EXISTS max_free_reports INTEGER DEFAULT 3,
-  ADD COLUMN IF NOT EXISTS tx_limit_free INTEGER DEFAULT 500;
+  ADD COLUMN IF NOT EXISTS tx_limit_free INTEGER DEFAULT 1500,
+  ADD COLUMN IF NOT EXISTS tx_used_free INTEGER DEFAULT 0;
 
 -- Increment function for free_reports_used
 CREATE OR REPLACE FUNCTION increment_free_reports_used(p_user_id UUID)
@@ -14,5 +15,16 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Helpful index
+-- Increment function for tx_used_free
+CREATE OR REPLACE FUNCTION increment_tx_used_free(p_user_id UUID, tx_count INTEGER)
+RETURNS VOID AS $$
+BEGIN
+  UPDATE profiles
+  SET tx_used_free = COALESCE(tx_used_free, 0) + tx_count
+  WHERE id = p_user_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Helpful indexes
 CREATE INDEX IF NOT EXISTS idx_profiles_free_reports ON profiles(free_reports_used);
+CREATE INDEX IF NOT EXISTS idx_profiles_tx_used ON profiles(tx_used_free);
