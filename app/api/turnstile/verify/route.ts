@@ -8,9 +8,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'missing-token' }, { status: 400 });
     }
 
-    const secret = process.env.TURNSTILE_SECRET_KEY;
+    // Prefer real secret; in development fall back to Cloudflare test secret to avoid setup blockers
+    const secret =
+      process.env.TURNSTILE_SECRET_KEY ||
+      (process.env.NODE_ENV !== 'production' ? '1x0000000000000000000000000000000AA' : undefined);
     if (!secret) {
-      return NextResponse.json({ success: false, error: 'server-misconfigured' }, { status: 500 });
+      return NextResponse.json({ success: false, error: 'server-misconfigured: missing TURNSTILE_SECRET_KEY' }, { status: 500 });
     }
 
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
@@ -24,6 +27,14 @@ export async function POST(req: NextRequest) {
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
       body: form,
     });
+
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => '');
+      return NextResponse.json(
+        { success: false, error: 'turnstile-upstream-error', status: resp.status, body: text?.slice(0, 200) },
+        { status: 502 }
+      );
+    }
 
     const json = (await resp.json()) as { success: boolean; "error-codes"?: string[] };
     if (!json.success) {
