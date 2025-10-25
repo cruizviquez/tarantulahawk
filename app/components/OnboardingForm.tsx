@@ -79,12 +79,12 @@ export default function OnboardingForm({ onClose }: OnboardingFormProps) {
           throw new Error('Verificación de seguridad fallida. Por favor intenta de nuevo.');
         }
 
-        // Send Magic Link via Supabase OTP
-        // Note: Remove captchaToken if Supabase CAPTCHA is disabled or doesn't support Turnstile
+        // Send Magic Link via Supabase OTP with Turnstile token
         const { error: signInError } = await supabase.auth.signInWithOtp({
         email,
           options: {
             emailRedirectTo: `${window.location.origin}/auth/callback`,
+            captchaToken: captchaToken,
             data: {
               name,
               company,
