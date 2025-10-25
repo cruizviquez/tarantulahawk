@@ -9,9 +9,9 @@ const supabase = createClient(
 export default async function AuthCallback({
   searchParams,
 }: {
-  searchParams: { code?: string; error?: string; error_description?: string };
+  searchParams: Promise<{ code?: string; error?: string; error_description?: string }>;
 }) {
-  const { code, error, error_description } = searchParams;
+  const { code, error, error_description } = await searchParams;
 
   if (error) {
     return (
