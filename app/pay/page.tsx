@@ -33,28 +33,29 @@ export default function PayPage() {
               ],
             });
           },
-          onApprove: async (_data: any, actions: any) => {
-            await actions.order.capture();
+          onApprove: async (data: any, actions: any) => {
+            try {
+              await actions.order.capture();
+              const orderID = data?.orderID;
+              if (!orderID) {
+                setError('Pago aprobado sin ID de orden.');
+                return;
+              }
 
-            // Mark account as paid in Supabase
-            const { data: user } = await supabase.auth.getUser();
-            const userId = user?.user?.id;
-            if (!userId) {
-              setError('No authenticated user');
-              return;
+              const res = await fetch('/api/paypal/capture', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ orderID, expectedAmount: amount.toFixed(2), currency: 'USD' }),
+              });
+              const json = await res.json();
+              if (!res.ok || !json.ok) {
+                setError(json?.error || 'No se pudo verificar el pago en el servidor.');
+                return;
+              }
+              setPaid(true);
+            } catch (e: any) {
+              setError(e?.message || 'Error procesando el pago.');
             }
-
-            const { error: updateError } = await supabase
-              .from('profiles')
-              .update({ subscription_tier: 'paid' })
-              .eq('id', userId);
-
-            if (updateError) {
-              setError('No se pudo actualizar la suscripción. Contacta soporte.');
-              return;
-            }
-
-            setPaid(true);
           },
           onError: (err: any) => {
             console.error('PayPal error', err);

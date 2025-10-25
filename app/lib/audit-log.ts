@@ -1,7 +1,8 @@
 import { supabase } from './supabaseClient';
+import { getServiceSupabase } from './supabaseServer';
 
 export interface AuditEvent {
-  user_id: string;
+  user_id: string | null;
   action: 'registration' | 'login' | 'logout' | 'report_generated' | 'transaction_uploaded' | 'export_xml' | 'api_key_created' | 'api_key_used' | 'api_key_rotated' | 'password_reset' | 'account_upgraded';
   metadata?: Record<string, any>;
   ip_address?: string;
@@ -17,18 +18,20 @@ export interface AuditEvent {
  */
 export async function logAuditEvent(event: AuditEvent): Promise<string | null> {
   try {
-    const { data, error } = await supabase
+    // Use service role for inserts (RLS policy restricts insert to service_role)
+    const svc = getServiceSupabase();
+    const { data, error } = await svc
       .from('audit_logs')
       .insert({
         user_id: event.user_id,
         action: event.action,
         metadata: event.metadata || {},
         ip_address: event.ip_address,
-        user_agent: event.user_agent || (typeof navigator !== 'undefined' ? navigator.userAgent : null),
+        user_agent: event.user_agent,
         resource_id: event.resource_id,
         resource_type: event.resource_type,
         status: event.status || 'success',
-        timestamp: new Date().toISOString(),
+        created_at: new Date().toISOString(),
       })
       .select('id')
       .single();
@@ -62,18 +65,18 @@ export async function getUserAuditLogs(
       .from('audit_logs')
       .select('*')
       .eq('user_id', userId)
-      .order('timestamp', { ascending: false });
+      .order('created_at', { ascending: false });
 
     if (options?.action) {
       query = query.eq('action', options.action);
     }
 
     if (options?.startDate) {
-      query = query.gte('timestamp', options.startDate.toISOString());
+      query = query.gte('created_at', options.startDate.toISOString());
     }
 
     if (options?.endDate) {
-      query = query.lte('timestamp', options.endDate.toISOString());
+      query = query.lte('created_at', options.endDate.toISOString());
     }
 
     if (options?.limit) {

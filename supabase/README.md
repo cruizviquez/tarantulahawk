@@ -61,15 +61,22 @@ Configure in Upstash console: https://console.upstash.com/
 ### 5. Test the Setup
 
 ```bash
-# Test database connection
-npm run supabase:test
+# Start development server
+npm run dev
 
 # Test email templates
-# Register a new account at http://localhost:3000
-# Check your email for the Magic Link
+# 1. Open http://localhost:3000
+# 2. Click "Try Free" and register a new account
+# 3. Check your email for the Magic Link
+# 4. Click the link to verify email flow works
 
 # Test rate limiting
-# Make multiple API calls and verify 429 responses after limit
+# Make 11+ API calls to /api/* endpoints and verify 429 response
+curl -I http://localhost:3000/api/health
+
+# Verify database tables in Supabase SQL Editor:
+# SELECT table_name FROM information_schema.tables 
+# WHERE table_schema = 'public';
 ```
 
 ## 🔒 Security Features

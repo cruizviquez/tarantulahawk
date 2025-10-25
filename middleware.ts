@@ -99,8 +99,66 @@ export async function middleware(request: NextRequest) {
 
   // Skip rate limiting if Redis is not configured (development mode)
   if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
-    console.warn('⚠️ Rate limiting disabled: Upstash Redis not configured');
-    return NextResponse.next();
+    // Fallback to DB-based rate limiting via Supabase RPC
+    try {
+      const clientIP = getClientIP(request);
+      const tier = await getUserTier(request);
+      const limits: Record<string, number> = { free: 10, paid: 100, enterprise: 10000 };
+      const limit = limits[tier] ?? 10;
+
+      const identifier = `${tier}:${clientIP}`;
+
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!supabaseUrl || !supabaseKey) {
+        return NextResponse.next(); // fail open if misconfigured
+      }
+
+      const rpcRes = await fetch(`${supabaseUrl}/rest/v1/rpc/check_and_increment_rate`, {
+        method: 'POST',
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ p_key: identifier, p_limit: limit }),
+      });
+
+      if (!rpcRes.ok) {
+        return NextResponse.next(); // fail open
+      }
+      const json = await rpcRes.json();
+      const row = Array.isArray(json) ? json[0] : json; // Supabase RPC returns single row or array
+      const allowed = row?.allowed as boolean;
+      const remaining = Number(row?.remaining ?? 0);
+      const resetAt = row?.reset_at ? new Date(row.reset_at).getTime() : Date.now() + 3600_000;
+
+      if (!allowed) {
+        return new NextResponse(
+          JSON.stringify({
+            error: 'Rate limit exceeded',
+            message: `Too many requests. You are limited to ${limit} requests per hour on the ${tier} tier.`,
+            tier,
+            limit,
+            reset: new Date(resetAt).toISOString(),
+          }),
+          {
+            status: 429,
+            headers: { 'Content-Type': 'application/json' },
+          }
+        );
+      }
+
+      const response = NextResponse.next();
+      response.headers.set('X-RateLimit-Limit', String(limit));
+      response.headers.set('X-RateLimit-Remaining', String(remaining));
+      response.headers.set('X-RateLimit-Reset', String(resetAt));
+      response.headers.set('X-RateLimit-Tier', tier);
+      return response;
+    } catch (e) {
+      console.error('DB rate limit fallback error:', e);
+      return NextResponse.next();
+    }
   }
 
   try {

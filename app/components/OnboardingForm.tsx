@@ -68,6 +68,17 @@ export default function OnboardingForm({ onClose }: OnboardingFormProps) {
     }
 
     try {
+        // Server-side verify Turnstile token
+        const verifyRes = await fetch('/api/turnstile/verify', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ token: captchaToken }),
+        });
+        if (!verifyRes.ok) {
+          const err = await verifyRes.json().catch(() => ({}));
+          throw new Error('Verificación de seguridad fallida. Por favor intenta de nuevo.');
+        }
+
         // Send Magic Link via Supabase OTP
         const { error: signInError } = await supabase.auth.signInWithOtp({
         email,
@@ -162,13 +173,13 @@ export default function OnboardingForm({ onClose }: OnboardingFormProps) {
             <div>
               <input 
                 type="email" 
-                  placeholder="Email Empresarial" 
+                  placeholder="Email (cualquier dominio)" 
                 value={email} 
                 onChange={e => setEmail(e.target.value)} 
                 required 
                   className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none"
               />
-                <p className="text-gray-500 text-xs mt-1">📧 Cualquier email empresarial es válido</p>
+                <p className="text-gray-500 text-xs mt-1">📧 Gmail, Outlook, dominios corporativos - todos aceptados</p>
             </div>
             
             <div>
@@ -192,7 +203,7 @@ export default function OnboardingForm({ onClose }: OnboardingFormProps) {
                     setCaptchaToken(null);
                     setError('Error en verificación de seguridad. Por favor recarga la página.');
                   }}
-                  theme="dark"
+                  options={{ theme: 'dark' }}
                 />
               </div>
             

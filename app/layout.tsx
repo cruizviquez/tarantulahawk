@@ -13,6 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || 'https://tarantulahawk.cloud'),
   title: "TarantulaHawk - AI-Powered AML, Risk and Compliance SaAS Platform | FinCEN BSA & Mexico SHCP, CNBV, LFPIORPI",
   description: "Advanced anti-money laundering (AML) platform with AI/ML technology for USA FinCEN BSA and Mexico LFPIORPI compliance. Real-time transaction monitoring, risk assessment, and automated reporting for financial institutions.",
   keywords: [

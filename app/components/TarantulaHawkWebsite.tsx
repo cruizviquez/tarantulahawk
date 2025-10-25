@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import OnboardingForm from './OnboardingForm';
 import AIChat from './AIChat';
 import { Globe, Shield, Zap, TrendingUp, CheckCircle, Brain, Mail } from 'lucide-react';
@@ -38,6 +38,40 @@ const TarantulaHawkLogo = ({ className = "w-12 h-12" }) => (
 export default function TarantulaHawkWebsite() {
   const [language, setLanguage] = useState<'en' | 'es'>('es');
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [usage, setUsage] = useState<
+    | {
+        subscription_tier: string;
+        freeReportsRemaining: number;
+        txRemaining: number;
+        freeExceeded: boolean;
+      }
+    | null
+  >(null);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await fetch('/api/usage', { cache: 'no-store' });
+        if (!mounted) return;
+        if (!res.ok) return; // not logged in or error -> no banner
+        const json = await res.json();
+        if (json?.ok && mounted) {
+          setUsage({
+            subscription_tier: json.subscription_tier,
+            freeReportsRemaining: json.freeReportsRemaining,
+            txRemaining: json.txRemaining,
+            freeExceeded: json.freeExceeded,
+          });
+        }
+      } catch {
+        // ignore - no banner
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   return (
     <>
@@ -102,6 +136,37 @@ export default function TarantulaHawkWebsite() {
           </div>
         </div>
       </nav>
+
+      {/* Usage Banner */}
+      {usage && usage.subscription_tier !== 'paid' && (
+        <div className={`mt-16 w-full ${usage.freeExceeded ? 'bg-red-900/20 border-red-700/40' : 'bg-teal-900/20 border-teal-700/40'} border-y`}> 
+          <div className="max-w-7xl mx-auto px-6 py-3 flex flex-col sm:flex-row items-start sm:items-center gap-3 justify-between">
+            <div className="text-sm">
+              {usage.freeExceeded ? (
+                <span className="text-red-300 font-medium">
+                  {language === 'en' ? 'Free limit reached.' : 'Límite gratis alcanzado.'}
+                </span>
+              ) : (
+                <span className="text-teal-300">
+                  {language === 'en'
+                    ? `Free remaining: ${usage.freeReportsRemaining} reports, ${usage.txRemaining} transactions`
+                    : `Gratis restante: ${usage.freeReportsRemaining} reportes, ${usage.txRemaining} transacciones`}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-3">
+              <a
+                href="/pay"
+                className={`px-4 py-2 rounded-lg text-sm font-semibold ${usage.freeExceeded ? 'bg-gradient-to-r from-red-600 to-orange-500' : 'border border-teal-600 text-teal-300 hover:bg-teal-600/10'}`}
+              >
+                {usage.freeExceeded
+                  ? language === 'en' ? 'Upgrade to Continue' : 'Mejorar para Continuar'
+                  : language === 'en' ? 'Upgrade' : 'Mejorar'}
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
 
       <section id="hero" className="pt-32 pb-20 px-6">
         <div className="max-w-7xl mx-auto">

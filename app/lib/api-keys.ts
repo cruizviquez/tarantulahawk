@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import { getServiceSupabase } from './supabaseServer';
 import { customAlphabet } from 'nanoid';
 import { logAuditEvent } from './audit-log';
 
@@ -33,6 +34,28 @@ export async function createAPIKey(options: {
   expires_in_days?: number;
 }): Promise<{ key: string; metadata: APIKey } | null> {
   try {
+    if (typeof window !== 'undefined') {
+      throw new Error('createAPIKey is server-only');
+    }
+
+    const svc = getServiceSupabase();
+
+    // Enforce enterprise-only key creation
+    const { data: profile, error: profileErr } = await svc
+      .from('profiles')
+      .select('subscription_tier')
+      .eq('id', options.user_id)
+      .single();
+
+    if (profileErr || !profile) {
+      console.error('Profile not found for API key creation');
+      return null;
+    }
+    if (profile.subscription_tier !== 'enterprise') {
+      console.warn('API key creation attempted by non-enterprise user');
+      return null;
+    }
+
     const env = options.environment || 'test';
     const rawKey = `sk_${env}_${generateApiKey()}`;
     const keyPrefix = rawKey.substring(0, 16); // Show first 16 chars
@@ -44,7 +67,7 @@ export async function createAPIKey(options: {
       ? new Date(Date.now() + options.expires_in_days * 24 * 60 * 60 * 1000).toISOString()
       : null;
 
-    const { data, error } = await supabase
+    const { data, error } = await svc
       .from('api_keys')
       .insert({
         user_id: options.user_id,
@@ -97,11 +120,15 @@ export async function verifyAPIKey(rawKey: string): Promise<{
   error?: string;
 }> {
   try {
+    if (typeof window !== 'undefined') {
+      throw new Error('verifyAPIKey is server-only');
+    }
+    const svc = getServiceSupabase();
     // Extract prefix to narrow search
     const keyPrefix = rawKey.substring(0, 16);
     const keyHash = await hashAPIKey(rawKey);
 
-    const { data, error } = await supabase
+    const { data, error } = await svc
       .from('api_keys')
       .select('*')
       .eq('key_prefix', keyPrefix)
@@ -122,7 +149,7 @@ export async function verifyAPIKey(rawKey: string): Promise<{
     const now = new Date();
     const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
 
-    const { count: hourlyCount } = await supabase
+    const { count: hourlyCount } = await svc
       .from('api_key_usage')
       .select('*', { count: 'exact', head: true })
       .eq('api_key_id', data.id)
@@ -153,7 +180,11 @@ export async function logAPIKeyUsage(options: {
   user_agent?: string;
 }): Promise<void> {
   try {
-    await supabase.from('api_key_usage').insert({
+    if (typeof window !== 'undefined') {
+      throw new Error('logAPIKeyUsage is server-only');
+    }
+    const svc = getServiceSupabase();
+    await svc.from('api_key_usage').insert({
       api_key_id: options.api_key_id,
       user_id: options.user_id,
       endpoint: options.endpoint,
@@ -165,11 +196,11 @@ export async function logAPIKeyUsage(options: {
     });
 
     // Update last_used_at and usage_count
-    await supabase
+    await svc
       .from('api_keys')
       .update({
         last_used_at: new Date().toISOString(),
-        usage_count: supabase.rpc('increment_usage', { key_id: options.api_key_id }),
+        usage_count: svc.rpc('increment_usage', { key_id: options.api_key_id }),
       })
       .eq('id', options.api_key_id);
 
@@ -197,8 +228,12 @@ export async function logAPIKeyUsage(options: {
  */
 export async function rotateAPIKey(oldKeyId: string, userId: string): Promise<{ key: string; metadata: APIKey } | null> {
   try {
+    if (typeof window !== 'undefined') {
+      throw new Error('rotateAPIKey is server-only');
+    }
+    const svc = getServiceSupabase();
     // Get old key details
-    const { data: oldKey } = await supabase
+    const { data: oldKey } = await svc
       .from('api_keys')
       .select('*')
       .eq('id', oldKeyId)
@@ -210,7 +245,7 @@ export async function rotateAPIKey(oldKeyId: string, userId: string): Promise<{ 
     }
 
     // Revoke old key
-    await supabase
+    await svc
       .from('api_keys')
       .update({ revoked: true })
       .eq('id', oldKeyId);
@@ -248,7 +283,11 @@ export async function rotateAPIKey(oldKeyId: string, userId: string): Promise<{ 
  */
 export async function revokeAPIKey(keyId: string, userId: string): Promise<boolean> {
   try {
-    const { error } = await supabase
+    if (typeof window !== 'undefined') {
+      throw new Error('revokeAPIKey is server-only');
+    }
+    const svc = getServiceSupabase();
+    const { error } = await svc
       .from('api_keys')
       .update({ revoked: true })
       .eq('id', keyId)
