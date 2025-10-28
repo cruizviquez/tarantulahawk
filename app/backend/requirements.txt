@@ -1,5 +1,6 @@
 # TarantulaHawk Backend API Requirements
-# Python 3.12 compatible
+# Python 3.12+ compatible
+# Unified requirements for complete ML landscape + API + Security
 
 # === CORE ML / DATA SCIENCE ===
 pandas==2.2.3
@@ -11,20 +12,18 @@ imbalanced-learn==0.12.3
 
 # === API / BACKEND ===
 fastapi==0.115.0
-uvicorn==0.30.3
+uvicorn[standard]==0.30.3  # Includes websockets, httptools, uvloop
 python-multipart==0.0.9
 pydantic==2.9.2
 starlette==0.38.2
 requests==2.32.3
-
-# HTTP Client for Supabase integration
-httpx==0.26.0
+httpx==0.26.0  # HTTP Client for Supabase integration
 
 # === DATA GENERATION / UTILITIES ===
 faker==33.0.0        # generación de datasets sintéticos
 tqdm==4.66.5
-openpyxl==3.1.5
-xlrd==2.0.1         # For legacy Excel files
+openpyxl==3.1.5      # Modern Excel .xlsx files
+xlrd==2.0.1          # Legacy Excel .xls files
 colorama==0.4.6
 python-dotenv==1.0.0
 
@@ -39,14 +38,14 @@ plotly==5.24.1
 dash==2.18.2         # dashboard interactivo TarantulaHawk
 dash-bootstrap-components==1.6.0
 
+# === SECURITY ===
+python-jose[cryptography]==3.3.0  # JWT tokens
+passlib[bcrypt]==1.7.4             # Password hashing
+
 # === TESTING / DEV TOOLS ===
 pytest==8.3.3
 pytest-cov==5.0.0
 
-# === SECURITY ===
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-
-# === OPTIONAL: DATABASE ===
+# === OPTIONAL: DATABASE (uncomment if needed) ===
 # psycopg2-binary==2.9.9  # PostgreSQL
-# sqlalchemy==2.0.25
+# sqlalchemy==2.0.25       # ORM

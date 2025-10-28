@@ -70,6 +70,19 @@ USERS_DB = {}  # {user_id: {email, balance, tier, created_at}}
 ANALYSIS_HISTORY = {}  # {analysis_id: {user_id, results, timestamp}}
 PENDING_PAYMENTS = {}  # {payment_id: {analysis_id, amount, status}}
 
+# Initialize mock test user for development
+TEST_USER_ID = "test-user-123"
+USERS_DB[TEST_USER_ID] = {
+    "user_id": TEST_USER_ID,
+    "email": "test@tarantulahawk.ai",
+    "password_hash": hashlib.sha256("test123".encode()).hexdigest(),
+    "company": "Test Company",
+    "tier": "standard",
+    "balance": 500.0,  # $500 virtual credit for testing
+    "created_at": datetime.now(),
+    "total_analyses": 0
+}
+
 # ===================================================================
 # PYDANTIC MODELS
 # ===================================================================
@@ -671,6 +684,12 @@ async def health_check():
             "portal_upload": "/api/portal/upload",
             "enterprise_api": "/api/v1/analizar",
             "documentation": "/api/docs"
+        },
+        "test_user": {
+            "user_id": TEST_USER_ID,
+            "email": "test@tarantulahawk.ai",
+            "balance": USERS_DB[TEST_USER_ID]["balance"],
+            "note": "Use this user_id in X-User-ID header for testing"
         }
     }
 
