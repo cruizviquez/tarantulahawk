@@ -40,6 +40,35 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: string
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingMode, setOnboardingMode] = useState<'signup' | 'login'>('signup');
   const [showAuthError, setShowAuthError] = useState(!!authError);
+  
+  // Mensajes de error según tipo
+  const getErrorMessage = () => {
+    if (!authError) return null;
+    
+    const messages: Record<string, { title: { es: string; en: string }, message: { es: string; en: string } }> = {
+      link_expired: {
+        title: { es: 'Magic Link Expirado', en: 'Magic Link Expired' },
+        message: { es: 'El enlace de autenticación ha expirado. Por favor, solicita un nuevo enlace.', en: 'The authentication link has expired. Please request a new link.' }
+      },
+      link_used: {
+        title: { es: 'Magic Link Ya Utilizado', en: 'Magic Link Already Used' },
+        message: { es: 'Este enlace ya fue utilizado anteriormente. Por seguridad, solicita un nuevo enlace.', en: 'This link was already used. For security, please request a new link.' }
+      },
+      link_invalid: {
+        title: { es: 'Magic Link Inválido', en: 'Invalid Magic Link' },
+        message: { es: 'El enlace de autenticación es inválido. Verifica el link o solicita uno nuevo.', en: 'The authentication link is invalid. Verify the link or request a new one.' }
+      },
+      signin_failed: {
+        title: { es: 'Error de Autenticación', en: 'Authentication Error' },
+        message: { es: 'No se pudo completar la autenticación. Intenta de nuevo.', en: 'Could not complete authentication. Please try again.' }
+      }
+    };
+    
+    return messages[authError] || messages.link_expired;
+  };
+  
+  const errorInfo = getErrorMessage();
+  
   const [usage, setUsage] = useState<
     | {
         subscription_tier: string;
@@ -78,19 +107,17 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: string
   return (
     <>
     {/* Auth Error Toast */}
-    {showAuthError && (
+    {showAuthError && errorInfo && (
       <div className="fixed top-20 right-6 z-[9999] animate-fade-in">
         <div className="bg-red-500/90 backdrop-blur-sm border border-red-400 rounded-lg p-4 shadow-2xl max-w-md">
           <div className="flex items-start gap-3">
             <div className="text-2xl">🔒</div>
             <div className="flex-1">
               <h3 className="font-bold text-white mb-1">
-                {language === 'es' ? 'Magic Link Expirado' : 'Magic Link Expired'}
+                {errorInfo.title[language]}
               </h3>
               <p className="text-sm text-white/90">
-                {language === 'es' 
-                  ? 'El enlace de autenticación ha expirado o ya fue utilizado. Por favor, solicita un nuevo enlace.' 
-                  : 'The authentication link has expired or was already used. Please request a new link.'}
+                {errorInfo.message[language]}
               </p>
             </div>
             <button 

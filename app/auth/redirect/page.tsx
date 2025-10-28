@@ -16,11 +16,20 @@ export default function AuthRedirectPage() {
 
     const hash = window.location.hash || '';
     
-    // Detectar errores en el hash (magic link expirado/inválido)
-    if (hash.includes('error=access_denied') || hash.includes('otp_expired') || hash.includes('error_code')) {
-      console.warn('[AUTH REDIRECT] Magic link expired or invalid');
+    // Detectar errores en el hash (magic link expirado/inválido/ya usado)
+    if (hash.includes('error=access_denied') || hash.includes('otp_expired') || hash.includes('error_code') || hash.includes('error_description')) {
+      console.warn('[AUTH REDIRECT] Magic link expired, invalid, or already used');
+      // Limpiar hash para no exponer error details
       window.history.replaceState(null, '', window.location.pathname);
-      router.replace('/?auth_error=link_expired');
+      
+      // Determinar mensaje específico
+      if (hash.includes('otp_expired') || hash.includes('has+expired')) {
+        router.replace('/?auth_error=link_expired');
+      } else if (hash.includes('invalid')) {
+        router.replace('/?auth_error=link_invalid');
+      } else {
+        router.replace('/?auth_error=link_used');
+      }
       return;
     }
     
