@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { calculateTieredCost, PRICING_TIERS, formatPricingSummary } from '../lib/pricing';
 import { Upload, FileSpreadsheet, FileText, BarChart3, Clock, Key, CreditCard, Download, AlertTriangle, CheckCircle, Lock, DollarSign, Zap, Shield, Database } from 'lucide-react';
 import MLProgressTracker from './MLProgressTracker';
+import ProfileModal from './ProfileModal';
 
 const TarantulaHawkLogo = ({ className = "w-10 h-10" }) => (
   <svg viewBox="0 0 400 400" className={className} xmlns="http://www.w3.org/2000/svg">
@@ -79,6 +80,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
   const [showPayment, setShowPayment] = useState(false);
   const [pendingPayment, setPendingPayment] = useState<PendingPayment | null>(null);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const [estimatedTransactions, setEstimatedTransactions] = useState<number>(0);
   const [estimatedCost, setEstimatedCost] = useState<number>(0);
   const [insufficientFunds, setInsufficientFunds] = useState<boolean>(false);
@@ -518,11 +520,11 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
                         <div className="text-xs text-gray-400 truncate">{user.email}</div>
                       </div>
                       <button 
-                        onClick={() => { setActiveTab('settings'); setShowProfileMenu(false); }}
+                        onClick={() => { setShowProfileModal(true); setShowProfileMenu(false); }}
                         className="w-full px-4 py-3 text-left hover:bg-gray-800 transition flex items-center gap-3"
                       >
                         <Key className="w-4 h-4" />
-                        {language === 'es' ? 'Ajustes' : 'Settings'}
+                        {language === 'es' ? 'Mi Perfil' : 'My Profile'}
                       </button>
                       <button 
                         onClick={() => { setActiveTab('account'); setShowProfileMenu(false); }}
@@ -1227,6 +1229,17 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
             <div className="text-gray-400">Running 3-layer ML models</div>
           </div>
         </div>
+      )}
+
+      {/* Profile Modal */}
+      {showProfileModal && (
+        <ProfileModal
+          user={user}
+          onClose={() => setShowProfileModal(false)}
+          onUpdate={(updatedData) => {
+            setUser({ ...user, ...updatedData });
+          }}
+        />
       )}
     </div>
   );
