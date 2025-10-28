@@ -44,7 +44,12 @@ app = FastAPI(
 # CORS Configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "https://tarantulahawk.ai"],
+    allow_origins=[
+        "http://localhost:3000", 
+        "https://tarantulahawk.ai",
+        "https://*.app.github.dev",  # GitHub Codespaces
+        "https://silver-funicular-wp59w7jgxvvf9j47-3000.app.github.dev"  # Current codespace
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

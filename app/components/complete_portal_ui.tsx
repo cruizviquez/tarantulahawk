@@ -185,6 +185,9 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
     setInsufficientFunds(false);
     setProcessingStage('');
     setProcessingProgress(0);
+    // Reset file input to allow re-uploading
+    const input = document.getElementById('file-upload') as HTMLInputElement;
+    if (input) input.value = '';
   };
 
   const handleFileUpload = async (file: File) => {
@@ -231,7 +234,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
       
       setProcessingProgress(10);
       
-      const response = await fetch('http://localhost:8000/api/portal/upload', {
+      const response = await fetch(`${API_URL.replace('/api', '')}/api/portal/upload`, {
         method: 'POST',
         body: formData,
         headers: {
@@ -765,7 +768,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
                         >
                           {isLoading 
                             ? (language === 'es' ? 'Procesando...' : 'Processing...') 
-                            : (language === 'es' ? 'Procesar Archivo' : 'Process File')}
+                            : (language === 'es' ? 'Iniciar Análisis AI' : 'Start AI Analysis')}
                         </button>
                       </div>
                     </div>
@@ -793,7 +796,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
             {/* Transaction-based Pricing Info */}
             <div className="bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-xl p-6">
               <h3 className="text-lg font-bold mb-4">{language === 'es' ? 'Precios por Transacción' : 'Transaction-Based Pricing'}</h3>
-              <div className="grid md:grid-cols-3 gap-4 text-sm">
+              <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
                 <div>
                   <div className="text-gray-400 mb-1">{language === 'es' ? '1 - 2,000 transacciones' : '1 - 2,000 transactions'}</div>
                   <div className="text-2xl font-bold text-white">$1.00<span className="text-sm text-gray-500">/txn</span></div>
@@ -808,6 +811,11 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
                   <div className="text-teal-400 mb-1">{language === 'es' ? '5,001 - 10,000 transacciones' : '5,001 - 10,000 transactions'}</div>
                   <div className="text-2xl font-bold text-white">$0.50<span className="text-sm text-gray-500">/txn</span></div>
                   <div className="text-xs text-gray-500 mt-1">{language === 'es' ? 'Descuento 50%' : '50% discount'}</div>
+                </div>
+                <div>
+                  <div className="text-green-400 mb-1">{language === 'es' ? '10,001+ transacciones' : '10,001+ transactions'}</div>
+                  <div className="text-2xl font-bold text-white">$0.35<span className="text-sm text-gray-500">/txn</span></div>
+                  <div className="text-xs text-gray-500 mt-1">{language === 'es' ? 'Descuento 65%' : '65% discount'}</div>
                 </div>
               </div>
             </div>
