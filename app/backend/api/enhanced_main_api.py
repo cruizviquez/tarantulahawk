@@ -381,13 +381,21 @@ async def upload_archivo_portal(
         with open(file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
-        # Load and validate
+        # Load and validate with proper Excel handling
         if file.filename.endswith('.csv'):
-            df = pd.read_csv(file_path)
+            df = pd.read_csv(file_path, encoding='utf-8-sig', skip_blank_lines=True)
         elif file.filename.endswith(('.xlsx', '.xls')):
-            df = pd.read_excel(file_path)
+            # Force openpyxl engine for .xlsx, read ALL rows, skip empty rows
+            df = pd.read_excel(
+                file_path, 
+                engine='openpyxl' if file.filename.endswith('.xlsx') else None,
+                sheet_name=0,  # First sheet
+                na_filter=True,  # Convert empty cells to NaN
+            )
+            # Drop completely empty rows
+            df = df.dropna(how='all')
         else:
-            raise HTTPException(status_code=400, detail="Formato no soportado")
+            raise HTTPException(status_code=400, detail="Formato no soportado. Use .xlsx, .xls o .csv")
         
         # Process transactions
         resultados = procesar_transacciones_core(df, None, user.get("tier", "standard"))

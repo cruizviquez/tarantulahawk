@@ -81,6 +81,8 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
   const [estimatedTransactions, setEstimatedTransactions] = useState<number>(0);
   const [estimatedCost, setEstimatedCost] = useState<number>(0);
   const [insufficientFunds, setInsufficientFunds] = useState<boolean>(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [fileStats, setFileStats] = useState<{rows: number, fileName: string, fileSize: number} | null>(null);
 
   // Update user state if props change
   useEffect(() => {
@@ -110,19 +112,75 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
   // to ensure consistent per-transaction pricing for high volumes.
   const calculateCost = (numTransactions: number): number => calculateTieredCost(numTransactions);
 
-  // Estimate transactions from file (simplified - actual count would come from parsing)
-  const estimateTransactionsFromFile = (file: File): number => {
-    // Rough estimate: 1 transaction per 200 bytes for CSV/Excel
-    // Real implementation would parse the file
-    const estimatedRows = Math.floor(file.size / 200);
-    return Math.max(1, estimatedRows);
+  // Improved estimation: Parse file locally to count actual rows
+  const estimateTransactionsFromFile = async (file: File): Promise<{rows: number, fileName: string, fileSize: number}> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      
+      reader.onload = (e) => {
+        try {
+          const content = e.target?.result as string;
+          let rows = 0;
+          
+          if (file.name.endsWith('.csv')) {
+            // Count CSV lines (excluding header)
+            const lines = content.split('\n').filter(line => line.trim().length > 0);
+            rows = Math.max(0, lines.length - 1); // -1 for header
+          } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+            // For Excel, we can't parse binary easily in browser
+            // Use improved heuristic: avg 150 bytes per row for Excel
+            rows = Math.floor(file.size / 150);
+          } else {
+            // Fallback
+            rows = Math.floor(file.size / 200);
+          }
+          
+          resolve({
+            rows: Math.max(1, rows),
+            fileName: file.name,
+            fileSize: file.size
+          });
+        } catch (error) {
+          // Fallback to old method
+          resolve({
+            rows: Math.floor(file.size / 200),
+            fileName: file.name,
+            fileSize: file.size
+          });
+        }
+      };
+      
+      reader.onerror = () => {
+        resolve({
+          rows: Math.floor(file.size / 200),
+          fileName: file.name,
+          fileSize: file.size
+        });
+      };
+      
+      // Read as text for CSV, or just estimate for Excel
+      if (file.name.endsWith('.csv')) {
+        reader.readAsText(file);
+      } else {
+        // For Excel, just use size estimation
+        resolve({
+          rows: Math.floor(file.size / 150),
+          fileName: file.name,
+          fileSize: file.size
+        });
+      }
+    });
   };
 
   const handleFileUpload = async (file: File) => {
     setIsLoading(true);
+    setSelectedFile(file);
     
-    // Estimate transactions and cost before upload
-    const txnCount = estimateTransactionsFromFile(file);
+    // Estimate transactions and cost before upload (async now)
+    const stats = await estimateTransactionsFromFile(file);
+    setFileStats(stats);
+    
+    const txnCount = stats.rows;
     const cost = calculateCost(txnCount);
     setEstimatedTransactions(txnCount);
     setEstimatedCost(cost);
@@ -131,8 +189,9 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
     if (cost > user.balance) {
       setInsufficientFunds(true);
       setIsLoading(false);
-      alert(`Fondos insuficientes. Costo estimado: $${cost.toFixed(2)}. Tu saldo: $${user.balance.toFixed(2)}. Por favor agrega fondos.`);
-      return;
+      return; // Don't show alert, show visual warning instead
+    } else {
+      setInsufficientFunds(false);
     }
     
     try {
@@ -439,27 +498,17 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
             <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8">
               <h2 className="text-2xl font-bold mb-6">{language === 'es' ? 'Subir Datos de Transacciones' : 'Upload Transaction Data'}</h2>
               
-              {/* File Format Options */}
-              <div className="grid md:grid-cols-4 gap-4 mb-8">
-                <div className="bg-black border border-gray-700 rounded-lg p-4 hover:border-teal-500 transition cursor-pointer">
-                  <FileSpreadsheet className="w-8 h-8 text-green-400 mb-3" />
-                  <div className="font-semibold mb-1">Excel (.xlsx)</div>
-                  <div className="text-xs text-gray-500">{language === 'es' ? 'Recomendado' : 'Recommended'}</div>
+              {/* File Format Options - ONLY EXCEL AND CSV */}
+              <div className="grid md:grid-cols-2 gap-4 mb-8">
+                <div className="bg-black border border-gray-700 rounded-lg p-6 hover:border-teal-500 transition cursor-pointer">
+                  <FileSpreadsheet className="w-12 h-12 text-green-400 mb-3" />
+                  <div className="font-semibold text-lg mb-1">Excel (.xlsx, .xls)</div>
+                  <div className="text-sm text-gray-500">{language === 'es' ? 'Recomendado para grandes volúmenes' : 'Recommended for large volumes'}</div>
                 </div>
-                <div className="bg-black border border-gray-700 rounded-lg p-4 hover:border-teal-500 transition cursor-pointer">
-                  <FileText className="w-8 h-8 text-blue-400 mb-3" />
-                  <div className="font-semibold mb-1">CSV</div>
-                  <div className="text-xs text-gray-500">{language === 'es' ? 'Separado por comas' : 'Comma separated'}</div>
-                </div>
-                <div className="bg-black border border-gray-700 rounded-lg p-4 hover:border-teal-500 transition cursor-pointer opacity-50">
-                  <Database className="w-8 h-8 text-purple-400 mb-3" />
-                  <div className="font-semibold mb-1">JSON</div>
-                  <div className="text-xs text-gray-500">{language === 'es' ? 'Formato API' : 'API format'}</div>
-                </div>
-                <div className="bg-black border border-gray-700 rounded-lg p-4 hover:border-teal-500 transition cursor-pointer opacity-50">
-                  <FileText className="w-8 h-8 text-orange-400 mb-3" />
-                  <div className="font-semibold mb-1">XML</div>
-                  <div className="text-xs text-gray-500">{language === 'es' ? 'Formato SHCP' : 'SHCP format'}</div>
+                <div className="bg-black border border-gray-700 rounded-lg p-6 hover:border-teal-500 transition cursor-pointer">
+                  <FileText className="w-12 h-12 text-blue-400 mb-3" />
+                  <div className="font-semibold text-lg mb-1">CSV</div>
+                  <div className="text-sm text-gray-500">{language === 'es' ? 'Archivos separados por comas' : 'Comma-separated values'}</div>
                 </div>
               </div>
 
@@ -507,6 +556,141 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
                   {language === 'es' ? 'Seleccionar Archivo' : 'Select File'}
                 </label>
               </div>
+
+              {/* Detailed File Statistics Panel */}
+              {fileStats && (
+                <div className="mt-6 bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-xl p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold flex items-center gap-2">
+                      <FileSpreadsheet className="w-5 h-5 text-teal-400" />
+                      {language === 'es' ? 'Análisis del Archivo' : 'File Analysis'}
+                    </h3>
+                    <button 
+                      onClick={() => {
+                        setFileStats(null);
+                        setSelectedFile(null);
+                        setEstimatedTransactions(0);
+                        setEstimatedCost(0);
+                        setInsufficientFunds(false);
+                      }}
+                      className="text-xs text-gray-500 hover:text-gray-300"
+                    >
+                      {language === 'es' ? 'Limpiar' : 'Clear'}
+                    </button>
+                  </div>
+                  
+                  <div className="grid md:grid-cols-2 gap-4 mb-4">
+                    {/* File Info */}
+                    <div className="bg-black/50 border border-gray-800 rounded-lg p-4">
+                      <div className="text-xs text-gray-500 mb-1">{language === 'es' ? 'Archivo' : 'File'}</div>
+                      <div className="font-semibold text-sm truncate">{fileStats.fileName}</div>
+                      <div className="text-xs text-gray-600 mt-1">{(fileStats.fileSize / 1024 / 1024).toFixed(2)} MB</div>
+                    </div>
+                    
+                    {/* Transaction Count */}
+                    <div className="bg-black/50 border border-gray-800 rounded-lg p-4">
+                      <div className="text-xs text-gray-500 mb-1">{language === 'es' ? 'Transacciones Detectadas' : 'Transactions Detected'}</div>
+                      <div className="text-2xl font-bold text-teal-400">{fileStats.rows.toLocaleString()}</div>
+                      <div className="text-xs text-gray-600 mt-1">{language === 'es' ? 'filas procesables' : 'processable rows'}</div>
+                    </div>
+                  </div>
+                  
+                  <div className="grid md:grid-cols-3 gap-4 mb-4">
+                    {/* Total Cost */}
+                    <div className="bg-black/50 border border-gray-800 rounded-lg p-4">
+                      <div className="text-xs text-gray-500 mb-1">{language === 'es' ? 'Costo Total' : 'Total Cost'}</div>
+                      <div className="text-xl font-bold text-orange-400">${estimatedCost.toFixed(2)} USD</div>
+                    </div>
+                    
+                    {/* Available Balance */}
+                    <div className="bg-black/50 border border-gray-800 rounded-lg p-4">
+                      <div className="text-xs text-gray-500 mb-1">{language === 'es' ? 'Saldo Disponible' : 'Available Balance'}</div>
+                      <div className="text-xl font-bold text-teal-400">${user.balance.toFixed(2)} USD</div>
+                    </div>
+                    
+                    {/* Balance After Processing */}
+                    <div className="bg-black/50 border border-gray-800 rounded-lg p-4">
+                      <div className="text-xs text-gray-500 mb-1">{language === 'es' ? 'Saldo Después' : 'Balance After'}</div>
+                      <div className={`text-xl font-bold ${user.balance >= estimatedCost ? 'text-green-400' : 'text-red-400'}`}>
+                        ${Math.max(0, user.balance - estimatedCost).toFixed(2)} USD
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Visual Balance Comparison */}
+                  <div className="mb-4">
+                    <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
+                      <span>{language === 'es' ? 'Comparación de Saldo' : 'Balance Comparison'}</span>
+                      <span>{((estimatedCost / user.balance) * 100).toFixed(1)}% {language === 'es' ? 'del saldo' : 'of balance'}</span>
+                    </div>
+                    <div className="w-full bg-gray-800 rounded-full h-3 overflow-hidden">
+                      <div 
+                        className={`h-full transition-all duration-500 ${
+                          insufficientFunds 
+                            ? 'bg-gradient-to-r from-red-600 to-red-400' 
+                            : estimatedCost / user.balance > 0.8
+                            ? 'bg-gradient-to-r from-orange-600 to-orange-400'
+                            : 'bg-gradient-to-r from-teal-600 to-teal-400'
+                        }`}
+                        style={{ width: `${Math.min(100, (estimatedCost / user.balance) * 100)}%` }}
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* Warning or Success Message */}
+                  {insufficientFunds ? (
+                    <div className="bg-red-900/20 border border-red-800/30 rounded-lg p-4 flex items-start gap-3">
+                      <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <div className="font-semibold text-red-400 mb-1">
+                          {language === 'es' ? 'Fondos Insuficientes' : 'Insufficient Funds'}
+                        </div>
+                        <div className="text-sm text-gray-400">
+                          {language === 'es' 
+                            ? `Necesitas $${(estimatedCost - user.balance).toFixed(2)} USD adicionales para procesar este archivo.` 
+                            : `You need an additional $${(estimatedCost - user.balance).toFixed(2)} USD to process this file.`}
+                        </div>
+                        <button 
+                          onClick={() => setActiveTab('pricing')}
+                          className="mt-3 text-sm px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg transition"
+                        >
+                          {language === 'es' ? 'Agregar Fondos' : 'Add Funds'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-teal-900/20 border border-teal-800/30 rounded-lg p-4 flex items-start gap-3">
+                      <CheckCircle className="w-5 h-5 text-teal-400 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <div className="font-semibold text-teal-400 mb-1">
+                          {language === 'es' ? 'Listo para Procesar' : 'Ready to Process'}
+                        </div>
+                        <div className="text-sm text-gray-400 mb-3">
+                          {language === 'es' 
+                            ? `Tu saldo es suficiente. Después del procesamiento tendrás $${(user.balance - estimatedCost).toFixed(2)} USD disponibles.`
+                            : `Your balance is sufficient. After processing you'll have $${(user.balance - estimatedCost).toFixed(2)} USD available.`}
+                        </div>
+                        <button 
+                          onClick={() => {
+                            if (selectedFile) {
+                              // Trigger actual upload
+                              const input = document.getElementById('file-upload') as HTMLInputElement;
+                              if (input) input.value = '';
+                              handleFileUpload(selectedFile);
+                            }
+                          }}
+                          disabled={isLoading}
+                          className="px-6 py-2 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-700 hover:to-teal-600 rounded-lg font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isLoading 
+                            ? (language === 'es' ? 'Procesando...' : 'Processing...') 
+                            : (language === 'es' ? 'Procesar Archivo' : 'Process File')}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Required Fields Info */}
               <div className="mt-6 p-4 bg-teal-900/20 border border-teal-800/30 rounded-lg">
