@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { calculateTieredCost, PRICING_TIERS, formatPricingSummary } from '../lib/pricing';
 import { Upload, FileSpreadsheet, FileText, BarChart3, Clock, Key, CreditCard, Download, AlertTriangle, CheckCircle, Lock, DollarSign, Zap, Shield, Database } from 'lucide-react';
+import MLProgressTracker from './MLProgressTracker';
 
 const TarantulaHawkLogo = ({ className = "w-10 h-10" }) => (
   <svg viewBox="0 0 400 400" className={className} xmlns="http://www.w3.org/2000/svg">
@@ -85,6 +86,8 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
   const [fileStats, setFileStats] = useState<{rows: number, fileName: string, fileSize: number} | null>(null);
   const [processingStage, setProcessingStage] = useState<string>(''); // '', 'uploading', 'validating', 'ml_supervised', 'ml_unsupervised', 'ml_reinforcement', 'generating_report', 'complete'
   const [processingProgress, setProcessingProgress] = useState<number>(0);
+  const [selectedAmount, setSelectedAmount] = useState<number>(500); // Default to $500
+  const [customAmount, setCustomAmount] = useState<string>(''); // For custom input
 
   // Update user state if props change
   useEffect(() => {
@@ -174,6 +177,16 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
     });
   };
 
+  const clearSelectedFile = () => {
+    setSelectedFile(null);
+    setFileStats(null);
+    setEstimatedTransactions(0);
+    setEstimatedCost(0);
+    setInsufficientFunds(false);
+    setProcessingStage('');
+    setProcessingProgress(0);
+  };
+
   const handleFileUpload = async (file: File) => {
     // Validate file size (500MB max)
     const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB in bytes
@@ -186,7 +199,10 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
     
     setIsLoading(true);
     setSelectedFile(file);
-    setProcessingStage('validating');
+    
+    // Stage 1: Uploading
+    setProcessingStage('uploading');
+    setProcessingProgress(5);
     
     // Estimate transactions and cost before upload (async now)
     const stats = await estimateTransactionsFromFile(file);
@@ -201,63 +217,107 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
     if (cost > user.balance) {
       setInsufficientFunds(true);
       setIsLoading(false);
+      setProcessingStage('');
+      setProcessingProgress(0);
       return; // Don't show alert, show visual warning instead
     } else {
       setInsufficientFunds(false);
     }
     
     try {
-      // Use Next.js API endpoint instead of Python backend
-      const response = await fetch('/api/reports/create', {
+      // Upload to Python backend
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      setProcessingProgress(10);
+      
+      const response = await fetch('http://localhost:8000/api/portal/upload', {
         method: 'POST',
+        body: formData,
         headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          transactions: [], // We'll parse the file on the server side later
-          transactionCount: numTransactions
-        })
+          'X-User-ID': user.id,
+        }
       });
-
+      
+      // Stage 2: Validating
+      setProcessingStage('validating');
+      setProcessingProgress(20);
+      
       const result = await response.json();
 
-      if (response.ok && result.reportId) {
-        // Success - balance was deducted
+      if (response.ok && result.success) {
+        // Stage 3: ML Supervised (simulate progress)
+        setProcessingStage('ml_supervised');
+        setProcessingProgress(30);
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        setProcessingProgress(45);
+        
+        // Stage 4: ML Unsupervised
+        setProcessingStage('ml_unsupervised');
+        setProcessingProgress(55);
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        setProcessingProgress(70);
+        
+        // Stage 5: ML Reinforcement
+        setProcessingStage('ml_reinforcement');
+        setProcessingProgress(75);
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        setProcessingProgress(85);
+        
+        // Stage 6: Generating Report
+        setProcessingStage('generating_report');
+        setProcessingProgress(90);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        setProcessingProgress(95);
+        
+        // Stage 7: Complete
+        setProcessingStage('complete');
+        setProcessingProgress(100);
+        await new Promise(resolve => setTimeout(resolve, 800));
+        
+        // Success - balance was deducted in backend
         setCurrentAnalysis({
           success: true,
-          analysis_id: result.reportId,
-          resumen: {
-            total_transacciones: numTransactions,
-            preocupante: Math.floor(numTransactions * 0.008),
-            inusual: Math.floor(numTransactions * 0.035),
-            relevante: Math.floor(numTransactions * 0.15),
-            limpio: numTransactions - Math.floor(numTransactions * 0.193),
-          },
-          transacciones: [], // Mock data for now
-          costo: result.costUsd || cost
+          analysis_id: result.analysis_id,
+          resumen: result.resumen,
+          transacciones: result.transacciones || [],
+          costo: result.costo,
+          xml_path: result.xml_path
         });
         
-        // Update user balance locally and refresh from server
+        // Update user balance
         setUser(prev => ({
           ...prev,
-          balance: prev.balance - (result.costUsd || cost)
+          balance: prev.balance - result.costo
         }));
         
         // Refresh balance from server to ensure accuracy
         await refreshUserBalance();
         
+        // Clear processing state
+        setProcessingStage('');
+        setProcessingProgress(0);
+        
         setActiveTab('dashboard');
-      } else if (response.status === 402) {
+      } else if (response.status === 402 || result.requiere_pago) {
         // Payment required
         setInsufficientFunds(true);
-        alert(`Fondos insuficientes. Costo estimado: $${result.requiredAmount?.toFixed(2)}. Tu saldo: $${user.balance.toFixed(2)}. Por favor agrega fondos.`);
+        setProcessingStage('');
+        setProcessingProgress(0);
+        alert(language === 'es'
+          ? `Fondos insuficientes. Costo estimado: $${cost.toFixed(2)}. Tu saldo: $${user.balance.toFixed(2)}. Por favor agrega fondos.`
+          : `Insufficient funds. Estimated cost: $${cost.toFixed(2)}. Your balance: $${user.balance.toFixed(2)}. Please add funds.`);
         setActiveTab('add-funds');
       } else {
         throw new Error(result.error || 'Error processing file');
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      alert('Error uploading file: ' + message);
+      setProcessingStage('');
+      setProcessingProgress(0);
+      alert(language === 'es'
+        ? `Error al procesar archivo: ${message}`
+        : `Error uploading file: ${message}`);
     } finally {
       setIsLoading(false);
     }
@@ -592,16 +652,11 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
                       {language === 'es' ? 'Análisis del Archivo' : 'File Analysis'}
                     </h3>
                     <button 
-                      onClick={() => {
-                        setFileStats(null);
-                        setSelectedFile(null);
-                        setEstimatedTransactions(0);
-                        setEstimatedCost(0);
-                        setInsufficientFunds(false);
-                      }}
-                      className="text-xs text-gray-500 hover:text-gray-300"
+                      onClick={clearSelectedFile}
+                      className="px-3 py-1 bg-red-600/20 hover:bg-red-600/30 border border-red-500/50 rounded-lg text-xs text-red-400 hover:text-red-300 transition flex items-center gap-1"
                     >
-                      {language === 'es' ? 'Limpiar' : 'Clear'}
+                      <AlertTriangle className="w-3 h-3" />
+                      {language === 'es' ? 'Eliminar Archivo' : 'Remove File'}
                     </button>
                   </div>
                   
@@ -886,13 +941,23 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
               
               <div className="grid md:grid-cols-3 gap-6 mb-8">
                 {/* Quick Amount Options */}
-                <button className="bg-gradient-to-br from-gray-800 to-black border-2 border-gray-700 hover:border-teal-500 rounded-xl p-6 transition text-center">
+                <button 
+                  onClick={() => { setSelectedAmount(100); setCustomAmount(''); }}
+                  className={`bg-gradient-to-br from-gray-800 to-black border-2 rounded-xl p-6 transition text-center ${
+                    selectedAmount === 100 && !customAmount ? 'border-teal-500 ring-2 ring-teal-500/50' : 'border-gray-700 hover:border-teal-500'
+                  }`}
+                >
                   <div className="text-3xl font-black mb-2">$100</div>
                   <div className="text-sm text-gray-400">
                     {language === 'es' ? '~100 transacciones' : '~100 transactions'}
                   </div>
                 </button>
-                <button className="bg-gradient-to-br from-gray-800 to-black border-2 border-teal-500 rounded-xl p-6 transition text-center">
+                <button 
+                  onClick={() => { setSelectedAmount(500); setCustomAmount(''); }}
+                  className={`bg-gradient-to-br from-gray-800 to-black border-2 rounded-xl p-6 transition text-center ${
+                    selectedAmount === 500 && !customAmount ? 'border-teal-500 ring-2 ring-teal-500/50' : 'border-gray-700 hover:border-teal-500'
+                  }`}
+                >
                   <div className="text-3xl font-black mb-2 bg-gradient-to-r from-red-500 to-teal-400 bg-clip-text text-transparent">
                     $500
                   </div>
@@ -900,7 +965,12 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
                     {language === 'es' ? 'Más Popular' : 'Most Popular'}
                   </div>
                 </button>
-                <button className="bg-gradient-to-br from-gray-800 to-black border-2 border-gray-700 hover:border-teal-500 rounded-xl p-6 transition text-center">
+                <button 
+                  onClick={() => { setSelectedAmount(1000); setCustomAmount(''); }}
+                  className={`bg-gradient-to-br from-gray-800 to-black border-2 rounded-xl p-6 transition text-center ${
+                    selectedAmount === 1000 && !customAmount ? 'border-teal-500 ring-2 ring-teal-500/50' : 'border-gray-700 hover:border-teal-500'
+                  }`}
+                >
                   <div className="text-3xl font-black mb-2">$1,000</div>
                   <div className="text-sm text-gray-400">
                     {language === 'es' ? '~1,000 transacciones' : '~1,000 transactions'}
@@ -918,7 +988,17 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
                   <input
                     type="number"
                     placeholder="0.00"
-                    className="w-full bg-black border border-gray-700 rounded-lg pl-8 pr-4 py-3 text-lg focus:border-teal-500 outline-none"
+                    value={customAmount}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setCustomAmount(val);
+                      if (val && parseFloat(val) > 0) {
+                        setSelectedAmount(parseFloat(val));
+                      }
+                    }}
+                    className={`w-full bg-black border rounded-lg pl-8 pr-4 py-3 text-lg focus:border-teal-500 outline-none ${
+                      customAmount ? 'border-teal-500 ring-2 ring-teal-500/50' : 'border-gray-700'
+                    }`}
                   />
                 </div>
               </div>
@@ -944,15 +1024,23 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
                 <button 
                   onClick={() => {
                     // TODO: Integrate Stripe Checkout or PayPal
-                    // Example: window.location.href = '/api/paypal/create-order?amount=500'
+                    // Example: window.location.href = `/api/paypal/create-order?amount=${selectedAmount}`
+                    if (selectedAmount <= 0) {
+                      alert(language === 'es' 
+                        ? 'Por favor selecciona o ingresa una cantidad válida.'
+                        : 'Please select or enter a valid amount.');
+                      return;
+                    }
                     alert(language === 'es' 
-                      ? 'Integración de pago en proceso. Por favor contacta a soporte para agregar fondos.'
-                      : 'Payment integration in progress. Please contact support to add funds.');
+                      ? `Integración de pago en proceso. Monto seleccionado: $${selectedAmount.toFixed(2)}. Por favor contacta a soporte para agregar fondos.`
+                      : `Payment integration in progress. Selected amount: $${selectedAmount.toFixed(2)}. Please contact support to add funds.`);
                   }}
                   className="w-full py-4 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-bold hover:from-red-700 hover:to-orange-600 transition flex items-center justify-center gap-3"
                 >
                   <CreditCard className="w-5 h-5" />
-                  {language === 'es' ? 'Pagar con Tarjeta (Stripe/PayPal)' : 'Pay with Card (Stripe/PayPal)'}
+                  {language === 'es' 
+                    ? `Pagar $${selectedAmount.toFixed(2)} con Tarjeta`
+                    : `Pay $${selectedAmount.toFixed(2)} with Card`}
                 </button>
                 <button 
                   onClick={() => {

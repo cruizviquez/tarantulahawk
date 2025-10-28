@@ -75,6 +75,7 @@ export default function TarantulaHawkWebsite() {
   }, []);
 
   return (
+    <>
     <div className="min-h-screen bg-black text-white">
       <nav className="fixed top-0 w-full bg-black/95 backdrop-blur-sm border-b border-gray-800 z-50">
         <div className="max-w-7xl mx-auto px-6 py-4">
