@@ -79,6 +79,19 @@ export async function GET(request: NextRequest) {
     },
   });
 
+  // Check if token already used (prevent replay attacks)
+  const tokenHash = access_token.substring(0, 30); // Use first 30 chars as hash
+  const { data: existingUse } = await supabase
+    .from('used_tokens')
+    .select('token_hash')
+    .eq('token_hash', tokenHash)
+    .single();
+  
+  if (existingUse) {
+    console.warn('[AUTH HASH] Magic link already used');
+    return NextResponse.redirect(`${publicUrl}/?auth_error=link_expired`);
+  }
+
   // Establecer sesión con los tokens
   try {
     const { data, error } = await supabase.auth.setSession({
@@ -103,6 +116,13 @@ export async function GET(request: NextRequest) {
       console.error('[AUTH HASH] No user in session');
       return NextResponse.redirect(`${publicUrl}/?auth_error=no_user`);
     }
+
+    // Mark token as used (prevent reuse)
+    await supabase.from('used_tokens').insert({
+      token_hash: tokenHash,
+      used_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString() // Expire in 1 hour
+    });
 
     // Log exitoso (útil para debugging)
     console.log('[AUTH HASH] Success:', {

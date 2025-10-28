@@ -51,11 +51,21 @@ export default function SessionMonitor({
       // Sign out from Supabase
       await supabase.auth.signOut();
 
-      // Redirect to home with message
-      router.push(`/?session=expired&reason=${reason}`);
+      // Force clear all cookies and storage
+      document.cookie.split(';').forEach(cookie => {
+        const name = cookie.split('=')[0].trim();
+        if (name.startsWith('sb-')) {
+          document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+        }
+      });
+      localStorage.clear();
+      sessionStorage.clear();
+
+      // Use replace instead of push to prevent back button
+      window.location.replace(`/?session=expired&reason=${reason}`);
     } catch (error) {
       console.error('Logout error:', error);
-      router.push('/');
+      window.location.replace('/');
     }
   };
 

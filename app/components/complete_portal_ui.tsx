@@ -67,20 +67,8 @@ interface TarantulaHawkPortalProps {
 }
 
 const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) => {
-  // Get backend API URL dynamically (client-side only)
-  const getApiUrl = () => {
-    if (typeof window === 'undefined') return 'http://localhost:8000';
-    
-    // Check if we're in Codespaces
-    if (window.location.hostname.includes('github.dev')) {
-      const backendHost = window.location.hostname.replace('-3000.app', '-8000.app');
-      return `https://${backendHost}`;
-    }
-    
-    return 'http://localhost:8000';
-  };
-  
-  const API_URL = getApiUrl();
+  // Backend API URL (set in useEffect to guarantee client-side only)
+  const [API_URL, setApiUrl] = useState<string>('');
   const [language, setLanguage] = useState<'es' | 'en'>('es'); // Default: Spanish
   const [activeTab, setActiveTab] = useState('upload');
   const [user, setUser] = useState<UserData>(initialUser);
@@ -99,6 +87,28 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
   const [processingStage, setProcessingStage] = useState<string>(''); // '', 'uploading', 'validating', 'ml_supervised', 'ml_unsupervised', 'ml_reinforcement', 'generating_report', 'complete'
   const [processingProgress, setProcessingProgress] = useState<number>(0);
   const [selectedAmount, setSelectedAmount] = useState<number>(500); // Default to $500
+
+  // Initialize API URL (client-side only, in useEffect to avoid SSR)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      // Priority 1: Environment variable (production)
+      if (process.env.NEXT_PUBLIC_BACKEND_API_URL) {
+        setApiUrl(process.env.NEXT_PUBLIC_BACKEND_API_URL);
+        console.log('[API_URL] Using environment variable:', process.env.NEXT_PUBLIC_BACKEND_API_URL);
+      }
+      // Priority 2: GitHub Codespaces detection
+      else if (window.location.hostname.includes('github.dev')) {
+        const backendHost = window.location.hostname.replace('-3000.app', '-8000.app');
+        setApiUrl(`https://${backendHost}`);
+        console.log('[API_URL] Codespaces detected:', `https://${backendHost}`);
+      }
+      // Priority 3: Local development
+      else {
+        setApiUrl('http://localhost:8000');
+        console.log('[API_URL] Local development:', 'http://localhost:8000');
+      }
+    }
+  }, []);
   const [customAmount, setCustomAmount] = useState<string>(''); // For custom input
 
   // Update user state if props change
@@ -203,6 +213,14 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
   };
 
   const handleFileUpload = async (file: File) => {
+    // Wait for API_URL to be initialized
+    if (!API_URL) {
+      alert(language === 'es' 
+        ? 'Inicializando conexión con backend...' 
+        : 'Initializing backend connection...');
+      return;
+    }
+    
     // Validate file size (500MB max)
     const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB in bytes
     if (file.size > MAX_FILE_SIZE) {
