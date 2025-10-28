@@ -8,8 +8,9 @@ const PUBLIC_ROUTES = ['/', '/auth/callback', '/auth/redirect', '/auth', '/login
 // APIs públicas que NO requieren autenticación
 const PUBLIC_API_PREFIXES = ['/api/auth/hash', '/api/auth/logout', '/api/turnstile', '/api/excel'];
 
-// Rutas que requieren autenticación
-const PROTECTED_ROUTES = ['/dashboard', '/admin', '/settings'];
+// Rutas protegidas por middleware (admin, settings)
+// Nota: /dashboard se protege en SSR (getAuthUser), no necesita middleware
+const PROTECTED_ROUTES = ['/admin', '/settings'];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
