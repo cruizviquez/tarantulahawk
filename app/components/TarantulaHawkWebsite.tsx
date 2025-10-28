@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import OnboardingForm from './OnboardingForm';
+import AuthHashHandler from './AuthHashHandler';
 import AIChat from './AIChat';
 import { Globe, Shield, Zap, TrendingUp, CheckCircle, Brain, Mail } from 'lucide-react';
 
@@ -38,6 +39,7 @@ const TarantulaHawkLogo = ({ className = "w-12 h-12" }) => (
 export default function TarantulaHawkWebsite() {
   const [language, setLanguage] = useState<'en' | 'es'>('es');
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingMode, setOnboardingMode] = useState<'signup' | 'login'>('signup');
   const [usage, setUsage] = useState<
     | {
         subscription_tier: string;
@@ -75,6 +77,8 @@ export default function TarantulaHawkWebsite() {
 
   return (
     <>
+    {/* Handle Supabase hash-based auth (when Site URL receives #access_token) */}
+    <AuthHashHandler />
     <div className="min-h-screen bg-black text-white">
       <nav className="fixed top-0 w-full bg-black/95 backdrop-blur-sm border-b border-gray-800 z-50">
         <div className="max-w-7xl mx-auto px-6 py-4">
@@ -107,7 +111,7 @@ export default function TarantulaHawkWebsite() {
                   }} 
                   className="text-gray-300 hover:text-white transition"
                 >
-                  {language === 'en' ? 'Chat' : 'Chat'}
+                  {language === 'en' ? 'Chat' : 'Contáctanos'}
                 </button>
               </nav>
               
@@ -121,15 +125,21 @@ export default function TarantulaHawkWebsite() {
                 </button>
                 <button
                   className="px-4 py-2 border border-gray-700 rounded-lg font-semibold hover:bg-gray-800 transition"
-                  onClick={() => window.open('#', '_blank')}
+                  onClick={() => {
+                    setOnboardingMode('login');
+                    setShowOnboarding(true);
+                  }}
                 >
                   {language === 'en' ? 'Login' : 'Ingresar'}
                 </button>
                 <button
                   className="px-6 py-2 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-semibold hover:from-red-700 hover:to-orange-600 transition"
-                  onClick={() => setShowOnboarding(true)}
+                  onClick={() => {
+                    setOnboardingMode('signup');
+                    setShowOnboarding(true);
+                  }}
                 >
-                  {language === 'en' ? 'Try Free' : 'Probar Gratis'}
+                  {language === 'en' ? 'Try Free' : 'Registrarse Gratis'}
                 </button>
               </div>
             </div>
@@ -191,9 +201,12 @@ export default function TarantulaHawkWebsite() {
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <button
                 className="px-8 py-4 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-bold text-lg hover:from-red-700 hover:to-orange-600 transition"
-                onClick={() => setShowOnboarding(true)}
+                onClick={() => {
+                  setOnboardingMode('signup');
+                  setShowOnboarding(true);
+                }}
               >
-                {language === 'en' ? 'Start Free Trial' : 'Comenzar Prueba Gratis'}
+                {language === 'en' ? 'Start Free Trial - Get $500 USD' : 'Registrarse - Obtén $500 USD Gratis'}
               </button>
               <button 
                 onClick={() => {
@@ -203,7 +216,7 @@ export default function TarantulaHawkWebsite() {
                 }} 
                 className="px-8 py-4 border-2 border-teal-500 rounded-lg font-bold text-lg hover:bg-teal-500/10 transition"
               >
-                {language === 'en' ? 'Ask AI Assistant' : 'Preguntar a IA'}
+                {language === 'en' ? 'Chat with us' : 'Chat con nosotros'}
               </button>
             </div>
           </div>
@@ -744,7 +757,13 @@ export default function TarantulaHawkWebsite() {
           <p className="text-xl text-gray-400 mb-8">
             {language === 'en' ? 'Start monitoring transactions and detecting money laundering in minutes' : 'Comienza a monitorear transacciones y detectar lavado de dinero en minutos'}
           </p>
-          <button className="px-12 py-5 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-bold text-xl hover:from-red-700 hover:to-orange-600 transition shadow-2xl shadow-red-500/50">
+          <button 
+            onClick={() => {
+              setOnboardingMode('signup');
+              setShowOnboarding(true);
+            }}
+            className="px-12 py-5 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-bold text-xl hover:from-red-700 hover:to-orange-600 transition shadow-2xl shadow-red-500/50"
+          >
             {language === 'en' ? 'Access AML Platform' : 'Acceder a Plataforma PLD'}
           </button>
         </div>
@@ -766,7 +785,7 @@ export default function TarantulaHawkWebsite() {
     <AIChat language={language} />
     
     {showOnboarding && (
-      <OnboardingForm onClose={() => setShowOnboarding(false)} />
+      <OnboardingForm onClose={() => setShowOnboarding(false)} mode={onboardingMode} />
     )}
     </>
   );

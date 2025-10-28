@@ -1,213 +1,278 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { Ratelimit } from '@upstash/ratelimit';
-import { Redis } from '@upstash/redis';
+import { createServerClient } from '@supabase/ssr';
 
-// Create Redis client (using Upstash Redis)
-const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL || '',
-  token: process.env.UPSTASH_REDIS_REST_TOKEN || '',
-});
+// Rutas públicas que NO requieren autenticación
+const PUBLIC_ROUTES = ['/', '/auth/callback', '/auth', '/api/auth'];
 
-// Rate limiters for different tiers
-const rateLimiters = {
-  free: new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(10, '1 h'), // 10 requests per hour
-    analytics: true,
-    prefix: '@tarantulahawk/ratelimit/free',
-  }),
-  paid: new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(100, '1 h'), // 100 requests per hour
-    analytics: true,
-    prefix: '@tarantulahawk/ratelimit/paid',
-  }),
-  enterprise: new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(10000, '1 h'), // 10k requests per hour (effectively unlimited)
-    analytics: true,
-    prefix: '@tarantulahawk/ratelimit/enterprise',
-  }),
-};
+// Rutas que requieren autenticación
+const PROTECTED_ROUTES = ['/dashboard', '/admin', '/settings'];
 
-/**
- * Extract client IP address from various headers
- */
-function getClientIP(request: NextRequest): string {
-  // Cloudflare
-  const cfConnectingIP = request.headers.get('cf-connecting-ip');
-  if (cfConnectingIP) return cfConnectingIP;
-
-  // Standard forwarded headers
-  const xForwardedFor = request.headers.get('x-forwarded-for');
-  if (xForwardedFor) {
-    const ips = xForwardedFor.split(',');
-    return ips[0].trim();
+export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  
+  // Skip auth check if coming from auth callback
+  const fromAuth = request.nextUrl.searchParams.get('from') === 'auth';
+  
+  // 1. VERIFICAR AUTENTICACIÓN PRIMERO
+  const isProtectedRoute = PROTECTED_ROUTES.some(route => pathname.startsWith(route));
+  const isPublicRoute = PUBLIC_ROUTES.some(route => pathname === route || pathname.startsWith(route));
+  
+  if (isProtectedRoute && !fromAuth) {
+    const authResponse = await verifyAuth(request);
+    if (authResponse) return authResponse; // Redirect si no autenticado
   }
-
-  const xRealIP = request.headers.get('x-real-ip');
-  if (xRealIP) return xRealIP;
-
-    // Fallback to unknown (IP extraction handles most cases)
-    return 'unknown';
+  
+  // 2. RATE LIMITING solo para APIs (después de auth)
+  if (pathname.startsWith('/api/') && !pathname.startsWith('/api/auth')) {
+    const rateLimitResponse = await applyRateLimit(request);
+    if (rateLimitResponse) return rateLimitResponse;
+  }
+  
+  return NextResponse.next();
 }
 
 /**
- * Determine user tier from Supabase auth token
+ * Verifica autenticación del usuario
+ * Retorna Response si hay error, null si está autenticado
  */
-async function getUserTier(request: NextRequest): Promise<'free' | 'paid' | 'enterprise'> {
+async function verifyAuth(request: NextRequest): Promise<NextResponse | null> {
   try {
-    // Extract Supabase auth token from cookie
-    const token = request.cookies.get('sb-access-token')?.value;
-    if (!token) return 'free';
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll();
+          },
+          setAll(cookiesToSet) {
+            // No podemos setear cookies en middleware read-only
+          },
+        },
+      }
+    );
 
-    // Parse JWT to get user_id (simple decode, not verifying - Supabase handles that)
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    const userId = payload.sub;
+    const { data: { user }, error } = await supabase.auth.getUser();
+    
+    console.log('[MIDDLEWARE AUTH]', {
+      pathname: request.nextUrl.pathname,
+      hasUser: !!user,
+      userId: user?.id,
+      error: error?.message,
+      cookies: request.cookies.getAll().filter(c => c.name.startsWith('sb-')).map(c => c.name)
+    });
+    
+    if (error || !user) {
+      console.log('[MIDDLEWARE] Redirecting to home - no auth');
+      const url = request.nextUrl.clone();
+      url.pathname = '/';
+      url.searchParams.set('auth', 'required');
+      return NextResponse.redirect(url);
+    }
+    
+    console.log('[MIDDLEWARE] Auth verified for user:', user.email);
+    return null; // Usuario autenticado
+  } catch (error) {
+    console.error('[MIDDLEWARE AUTH ERROR]', error);
+    const url = request.nextUrl.clone();
+    url.pathname = '/';
+    url.searchParams.set('auth', 'error');
+    return NextResponse.redirect(url);
+  }
+}
 
-    // Fetch user profile from Supabase to get subscription_tier
+/**
+ * Aplica rate limiting basado en tier del usuario
+ */
+async function applyRateLimit(request: NextRequest): Promise<NextResponse | null> {
+  // Skip en desarrollo
+  if (process.env.NODE_ENV === 'development') {
+    return null;
+  }
+
+  const clientIP = getClientIP(request);
+  const tier = await getUserTier(request);
+  
+  // Límites por tier (requests por hora)
+  const limits = {
+    free: 10,
+    paid: 100,
+    enterprise: 1000
+  };
+  
+  const limit = limits[tier];
+  
+  // Usar Upstash si está configurado
+  if (process.env.UPSTASH_REDIS_REST_URL) {
+    return await upstashRateLimit(clientIP, tier, limit);
+  }
+  
+  // Fallback a Supabase
+  return await supabaseRateLimit(clientIP, tier, limit);
+}
+
+/**
+ * Rate limiting con Upstash Redis
+ */
+async function upstashRateLimit(
+  clientIP: string, 
+  tier: string, 
+  limit: number
+): Promise<NextResponse | null> {
+  try {
+    const { Ratelimit } = await import('@upstash/ratelimit');
+    const { Redis } = await import('@upstash/redis');
+    
+    const redis = new Redis({
+      url: process.env.UPSTASH_REDIS_REST_URL!,
+      token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+    });
+
+    const ratelimit = new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(limit, '1 h'),
+      analytics: true,
+      prefix: `ratelimit:${tier}`,
+    });
+
+    const { success, limit: maxLimit, reset, remaining } = await ratelimit.limit(clientIP);
+
+    if (!success) {
+      return new NextResponse(
+        JSON.stringify({
+          error: 'Rate limit exceeded',
+          tier,
+          limit: maxLimit,
+          reset: new Date(reset).toISOString(),
+        }),
+        { 
+          status: 429,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
+    const response = NextResponse.next();
+    response.headers.set('X-RateLimit-Limit', String(maxLimit));
+    response.headers.set('X-RateLimit-Remaining', String(remaining));
+    response.headers.set('X-RateLimit-Reset', String(reset));
+    return null; // Permite continuar
+    
+  } catch (error) {
+    console.error('[UPSTASH ERROR]', error);
+    return null; // Fail open
+  }
+}
+
+/**
+ * Rate limiting con Supabase (fallback)
+ */
+async function supabaseRateLimit(
+  clientIP: string,
+  tier: string,
+  limit: number
+): Promise<NextResponse | null> {
+  try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    
+    if (!supabaseUrl || !supabaseKey) return null;
 
-    if (!supabaseUrl || !supabaseKey) return 'free';
-
-    const response = await fetch(`${supabaseUrl}/rest/v1/profiles?id=eq.${userId}&select=subscription_tier`, {
+    const identifier = `${tier}:${clientIP}`;
+    
+    const response = await fetch(`${supabaseUrl}/rest/v1/rpc/check_rate_limit`, {
+      method: 'POST',
       headers: {
         'apikey': supabaseKey,
         'Authorization': `Bearer ${supabaseKey}`,
+        'Content-Type': 'application/json',
       },
+      body: JSON.stringify({ 
+        p_identifier: identifier, 
+        p_limit: limit 
+      }),
     });
 
-    if (!response.ok) return 'free';
+    if (!response.ok) return null;
 
     const data = await response.json();
-    if (!data || data.length === 0) return 'free';
+    const allowed = data?.allowed ?? true;
 
-    return data[0].subscription_tier || 'free';
+    if (!allowed) {
+      return new NextResponse(
+        JSON.stringify({
+          error: 'Rate limit exceeded',
+          tier,
+          limit,
+        }),
+        { 
+          status: 429,
+          headers: { 'Content-Type': 'application/json' }
+        }
+      );
+    }
+
+    return null;
+    
   } catch (error) {
-    console.error('Error determining user tier:', error);
+    console.error('[SUPABASE RATE LIMIT ERROR]', error);
+    return null; // Fail open
+  }
+}
+
+/**
+ * Obtiene tier del usuario de forma SEGURA
+ */
+async function getUserTier(request: NextRequest): Promise<'free' | 'paid' | 'enterprise'> {
+  try {
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll();
+          },
+          setAll() {},
+        },
+      }
+    );
+
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return 'free';
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('subscription_tier')
+      .eq('id', user.id)
+      .single();
+
+    return (profile?.subscription_tier as any) || 'free';
+    
+  } catch (error) {
+    console.error('[GET USER TIER ERROR]', error);
     return 'free';
   }
 }
 
-export async function middleware(request: NextRequest) {
-  // Only apply rate limiting to API routes
-  if (!request.nextUrl.pathname.startsWith('/api/')) {
-    return NextResponse.next();
-  }
-
-  // Skip rate limiting if Redis is not configured (development mode)
-  if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
-    // Fallback to DB-based rate limiting via Supabase RPC
-    try {
-      const clientIP = getClientIP(request);
-      const tier = await getUserTier(request);
-      const limits: Record<string, number> = { free: 10, paid: 100, enterprise: 10000 };
-      const limit = limits[tier] ?? 10;
-
-      const identifier = `${tier}:${clientIP}`;
-
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-      if (!supabaseUrl || !supabaseKey) {
-        return NextResponse.next(); // fail open if misconfigured
-      }
-
-      const rpcRes = await fetch(`${supabaseUrl}/rest/v1/rpc/check_and_increment_rate`, {
-        method: 'POST',
-        headers: {
-          'apikey': supabaseKey,
-          'Authorization': `Bearer ${supabaseKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ p_key: identifier, p_limit: limit }),
-      });
-
-      if (!rpcRes.ok) {
-        return NextResponse.next(); // fail open
-      }
-      const json = await rpcRes.json();
-      const row = Array.isArray(json) ? json[0] : json; // Supabase RPC returns single row or array
-      const allowed = row?.allowed as boolean;
-      const remaining = Number(row?.remaining ?? 0);
-      const resetAt = row?.reset_at ? new Date(row.reset_at).getTime() : Date.now() + 3600_000;
-
-      if (!allowed) {
-        return new NextResponse(
-          JSON.stringify({
-            error: 'Rate limit exceeded',
-            message: `Too many requests. You are limited to ${limit} requests per hour on the ${tier} tier.`,
-            tier,
-            limit,
-            reset: new Date(resetAt).toISOString(),
-          }),
-          {
-            status: 429,
-            headers: { 'Content-Type': 'application/json' },
-          }
-        );
-      }
-
-      const response = NextResponse.next();
-      response.headers.set('X-RateLimit-Limit', String(limit));
-      response.headers.set('X-RateLimit-Remaining', String(remaining));
-      response.headers.set('X-RateLimit-Reset', String(resetAt));
-      response.headers.set('X-RateLimit-Tier', tier);
-      return response;
-    } catch (e) {
-      console.error('DB rate limit fallback error:', e);
-      return NextResponse.next();
-    }
-  }
-
-  try {
-    // Get client IP and user tier
-    const clientIP = getClientIP(request);
-    const tier = await getUserTier(request);
-
-    // Select appropriate rate limiter
-    const rateLimiter = rateLimiters[tier];
-
-    // Check rate limit (use IP as identifier)
-    const { success, limit, reset, remaining } = await rateLimiter.limit(clientIP);
-
-    // Add rate limit headers to response
-    const response = success
-      ? NextResponse.next()
-      : new NextResponse(
-          JSON.stringify({
-            error: 'Rate limit exceeded',
-            message: `Too many requests. You are limited to ${limit} requests per hour on the ${tier} tier.`,
-            tier,
-            limit,
-            reset: new Date(reset).toISOString(),
-          }),
-          {
-            status: 429,
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          }
-        );
-
-    // Set rate limit headers (standard RateLimit spec)
-    response.headers.set('X-RateLimit-Limit', limit.toString());
-    response.headers.set('X-RateLimit-Remaining', remaining.toString());
-    response.headers.set('X-RateLimit-Reset', reset.toString());
-    response.headers.set('X-RateLimit-Tier', tier);
-
-    return response;
-  } catch (error) {
-    console.error('Rate limiting error:', error);
-    // On error, allow request to proceed (fail open)
-    return NextResponse.next();
-  }
+/**
+ * Extrae IP del cliente
+ */
+function getClientIP(request: NextRequest): string {
+  return (
+    request.headers.get('cf-connecting-ip') ||
+    request.headers.get('x-forwarded-for')?.split(',')[0].trim() ||
+    request.headers.get('x-real-ip') ||
+    'unknown'
+  );
 }
 
-// Configure which routes the middleware runs on
 export const config = {
   matcher: [
-    '/api/:path*', // All API routes
+    '/dashboard/:path*',
+    '/admin/:path*',
+    '/settings/:path*',
+    '/api/:path*',
   ],
 };

@@ -1,0 +1,145 @@
+{
+    "timestamp": "2025-10-23T21:40:05.759484",
+    "dataset_size": 100000,
+    "thresholds_actuales": {
+        "preocupante": 0.2,
+        "inusual": 0.25
+    },
+    "thresholds_optimizados": {
+        "preocupante": 0.26000000000000006,
+        "inusual": 0.05
+    },
+    "metricas_optimizadas": {
+        "fn_preocupante": 0,
+        "fn_inusual": 0,
+        "fp_preocupante": 61,
+        "fp_inusual": 0,
+        "costo_total": 1498475.0
+    },
+    "reporte_clasificacion": {
+        "inusual": {
+            "precision": 1.0,
+            "recall": 0.9991382199454206,
+            "f1-score": 0.9995689242264585,
+            "support": 20887.0
+        },
+        "preocupante": {
+            "precision": 0.9919863373620599,
+            "recall": 1.0,
+            "f1-score": 0.9959770493965574,
+            "support": 7551.0
+        },
+        "relevante": {
+            "precision": 1.0,
+            "recall": 0.9993991224392834,
+            "f1-score": 0.9996994709290542,
+            "support": 71562.0
+        },
+        "accuracy": 0.99939,
+        "macro avg": {
+            "precision": 0.9973287791206866,
+            "recall": 0.999512447461568,
+            "f1-score": 0.9984151481840233,
+            "support": 100000.0
+        },
+        "weighted avg": {
+            "precision": 0.9993948883342091,
+            "recall": 0.99939,
+            "f1-score": 0.9993911235893641,
+            "support": 100000.0
+        }
+    },
+    "recomendacion": "mantener_thresholds",
+    "top_10_combinaciones": [
+        {
+            "threshold_preocupante": 0.26000000000000006,
+            "threshold_inusual": 0.05,
+            "cost": 1498475.0,
+            "fn_preocupante": 0,
+            "fn_inusual": 0,
+            "fp_preocupante": 61,
+            "fp_inusual": 0
+        },
+        {
+            "threshold_preocupante": 0.26000000000000006,
+            "threshold_inusual": 0.060000000000000005,
+            "cost": 1498475.0,
+            "fn_preocupante": 0,
+            "fn_inusual": 0,
+            "fp_preocupante": 61,
+            "fp_inusual": 0
+        },
+        {
+            "threshold_preocupante": 0.26000000000000006,
+            "threshold_inusual": 0.07,
+            "cost": 1498475.0,
+            "fn_preocupante": 0,
+            "fn_inusual": 0,
+            "fp_preocupante": 61,
+            "fp_inusual": 0
+        },
+        {
+            "threshold_preocupante": 0.26000000000000006,
+            "threshold_inusual": 0.08000000000000002,
+            "cost": 1498475.0,
+            "fn_preocupante": 0,
+            "fn_inusual": 0,
+            "fp_preocupante": 61,
+            "fp_inusual": 0
+        },
+        {
+            "threshold_preocupante": 0.26000000000000006,
+            "threshold_inusual": 0.09000000000000001,
+            "cost": 1498475.0,
+            "fn_preocupante": 0,
+            "fn_inusual": 0,
+            "fp_preocupante": 61,
+            "fp_inusual": 0
+        },
+        {
+            "threshold_preocupante": 0.26000000000000006,
+            "threshold_inusual": 0.1,
+            "cost": 1498475.0,
+            "fn_preocupante": 0,
+            "fn_inusual": 0,
+            "fp_preocupante": 61,
+            "fp_inusual": 0
+        },
+        {
+            "threshold_preocupante": 0.26000000000000006,
+            "threshold_inusual": 0.11000000000000001,
+            "cost": 1498475.0,
+            "fn_preocupante": 0,
+            "fn_inusual": 0,
+            "fp_preocupante": 61,
+            "fp_inusual": 0
+        },
+        {
+            "threshold_preocupante": 0.26000000000000006,
+            "threshold_inusual": 0.12000000000000001,
+            "cost": 1498475.0,
+            "fn_preocupante": 0,
+            "fn_inusual": 0,
+            "fp_preocupante": 61,
+            "fp_inusual": 0
+        },
+        {
+            "threshold_preocupante": 0.26000000000000006,
+            "threshold_inusual": 0.13,
+            "cost": 1498475.0,
+            "fn_preocupante": 0,
+            "fn_inusual": 0,
+            "fp_preocupante": 61,
+            "fp_inusual": 0
+        },
+        {
+            "threshold_preocupante": 0.26000000000000006,
+            "threshold_inusual": 0.14,
+            "cost": 1498475.0,
+            "fn_preocupante": 0,
+            "fn_inusual": 0,
+            "fp_preocupante": 61,
+            "fp_inusual": 0
+        }
+    ]
+}

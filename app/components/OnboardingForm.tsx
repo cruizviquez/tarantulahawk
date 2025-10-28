@@ -36,13 +36,15 @@ const TarantulaHawkLogo = ({ className = "w-10 h-10 mb-4 mx-auto" }) => (
 
 interface OnboardingFormProps {
   onClose: () => void;
+  mode?: 'signup' | 'login'; // signup = new users, login = existing users
 }
 
-export default function OnboardingForm({ onClose }: OnboardingFormProps) {
+export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingFormProps) {
+  const [currentMode, setCurrentMode] = useState<'signup' | 'login'>(mode);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [company, setCompany] = useState('');
-    const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -53,67 +55,97 @@ export default function OnboardingForm({ onClose }: OnboardingFormProps) {
     setError('');
     setSuccess(false);
 
-      // Validate CAPTCHA
-      if (!captchaToken) {
-        setError('Por favor completa la verificación de seguridad.');
+    // Validate CAPTCHA
+    if (!captchaToken) {
+      setError('Por favor completa la verificación de seguridad.');
       setLoading(false);
       return;
     }
 
-      // Validate company name
-    if (!company.trim()) {
-        setError('El campo empresa es obligatorio.');
+    // Validate company name for SIGNUP only
+    if (currentMode === 'signup' && !company.trim()) {
+      setError('El campo empresa es obligatorio.');
+      setLoading(false);
+      return;
+    }
+
+    // Validate name for SIGNUP only
+    if (currentMode === 'signup' && !name.trim()) {
+      setError('El campo nombre es obligatorio.');
       setLoading(false);
       return;
     }
 
     try {
-        // Server-side verify Turnstile token
-        const verifyRes = await fetch('/api/turnstile/verify', {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ token: captchaToken }),
-        });
-        if (!verifyRes.ok) {
-          const err = await verifyRes.json().catch(() => ({}));
-          throw new Error('Verificación de seguridad fallida. Por favor intenta de nuevo.');
-        }
+      // Server-side verify Turnstile token
+      const verifyRes = await fetch('/api/turnstile/verify', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ token: captchaToken }),
+      });
+      if (!verifyRes.ok) {
+        const err = await verifyRes.json().catch(() => ({}));
+        throw new Error('Verificación de seguridad fallida. Por favor intenta de nuevo.');
+      }
 
-        // Send Magic Link via Supabase OTP
-        // Note: We verify CAPTCHA server-side above. Disable Supabase CAPTCHA in dashboard to avoid conflicts.
-        const { error: signInError } = await supabase.auth.signInWithOtp({
+      // Send Magic Link via Supabase OTP
+      const { error: signInError } = await supabase.auth.signInWithOtp({
         email,
-          options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback`,
-            data: {
-              name,
-              company,
-              subscription_tier: 'free',
-              credits_remaining: 10,
-            },
-          },
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          shouldCreateUser: currentMode === 'signup',
+          data: currentMode === 'signup' ? {
+            name,
+            company,
+            balance: 500.0,
+          } : undefined,
+        },
       });
 
-        if (signInError) {
-          throw signInError;
+      if (signInError) {
+        // Check if user doesn't exist (only in login mode)
+        if (currentMode === 'login' && (
+          signInError.message.includes('User not found') || 
+          signInError.message.includes('Signups not allowed') ||
+          signInError.message.includes('signups not allowed')
+        )) {
+          setError('Usuario no registrado');
+          setLoading(false);
+          // Show signup option
+          setTimeout(() => {
+            if (window.confirm('Usuario no registrado. ¿Deseas crear una cuenta nueva con este email?')) {
+              setCurrentMode('signup');
+              setError('');
+            }
+          }, 100);
+          return;
         }
+        throw signInError;
+      }
 
-        // Log audit event
-        await logAuditEvent({
-          user_id: null, // User not created yet, will be created on Magic Link click
-          action: 'registration',
-          metadata: {
-            email,
-            company,
-            registration_method: 'magic_link',
-          },
-          status: 'pending',
-        });
+      // Log audit event (only for signup)
+      if (currentMode === 'signup') {
+        try {
+          await logAuditEvent({
+            user_id: null, // User not created yet, will be created on Magic Link click
+            action: 'registration',
+            metadata: {
+              email,
+              company,
+              registration_method: 'magic_link',
+            },
+            status: 'pending',
+          });
+        } catch (auditError) {
+          // Non-critical error, continue with signup flow
+          console.warn('Audit log failed:', auditError);
+        }
+      }
 
-        setSuccess(true);
-        setLoading(false);
+      setSuccess(true);
+      setLoading(false);
     } catch (error: any) {
-      setError(error.message || 'Error al crear la cuenta. Por favor intenta de nuevo.');
+      setError(error.message || 'Error al procesar tu solicitud. Por favor intenta de nuevo.');
       setLoading(false);
     }
   };
@@ -123,8 +155,23 @@ export default function OnboardingForm({ onClose }: OnboardingFormProps) {
       <div className="bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-2xl p-8 max-w-md w-full shadow-2xl" onClick={e => e.stopPropagation()}>
         <button onClick={onClose} className="absolute top-6 right-8 text-gray-500 hover:text-white text-2xl">×</button>
         <TarantulaHawkLogo />
-        <h2 className="text-2xl font-black mb-2 text-center bg-gradient-to-r from-red-500 to-teal-400 bg-clip-text text-transparent">Sign Up for Free Trial</h2>
-        <p className="text-gray-400 text-center mb-6">Create your account to access the AML platform. No credit card required.</p>
+        {currentMode === 'signup' ? (
+          <>
+            <h2 className="text-2xl font-black mb-2 text-center bg-gradient-to-r from-red-500 to-teal-400 bg-clip-text text-transparent">
+              Regístrate y Obtén $500 USD Gratis
+            </h2>
+            <p className="text-gray-400 text-center mb-6">
+              Crea tu cuenta y recibe $500 USD en créditos virtuales para probar la plataforma de AML. Sin tarjeta de crédito.
+            </p>
+          </>
+        ) : (
+          <>
+            <h2 className="text-2xl font-black mb-4 text-center bg-gradient-to-r from-red-500 to-teal-400 bg-clip-text text-transparent">
+              TarantulaHawk
+            </h2>
+            {/* Login mode: we intentionally remove the descriptive subtitle for a cleaner look */}
+          </>
+        )}
         {success ? (
           <div className="text-center py-12">
             <div className="text-green-500 text-5xl mb-4">�</div>
@@ -132,23 +179,36 @@ export default function OnboardingForm({ onClose }: OnboardingFormProps) {
               <p className="text-gray-400 mb-4">Hemos enviado un enlace seguro a:</p>
             <p className="text-white font-semibold mb-4 bg-gray-800 rounded-lg p-3">{email}</p>
             
+            {currentMode === 'signup' && (
+              <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 mb-4">
+                <h3 className="text-green-400 font-semibold mb-2">🎁 $500 USD en Créditos Virtuales</h3>
+                <ul className="text-gray-400 text-sm text-left space-y-1">
+                  <li>✅ Créditos inmediatos al activar tu cuenta</li>
+                  <li>✅ Prueba todas las funcionalidades de AML</li>
+                  <li>✅ Sin compromiso ni tarjeta de crédito</li>
+                  <li>✅ Análisis de transacciones ilimitados</li>
+                </ul>
+              </div>
+            )}
+            
             <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-6">
               <h3 className="text-blue-400 font-semibold mb-2">🛡️ Seguridad Mejorada</h3>
               <ul className="text-gray-400 text-sm text-left space-y-1">
-                  <li>✅ Sin contraseñas - sin riesgo de phishing</li>
-                  <li>✅ Magic Link de un solo uso</li>
-                  <li>✅ Registro abierto para pequeñas empresas</li>
-                  <li>✅ Validación CAPTCHA contra bots</li>
+                <li>✅ Sin contraseñas - sin riesgo de phishing</li>
+                <li>✅ Magic Link de un solo uso</li>
+                <li>✅ Validación CAPTCHA contra bots</li>
+                <li>✅ Acceso seguro en segundos</li>
               </ul>
             </div>
             
             <p className="text-gray-500 text-sm mb-6">
-                <strong>Paso siguiente:</strong> Revisa tu bandeja de entrada y haz clic en el Magic Link. 
-                El enlace es válido por 60 minutos y solo puede usarse una vez.
+              <strong>Paso siguiente:</strong> Revisa tu bandeja de entrada y haz clic en el Magic Link.
+              <br />
+              ⏱️ <strong>El enlace expira en 10 minutos</strong> y solo puede usarse una vez por seguridad.
             </p>
             
-            <button onClick={onClose} className="px-6 py-3 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-semibold hover:from-red-700 hover:to-orange-600 transition">
-              Entendido, Cerrar
+            <button onClick={onClose} className="px-6 py-3 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-semibold hover:from-red-700 hover:to-orange-600 transition w-full">
+              Entendido
             </button>
           </div>
         ) : (
@@ -160,71 +220,93 @@ export default function OnboardingForm({ onClose }: OnboardingFormProps) {
               </div>
             )}
             
-            <div>
-              <input 
-                type="text" 
-                placeholder="Nombre Completo" 
-                value={name} 
-                onChange={e => setName(e.target.value)} 
-                required 
-                className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none" 
-              />
-            </div>
+            {currentMode === 'signup' && (
+              <>
+                <div>
+                  <input 
+                    type="text" 
+                    placeholder="Nombre Completo" 
+                    value={name} 
+                    onChange={e => setName(e.target.value)} 
+                    required 
+                    className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none" 
+                  />
+                </div>
+                
+                <div>
+                  <input 
+                    type="text" 
+                    placeholder="Empresa / Organización" 
+                    value={company} 
+                    onChange={e => setCompany(e.target.value)} 
+                    required 
+                    className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none" 
+                  />
+                  <p className="text-gray-500 text-xs mt-1">� Solo para uso empresarial</p>
+                </div>
+              </>
+            )}
             
             <div>
               <input 
                 type="email" 
-                  placeholder="Email (cualquier dominio)" 
+                placeholder="Correo Electrónico" 
                 value={email} 
                 onChange={e => setEmail(e.target.value)} 
                 required 
-                  className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none"
+                className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none"
               />
-                <p className="text-gray-500 text-xs mt-1">📧 Gmail, Outlook, dominios corporativos - todos aceptados</p>
+              <p className="text-gray-500 text-xs mt-1">� Cualquier dominio de email es aceptado</p>
             </div>
             
-            <div>
-              <input 
-                type="text" 
-                placeholder="Empresa / Organización" 
-                value={company} 
-                onChange={e => setCompany(e.target.value)} 
-                required 
-                className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none" 
+            {/* CAPTCHA */}
+            <div className="flex justify-center">
+              <Turnstile
+                siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '1x00000000000000000000AA'}
+                onSuccess={(token) => setCaptchaToken(token)}
+                onError={() => {
+                  setCaptchaToken(null);
+                  setError('Error en verificación de seguridad. Por favor recarga la página.');
+                }}
+                options={{ theme: 'dark' }}
               />
-              <p className="text-gray-500 text-xs mt-1">💼 Solo para uso empresarial</p>
             </div>
-            
-              {/* CAPTCHA */}
-              <div className="flex justify-center">
-                <Turnstile
-                  siteKey={process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY || '1x00000000000000000000AA'}
-                  onSuccess={(token) => setCaptchaToken(token)}
-                  onError={() => {
-                    setCaptchaToken(null);
-                    setError('Error en verificación de seguridad. Por favor recarga la página.');
-                  }}
-                  options={{ theme: 'dark' }}
-                />
-              </div>
             
             <button 
               type="submit" 
-              disabled={
-                loading || 
-                  !captchaToken ||
-                !name.trim() ||
-                !company.trim()
-              }
+              disabled={loading || !captchaToken || (currentMode === 'signup' && (!name.trim() || !company.trim()))}
               className="w-full py-4 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-bold hover:from-red-700 hover:to-orange-600 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-                {loading ? 'Enviando Magic Link...' : '✨ Crear Cuenta sin Contraseña'}
+              {loading ? 'Enviando Magic Link...' : currentMode === 'signup' ? '✨ Crear Cuenta y Obtener $500 USD' : '🔐 Enviar Enlace de Acceso'}
             </button>
             
             <div className="text-center">
-              <p className="text-gray-500 text-xs">
-                  🛡️ Sin contraseñas = Sin riesgo de phishing. Recibirás un enlace seguro por email.
+              <p className="text-gray-500 text-xs mb-2">
+                🛡️ Sin contraseñas = Sin riesgo de phishing. Recibirás un enlace seguro por email (válido 10 min).
               </p>
+              {currentMode === 'signup' ? (
+                <p className="text-gray-400 text-sm">
+                  ¿Ya tienes cuenta?{' '}
+                  <button
+                    type="button"
+                    onClick={() => { setCurrentMode('login'); setError(''); }}
+                    className="text-teal-400 hover:text-teal-300 underline"
+                  >
+                    Inicia sesión aquí
+                  </button>
+                </p>
+              ) : (
+                <p className="text-gray-400 text-sm">
+                  ¿No tienes cuenta?{' '}
+                  <button
+                    type="button"
+                    onClick={() => { setCurrentMode('signup'); setError(''); }}
+                    className="text-teal-400 hover:text-teal-300 underline"
+                  >
+                    Regístrate aquí
+                  </button>
+                </p>
+              )}
             </div>
           </form>
         )}

@@ -77,24 +77,49 @@ export async function POST(req: NextRequest) {
 
     const userId = userData.user.id;
 
-    // Update subscription server-side
-    const { error: upErr } = await supa
-      .from('profiles')
-      .update({ subscription_tier: 'paid' })
-      .eq('id', userId);
-    if (upErr) {
-      return NextResponse.json({ ok: false, error: 'db-update-failed' }, { status: 500 });
+    // Convert payment amount to USD credits (1:1 ratio, e.g., $15 = $15 credits)
+    const creditsToAdd = parseFloat(amount);
+    
+    // Call add_credits function
+    const { data: creditResult, error: creditError } = await supa.rpc('add_credits', {
+      p_user_id: userId,
+      p_amount: creditsToAdd,
+      p_transaction_type: 'credit_purchase',
+      p_description: `PayPal purchase: Order ${orderID}`,
+      p_metadata: { provider: 'paypal', orderID, amount, currency: curr }
+    });
+
+    if (creditError || !creditResult?.[0]?.success) {
+      console.error('Failed to add credits:', creditError);
+      return NextResponse.json({ 
+        ok: false, 
+        error: 'credit-add-failed',
+        details: creditError?.message || creditResult?.[0]?.message 
+      }, { status: 500 });
     }
+
+    const newBalance = creditResult[0].new_balance;
 
     // Audit log
     await logAuditEvent({
       user_id: userId,
-      action: 'account_upgraded',
+      action: 'credits_purchased',
       status: 'success',
-      metadata: { provider: 'paypal', orderID, amount, currency: curr },
+      metadata: { 
+        provider: 'paypal', 
+        orderID, 
+        amount_paid: amount, 
+        currency: curr,
+        credits_added: creditsToAdd,
+        new_balance: newBalance
+      },
     });
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ 
+      ok: true, 
+      creditsAdded: creditsToAdd,
+      newBalance: newBalance
+    });
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message || 'unknown-error' }, { status: 500 });
   }

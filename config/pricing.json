@@ -1,0 +1,9 @@
+{
+  "currency": "USD",
+  "tiers": [
+    { "upto": 2000, "rate": 1.0 },
+    { "upto": 5000, "rate": 0.75 },
+    { "upto": 10000, "rate": 0.5 },
+    { "upto": null, "rate": 0.35 }
+  ]
+}

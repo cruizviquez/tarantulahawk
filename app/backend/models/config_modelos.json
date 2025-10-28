@@ -1,0 +1,40 @@
+{
+  "dataset": {
+    "path": "backend/datasets/dataset_pld_lfpiorpi_100k_ml_ready.csv"
+  },
+  "modelos": {
+    "ensemble": {
+      "use_stacking": true,
+      "test_size": 0.20,
+      "cv_folds": 3,
+      "sampling_strategy": {
+        "preocupante": 0.85,
+        "inusual": 0.80
+      },
+      "threshold_preocupante": 0.20,
+      "threshold_inusual": 0.25
+    },
+    "no_supervisado": {
+      "n_clusters_range": [6, 14],
+      "auto_select_clusters": true,
+      "contamination_range": [0.03, 0.04, 0.05, 0.06],
+      "auto_select_contamination": true,
+      "iforest_n_estimators": 300,
+      "pca_variance": 0.98
+    },
+    "refuerzo": {
+      "alpha": 0.3,
+      "alpha_decay": 0.998,
+      "gamma": 0.9,
+      "epsilon": 0.4,
+      "epsilon_min": 0.02,
+      "decay_rate": 0.995,
+      "episodios": 800,
+      "umbral_inusual": 50000,
+      "umbral_preocupante": 200000,
+      "n_states": 25,
+      "recompensa_acierto": 15,
+      "penalizacion_fn_critico": -35
+    }
+  }
+}

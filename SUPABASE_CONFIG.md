@@ -84,7 +84,7 @@ AND routine_name IN ('is_trial_active', 'extend_trial', 'log_user_activity');
             <hr style="border: 1px solid #333; margin: 30px 0;">
             
             <p><strong>¿Necesitas ayuda?</strong><br>
-            Contacta nuestro equipo de soporte: <a href="mailto:support@tarantulahawk.com" style="color: #ea580c;">support@tarantulahawk.com</a></p>
+            Contacta nuestro equipo de soporte: <a href="mailto:info@tarantulahawk.cloud" style="color: #ea580c;">info@tarantulahawk.cloud</a></p>
         </div>
         <div class="footer">
             <p>&copy; 2025 TarantulaHawk. Todos los derechos reservados.</p>
@@ -157,7 +157,7 @@ SMTP Host: smtp.gmail.com
 SMTP Port: 587
 SMTP User: tu-email@gmail.com
 SMTP Pass: tu-app-password
-Sender Email: noreply@tarantulahawk.com
+Sender Email: info@tarantulahawk.cloud
 Sender Name: TarantulaHawk
 ```
 
