@@ -2,6 +2,24 @@ import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 
+/**
+ * Callback handler para Magic Links con PKCE Code Exchange
+ * 
+ * FLUJO RECOMENDADO (Server-Side Auth):
+ * 1. Usuario hace clic en Magic Link: /auth/callback?code=ABC123
+ * 2. Este handler intercambia el code por una sesión segura
+ * 3. Redirect directo a /dashboard con cookies seteadas
+ * 
+ * FLUJO LEGACY (Hash-based Auth - NO RECOMENDADO):
+ * 1. Magic Link con tokens en hash: /#access_token=XYZ&refresh_token=123
+ * 2. Servidor no puede leer hash → redirect a /?auth_error=no_code
+ * 3. Cliente (AuthHashHandler) lee hash y llama /api/auth/hash
+ * 4. /api/auth/hash setea cookies y redirect a /dashboard
+ * 
+ * Para eliminar el doble redirect:
+ * - Configura Supabase en "Server-Side Auth Flow" (PKCE enabled)
+ * - Asegúrate que Auth Flow Type = "Server-Side" en Supabase Dashboard
+ */
 export default async function AuthCallback({
   searchParams,
 }: {

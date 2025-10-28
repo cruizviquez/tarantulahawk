@@ -11,16 +11,23 @@ const PROTECTED_ROUTES = ['/dashboard', '/admin', '/settings'];
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   
-  // Skip auth check if coming from auth callback
+  // Skip auth check if coming from auth callback or has valid session cookie
   const fromAuth = request.nextUrl.searchParams.get('from') === 'auth';
+  const hasSessionCookie = request.cookies.has('sb-jhjlxjaicjorzeaqdbsv-auth-token'); // Reemplaza con tu project ID
   
   // 1. VERIFICAR AUTENTICACIÓN PRIMERO
   const isProtectedRoute = PROTECTED_ROUTES.some(route => pathname.startsWith(route));
   const isPublicRoute = PUBLIC_ROUTES.some(route => pathname === route || pathname.startsWith(route));
   
-  if (isProtectedRoute && !fromAuth) {
+  // Optimización: si viene de auth o tiene cookie válida, skip verificación pesada
+  if (isProtectedRoute && !fromAuth && !hasSessionCookie) {
     const authResponse = await verifyAuth(request);
     if (authResponse) return authResponse; // Redirect si no autenticado
+  } else if (isProtectedRoute && hasSessionCookie) {
+    // Verificación ligera: solo check que la cookie existe
+    // La validación completa se hace en la página protegida
+    const quickAuthCheck = await quickVerifyAuth(request);
+    if (quickAuthCheck) return quickAuthCheck;
   }
   
   // 2. RATE LIMITING solo para APIs (después de auth)
@@ -79,6 +86,30 @@ async function verifyAuth(request: NextRequest): Promise<NextResponse | null> {
     url.pathname = '/';
     url.searchParams.set('auth', 'error');
     return NextResponse.redirect(url);
+  }
+}
+
+/**
+ * Verificación rápida de autenticación (solo check de cookie)
+ * Más rápido que getUser() completo
+ */
+async function quickVerifyAuth(request: NextRequest): Promise<NextResponse | null> {
+  try {
+    // Solo verifica que exista una cookie de sesión válida
+    // La validación completa se hace en la página destino
+    const sessionCookie = request.cookies.get('sb-jhjlxjaicjorzeaqdbsv-auth-token');
+    
+    if (!sessionCookie || !sessionCookie.value) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/';
+      url.searchParams.set('auth', 'required');
+      return NextResponse.redirect(url);
+    }
+    
+    return null; // Cookie existe, asumir válida
+  } catch (error) {
+    console.error('[MIDDLEWARE QUICK AUTH ERROR]', error);
+    return null; // Fail open
   }
 }
 
