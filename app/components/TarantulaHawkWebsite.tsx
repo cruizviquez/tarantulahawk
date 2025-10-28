@@ -759,7 +759,8 @@ export default function TarantulaHawkWebsite() {
           </p>
           <button 
             onClick={() => {
-              setOnboardingMode('signup');
+              // Open login modal instead of signup for this CTA
+              setOnboardingMode('login');
               setShowOnboarding(true);
             }}
             className="px-12 py-5 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-bold text-xl hover:from-red-700 hover:to-orange-600 transition shadow-2xl shadow-red-500/50"
