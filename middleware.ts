@@ -6,7 +6,7 @@ import { createServerClient } from '@supabase/ssr';
 const PUBLIC_ROUTES = ['/', '/auth/callback', '/auth/redirect', '/auth', '/login', '/signup'];
 
 // APIs públicas que NO requieren autenticación
-const PUBLIC_API_PREFIXES = ['/api/auth/hash', '/api/auth/logout', '/api/turnstile'];
+const PUBLIC_API_PREFIXES = ['/api/auth/hash', '/api/auth/logout', '/api/turnstile', '/api/excel'];
 
 // Rutas que requieren autenticación
 const PROTECTED_ROUTES = ['/dashboard', '/admin', '/settings'];

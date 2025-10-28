@@ -143,62 +143,42 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
 
   // Improved estimation: Parse file locally to count actual rows
   const estimateTransactionsFromFile = async (file: File): Promise<{rows: number, fileName: string, fileSize: number}> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
+    try {
+      // Usar el endpoint de parsing para obtener count exacto
+      const formData = new FormData();
+      formData.append('file', file);
       
-      reader.onload = (e) => {
-        try {
-          const content = e.target?.result as string;
-          let rows = 0;
-          
-          if (file.name.endsWith('.csv')) {
-            // Count CSV lines (excluding header)
-            const lines = content.split('\n').filter(line => line.trim().length > 0);
-            rows = Math.max(0, lines.length - 1); // -1 for header
-          } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
-            // For Excel, we can't parse binary easily in browser
-            // Use improved heuristic: avg 150 bytes per row for Excel
-            rows = Math.floor(file.size / 150);
-          } else {
-            // Fallback
-            rows = Math.floor(file.size / 200);
-          }
-          
-          resolve({
-            rows: Math.max(1, rows),
+      const response = await fetch('/api/excel/parse', {
+        method: 'POST',
+        body: formData,
+        credentials: 'same-origin'
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.rowCount !== undefined) {
+          return {
+            rows: result.rowCount,
             fileName: file.name,
             fileSize: file.size
-          });
-        } catch (error) {
-          // Fallback to old method
-          resolve({
-            rows: Math.floor(file.size / 200),
-            fileName: file.name,
-            fileSize: file.size
-          });
+          };
         }
-      };
-      
-      reader.onerror = () => {
-        resolve({
-          rows: Math.floor(file.size / 200),
-          fileName: file.name,
-          fileSize: file.size
-        });
-      };
-      
-      // Read as text for CSV, or just estimate for Excel
-      if (file.name.endsWith('.csv')) {
-        reader.readAsText(file);
-      } else {
-        // For Excel, just use size estimation
-        resolve({
-          rows: Math.floor(file.size / 150),
-          fileName: file.name,
-          fileSize: file.size
-        });
       }
-    });
+      
+      // Fallback: estimación por tamaño
+      return {
+        rows: Math.floor(file.size / 200),
+        fileName: file.name,
+        fileSize: file.size
+      };
+    } catch {
+      // Error: usar estimación conservadora
+      return {
+        rows: Math.floor(file.size / 200),
+        fileName: file.name,
+        fileSize: file.size
+      };
+    }
   };
 
   const clearSelectedFile = () => {
@@ -260,23 +240,63 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
     }
     
     try {
-      // Upload to Python backend
+      // PASO 1: Parse Excel con nuevo endpoint
       const formData = new FormData();
       formData.append('file', file);
       
       setProcessingProgress(10);
       
-      const response = await fetch(`${API_URL}/api/portal/upload`, {
+      const parseResponse = await fetch('/api/excel/parse', {
         method: 'POST',
         body: formData,
-        headers: {
-          'X-User-ID': user.id,
+        credentials: 'same-origin'
+      });
+      
+      // Manejo robusto de errores
+      if (!parseResponse.ok) {
+        const errorText = await parseResponse.text();
+        let errorMessage = `Error ${parseResponse.status}`;
+        
+        try {
+          const errorJson = JSON.parse(errorText);
+          errorMessage = errorJson.error || errorJson.message || errorMessage;
+        } catch {
+          errorMessage = errorText || errorMessage;
         }
+        
+        throw new Error(errorMessage);
+      }
+      
+      const parseResult = await parseResponse.json();
+      
+      if (!parseResult.success) {
+        throw new Error(parseResult.error || 'Error desconocido al parsear Excel');
+      }
+      
+      console.log('📊 Excel parseado:', {
+        fileName: parseResult.fileName,
+        rowCount: parseResult.rowCount,
+        columns: parseResult.columns
       });
       
       // Stage 2: Validating
       setProcessingStage('validating');
       setProcessingProgress(20);
+      
+      // PASO 2: Enviar datos parseados al backend Python
+      const response = await fetch(`${API_URL}/api/portal/upload`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-User-ID': user.id,
+        },
+        body: JSON.stringify({
+          fileName: parseResult.fileName,
+          data: parseResult.data,
+          rowCount: parseResult.rowCount
+        }),
+        credentials: 'same-origin'
+      });
       
       const result = await response.json();
 
