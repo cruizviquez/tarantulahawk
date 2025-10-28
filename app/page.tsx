@@ -2,7 +2,6 @@ import { redirect } from 'next/navigation';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import TarantulaHawkWebsite from './components/TarantulaHawkWebsite';
-import AuthRedirectHandler from './components/AuthRedirectHandler';
 
 export default async function Home({
   searchParams,
@@ -63,9 +62,6 @@ export default async function Home({
   }
 
   return (
-    <>
-      <AuthRedirectHandler />
-      <TarantulaHawkWebsite authError={authError} />
-    </>
+    <TarantulaHawkWebsite authError={authError} />
   );
 }

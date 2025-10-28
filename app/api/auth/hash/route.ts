@@ -3,26 +3,72 @@ import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
 
 /**
- * Endpoint para procesar magic link con tokens en hash
- * GET /api/auth/hash?access_token=...&refresh_token=...&next=/dashboard
+ * Endpoint para procesar magic link con tokens
+ * POST /api/auth/hash (body: { access_token, refresh_token }) - RECOMENDADO (no expone tokens en URL)
+ * GET /api/auth/hash?access_token=...&refresh_token=... - Legacy support
+ */
+
+/**
+ * Helper: Get public URL from request
+ */
+function getPublicUrl(request: NextRequest): string {
+  const forwardedHost = request.headers.get('x-forwarded-host');
+  const forwardedProto = request.headers.get('x-forwarded-proto') || 'https';
+  return forwardedHost 
+    ? `${forwardedProto}://${forwardedHost}`
+    : request.nextUrl.origin;
+}
+
+/**
+ * POST handler - Método preferido (tokens en body, no en URL)
+ */
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { access_token, refresh_token } = body;
+
+    return await processAuth(request, access_token, refresh_token, false);
+  } catch (error) {
+    console.error('[AUTH HASH POST] Exception:', error);
+    return NextResponse.json(
+      { success: false, error: 'Invalid request body' },
+      { status: 400 }
+    );
+  }
+}
+
+/**
+ * GET handler - Legacy support (menos seguro, tokens en URL)
  */
 export async function GET(request: NextRequest) {
   const url = request.nextUrl;
   const access_token = url.searchParams.get('access_token');
   const refresh_token = url.searchParams.get('refresh_token');
-  const next = url.searchParams.get('next') || '/dashboard';
   
-  // Get the correct public URL (handles Codespaces X-Forwarded-Host)
-  const forwardedHost = request.headers.get('x-forwarded-host');
-  const forwardedProto = request.headers.get('x-forwarded-proto') || 'https';
-  const publicUrl = forwardedHost 
-    ? `${forwardedProto}://${forwardedHost}`
-    : url.origin;
+  return await processAuth(request, access_token, refresh_token, true);
+}
+
+/**
+ * Función compartida para procesar autenticación
+ */
+async function processAuth(
+  request: NextRequest,
+  access_token: string | null,
+  refresh_token: string | null,
+  isRedirect: boolean
+): Promise<NextResponse> {
+  const publicUrl = getPublicUrl(request);
 
   // Validar tokens requeridos
   if (!access_token || !refresh_token) {
     console.error('[AUTH HASH] Missing tokens');
-    return NextResponse.redirect(`${publicUrl}/?auth_error=missing_tokens`);
+    if (isRedirect) {
+      return NextResponse.redirect(`${publicUrl}/?auth_error=missing_tokens`);
+    }
+    return NextResponse.json(
+      { success: false, error: 'Missing tokens' },
+      { status: 400 }
+    );
   }
 
   // Validar configuración de Supabase
@@ -31,25 +77,13 @@ export async function GET(request: NextRequest) {
   
   if (!supabaseUrl || !supabaseAnonKey) {
     console.error('[AUTH HASH] Missing Supabase config');
-    return NextResponse.redirect(`${publicUrl}/?auth_error=server_config`);
-  }
-
-  // Sanitizar ruta de redirección (prevenir open redirect)
-  let nextPath = '/dashboard';
-  try {
-    if (next.startsWith('/')) {
-      // Ruta relativa válida
-      nextPath = next;
-    } else if (next.startsWith('http://') || next.startsWith('https://')) {
-      // Solo permitir mismo origen
-      const parsed = new URL(next);
-      if (parsed.origin === publicUrl) {
-        nextPath = parsed.pathname + parsed.search;
-      }
+    if (isRedirect) {
+      return NextResponse.redirect(`${publicUrl}/?auth_error=server_config`);
     }
-  } catch (error) {
-    console.error('[AUTH HASH] Invalid next parameter:', error);
-    nextPath = '/dashboard';
+    return NextResponse.json(
+      { success: false, error: 'Server configuration error' },
+      { status: 500 }
+    );
   }
 
   // Crear cliente de Supabase con acceso a cookies
@@ -89,7 +123,13 @@ export async function GET(request: NextRequest) {
   
   if (existingUse) {
     console.warn('[AUTH HASH] Magic link already used');
-    return NextResponse.redirect(`${publicUrl}/?auth_error=link_expired`);
+    if (isRedirect) {
+      return NextResponse.redirect(`${publicUrl}/?auth_error=link_expired`);
+    }
+    return NextResponse.json(
+      { success: false, error: 'Magic link already used or expired' },
+      { status: 400 }
+    );
   }
 
   // Establecer sesión con los tokens
@@ -101,20 +141,38 @@ export async function GET(request: NextRequest) {
 
     if (error) {
       console.error('[AUTH HASH] setSession error:', error.message);
-      return NextResponse.redirect(
-        `${publicUrl}/?auth_error=${encodeURIComponent(error.message)}`
+      if (isRedirect) {
+        return NextResponse.redirect(
+          `${publicUrl}/?auth_error=${encodeURIComponent(error.message)}`
+        );
+      }
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 400 }
       );
     }
 
     if (!data?.session) {
       console.error('[AUTH HASH] No session returned');
-      return NextResponse.redirect(`${publicUrl}/?auth_error=no_session`);
+      if (isRedirect) {
+        return NextResponse.redirect(`${publicUrl}/?auth_error=no_session`);
+      }
+      return NextResponse.json(
+        { success: false, error: 'No session returned' },
+        { status: 400 }
+      );
     }
 
     // Verificar que el usuario existe
     if (!data.user) {
       console.error('[AUTH HASH] No user in session');
-      return NextResponse.redirect(`${publicUrl}/?auth_error=no_user`);
+      if (isRedirect) {
+        return NextResponse.redirect(`${publicUrl}/?auth_error=no_user`);
+      }
+      return NextResponse.json(
+        { success: false, error: 'No user in session' },
+        { status: 400 }
+      );
     }
 
     // Mark token as used (prevent reuse)
@@ -128,27 +186,33 @@ export async function GET(request: NextRequest) {
     console.log('[AUTH HASH] Success:', {
       userId: data.user.id,
       email: data.user.email,
-      nextPath,
       publicUrl,
     });
 
-    // Redirigir a la ruta protegida
-    const redirectUrl = `${publicUrl}${nextPath}`;
-    console.log('[AUTH HASH] Redirecting to:', redirectUrl);
-    return NextResponse.redirect(redirectUrl);
+    // Para GET: redirigir al dashboard
+    if (isRedirect) {
+      const redirectUrl = `${publicUrl}/dashboard`;
+      console.log('[AUTH HASH] Redirecting to:', redirectUrl);
+      return NextResponse.redirect(redirectUrl);
+    }
+
+    // Para POST: retornar JSON success
+    return NextResponse.json({
+      success: true,
+      user: {
+        id: data.user.id,
+        email: data.user.email,
+      },
+    });
     
   } catch (error) {
     console.error('[AUTH HASH] Exception:', error);
-    return NextResponse.redirect(`${publicUrl}/?auth_error=exception`);
+    if (isRedirect) {
+      return NextResponse.redirect(`${publicUrl}/?auth_error=exception`);
+    }
+    return NextResponse.json(
+      { success: false, error: 'Authentication failed' },
+      { status: 500 }
+    );
   }
-}
-
-/**
- * Manejar otros métodos HTTP
- */
-export async function POST() {
-  return NextResponse.json(
-    { error: 'Method not allowed. Use GET with query parameters.' },
-    { status: 405 }
-  );
 }
