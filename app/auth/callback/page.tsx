@@ -23,13 +23,25 @@ import { redirect } from 'next/navigation';
 export default async function AuthCallback({
   searchParams,
 }: {
-  searchParams: Promise<{ code?: string; error?: string; error_description?: string }>;
+  searchParams: Promise<{ 
+    code?: string; 
+    token_hash?: string;
+    type?: string;
+    error?: string; 
+    error_description?: string;
+  }>;
 }) {
   const params = await searchParams;
-  const { code, error, error_description } = params;
+  const { code, token_hash, type, error, error_description } = params;
 
   // Debug logging (remove in production)
-  console.log('[AUTH CALLBACK] Search params:', { code: code ? 'present' : 'missing', error, error_description });
+  console.log('[AUTH CALLBACK] Search params:', { 
+    code: code ? 'present' : 'missing',
+    token_hash: token_hash ? 'present' : 'missing',
+    type,
+    error, 
+    error_description 
+  });
 
   if (error) {
     console.error('[AUTH CALLBACK] Error from Supabase:', error, error_description);
@@ -51,8 +63,8 @@ export default async function AuthCallback({
     );
   }
 
-  if (!code) {
-    console.warn('[AUTH CALLBACK] No code parameter received, redirecting to home');
+  if (!code && !token_hash) {
+    console.warn('[AUTH CALLBACK] No code or token_hash parameter received, redirecting to home');
     redirect('/?auth_error=no_code');
   }
 
@@ -79,9 +91,25 @@ export default async function AuthCallback({
     }
   );
 
-  // Exchange code for session (SECURE)
-  console.log('[AUTH CALLBACK] Attempting to exchange code for session...');
-  const { data: sessionData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+  // Exchange code/token for session (SECURE)
+  console.log('[AUTH CALLBACK] Attempting to exchange token for session...');
+  
+  let sessionData, exchangeError;
+  
+  if (code) {
+    // PKCE flow: exchange code for session
+    const result = await supabase.auth.exchangeCodeForSession(code);
+    sessionData = result.data;
+    exchangeError = result.error;
+  } else if (token_hash && type === 'magiclink') {
+    // Magic link flow: verify OTP token
+    const result = await supabase.auth.verifyOtp({
+      token_hash,
+      type: 'magiclink',
+    });
+    sessionData = result.data;
+    exchangeError = result.error;
+  }
   
   if (exchangeError) {
     console.error('[AUTH CALLBACK] Exchange error:', exchangeError.message, exchangeError);
