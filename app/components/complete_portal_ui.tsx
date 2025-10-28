@@ -377,7 +377,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
 
       if (result.success) {
         // Reload analysis with full results
-        const analysisResponse = await fetch(`${API_URL}/api/analysis/${result.analysis_id}`, {
+        const analysisResponse = await fetch(`${API_URL}/analysis/${result.analysis_id}`, {
           headers: { 'X-User-ID': user.id }
         });
         

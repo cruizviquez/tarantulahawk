@@ -35,10 +35,11 @@ const TarantulaHawkLogo = ({ className = "w-12 h-12" }) => (
   </svg>
 );
 
-export default function TarantulaHawkWebsite() {
+export default function TarantulaHawkWebsite({ authError }: { authError?: string }) {
   const [language, setLanguage] = useState<'en' | 'es'>('es');
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingMode, setOnboardingMode] = useState<'signup' | 'login'>('signup');
+  const [showAuthError, setShowAuthError] = useState(!!authError);
   const [usage, setUsage] = useState<
     | {
         subscription_tier: string;
@@ -76,6 +77,33 @@ export default function TarantulaHawkWebsite() {
 
   return (
     <>
+    {/* Auth Error Toast */}
+    {showAuthError && (
+      <div className="fixed top-20 right-6 z-[9999] animate-fade-in">
+        <div className="bg-red-500/90 backdrop-blur-sm border border-red-400 rounded-lg p-4 shadow-2xl max-w-md">
+          <div className="flex items-start gap-3">
+            <div className="text-2xl">🔒</div>
+            <div className="flex-1">
+              <h3 className="font-bold text-white mb-1">
+                {language === 'es' ? 'Magic Link Expirado' : 'Magic Link Expired'}
+              </h3>
+              <p className="text-sm text-white/90">
+                {language === 'es' 
+                  ? 'El enlace de autenticación ha expirado o ya fue utilizado. Por favor, solicita un nuevo enlace.' 
+                  : 'The authentication link has expired or was already used. Please request a new link.'}
+              </p>
+            </div>
+            <button 
+              onClick={() => setShowAuthError(false)}
+              className="text-white/80 hover:text-white text-xl leading-none"
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    
     <div className="min-h-screen bg-black text-white">
       <nav className="fixed top-0 w-full bg-black/95 backdrop-blur-sm border-b border-gray-800 z-50">
         <div className="max-w-7xl mx-auto px-6 py-4">

@@ -16,6 +16,12 @@ export default async function Home({
     redirect(`/auth/callback?code=${encodeURIComponent(code)}`);
   }
   
+  // Check for auth errors (show to user)
+  const authError = typeof params.auth_error === 'string' ? params.auth_error : undefined;
+  if (authError) {
+    console.log('[HOME] Auth error:', authError);
+  }
+  
   // Check if user explicitly logged out (skip redirect to dashboard)
   const loggedOut = typeof params.logout === 'string';
   
@@ -59,7 +65,7 @@ export default async function Home({
   return (
     <>
       <AuthRedirectHandler />
-      <TarantulaHawkWebsite />
+      <TarantulaHawkWebsite authError={authError} />
     </>
   );
 }
