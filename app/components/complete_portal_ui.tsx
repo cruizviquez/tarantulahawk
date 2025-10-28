@@ -83,6 +83,8 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
   const [insufficientFunds, setInsufficientFunds] = useState<boolean>(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileStats, setFileStats] = useState<{rows: number, fileName: string, fileSize: number} | null>(null);
+  const [processingStage, setProcessingStage] = useState<string>(''); // '', 'uploading', 'validating', 'ml_supervised', 'ml_unsupervised', 'ml_reinforcement', 'generating_report', 'complete'
+  const [processingProgress, setProcessingProgress] = useState<number>(0);
 
   // Update user state if props change
   useEffect(() => {
@@ -173,8 +175,18 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
   };
 
   const handleFileUpload = async (file: File) => {
+    // Validate file size (500MB max)
+    const MAX_FILE_SIZE = 500 * 1024 * 1024; // 500MB in bytes
+    if (file.size > MAX_FILE_SIZE) {
+      alert(language === 'es' 
+        ? `Archivo demasiado grande. Máximo permitido: 500MB. Tu archivo: ${(file.size / 1024 / 1024).toFixed(2)}MB`
+        : `File too large. Maximum allowed: 500MB. Your file: ${(file.size / 1024 / 1024).toFixed(2)}MB`);
+      return;
+    }
+    
     setIsLoading(true);
     setSelectedFile(file);
+    setProcessingStage('validating');
     
     // Estimate transactions and cost before upload (async now)
     const stats = await estimateTransactionsFromFile(file);
@@ -498,17 +510,21 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
             <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8">
               <h2 className="text-2xl font-bold mb-6">{language === 'es' ? 'Subir Datos de Transacciones' : 'Upload Transaction Data'}</h2>
               
-              {/* File Format Options - ONLY EXCEL AND CSV */}
-              <div className="grid md:grid-cols-2 gap-4 mb-8">
-                <div className="bg-black border border-gray-700 rounded-lg p-6 hover:border-teal-500 transition cursor-pointer">
-                  <FileSpreadsheet className="w-12 h-12 text-green-400 mb-3" />
-                  <div className="font-semibold text-lg mb-1">Excel (.xlsx, .xls)</div>
-                  <div className="text-sm text-gray-500">{language === 'es' ? 'Recomendado para grandes volúmenes' : 'Recommended for large volumes'}</div>
+              {/* File Format Info - Informative Only */}
+              <div className="flex items-center justify-center gap-6 mb-6 text-sm">
+                <div className="flex items-center gap-2 px-4 py-2 bg-black/50 border border-gray-800 rounded-lg">
+                  <FileSpreadsheet className="w-5 h-5 text-green-400" />
+                  <span className="text-gray-300">Excel (.xlsx, .xls)</span>
                 </div>
-                <div className="bg-black border border-gray-700 rounded-lg p-6 hover:border-teal-500 transition cursor-pointer">
-                  <FileText className="w-12 h-12 text-blue-400 mb-3" />
-                  <div className="font-semibold text-lg mb-1">CSV</div>
-                  <div className="text-sm text-gray-500">{language === 'es' ? 'Archivos separados por comas' : 'Comma-separated values'}</div>
+                <div className="text-gray-700">|</div>
+                <div className="flex items-center gap-2 px-4 py-2 bg-black/50 border border-gray-800 rounded-lg">
+                  <FileText className="w-5 h-5 text-blue-400" />
+                  <span className="text-gray-300">CSV</span>
+                </div>
+                <div className="text-gray-700">|</div>
+                <div className="flex items-center gap-2 px-4 py-2 bg-black/50 border border-gray-800 rounded-lg">
+                  <Database className="w-5 h-5 text-gray-600" />
+                  <span className="text-gray-600">{language === 'es' ? 'Máx 500MB' : 'Max 500MB'}</span>
                 </div>
               </div>
 
@@ -556,6 +572,16 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
                   {language === 'es' ? 'Seleccionar Archivo' : 'Select File'}
                 </label>
               </div>
+
+              {/* ML Progress Tracker - Shows when processing */}
+              {processingStage && processingStage !== '' && (
+                <MLProgressTracker 
+                  stage={processingStage}
+                  progress={processingProgress}
+                  language={language}
+                  fileName={selectedFile?.name}
+                />
+              )}
 
               {/* Detailed File Statistics Panel */}
               {fileStats && (

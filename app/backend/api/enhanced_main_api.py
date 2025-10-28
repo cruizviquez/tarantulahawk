@@ -366,20 +366,33 @@ async def upload_archivo_portal(
     """
     SMALL USER FLOW - Portal Upload
     
-    1. User uploads file via web portal
+    1. User uploads file via web portal (max 500MB)
     2. Validate & enrich data
     3. Run ML models
     4. Generate payment if needed
     5. Return results (locked until payment)
     """
     
+    # Validate file size (500MB max)
+    MAX_FILE_SIZE = 500 * 1024 * 1024  # 500MB in bytes
+    
     try:
-        # Save uploaded file
+        # Save uploaded file and check size
         file_id = str(uuid.uuid4())
         file_path = UPLOAD_DIR / f"{file_id}_{file.filename}"
         
+        file_size = 0
         with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
+            while chunk := await file.read(8192):  # Read in 8KB chunks
+                file_size += len(chunk)
+                if file_size > MAX_FILE_SIZE:
+                    buffer.close()
+                    os.remove(file_path)
+                    raise HTTPException(
+                        status_code=413,
+                        detail=f"Archivo demasiado grande. Máximo: 500MB. Tu archivo: {file_size / 1024 / 1024:.2f}MB"
+                    )
+                buffer.write(chunk)
         
         # Load and validate with proper Excel handling
         if file.filename.endswith('.csv'):
