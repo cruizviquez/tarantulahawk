@@ -18,21 +18,24 @@
       padding: 40px 20px;
     }
     .header {
-      text-align: center;
-      padding: 30px 0;
-      background: linear-gradient(135deg, #CC3300 0%, #FF4500 50%, #FF6B00 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      padding: 20px;
+      background: linear-gradient(135deg, #000000 100%);
       border-radius: 12px 12px 0 0;
     }
     .logo {
-      width: 80px;
-      height: 80px;
-      margin: 0 auto 20px;
+      width: 50px;
+      height: 50px;
+      flex-shrink: 0;
     }
     .header h1 {
       margin: 0;
       font-size: 28px;
       font-weight: 900;
-      background: linear-gradient(135deg, #FFFFFF 0%, #20B2AA 100%);
+      background: linear-gradient(135deg, #FF6347 0%, #20B2AA 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
@@ -62,7 +65,7 @@
     .confirm-button {
       display: inline-block;
       padding: 18px 40px;
-      background: linear-gradient(135deg, #20B2AA 0%, #00CED1 50%, #48D1CC 100%);
+      background: linear-gradient(135deg, #FF6347 0%, #FF8C5A 100%);
       color: #FFFFFF;
       text-decoration: none;
       border-radius: 8px;
@@ -75,15 +78,15 @@
       transform: translateY(-2px);
     }
     .welcome-box {
-      background: linear-gradient(135deg, rgba(255, 69, 0, 0.1) 0%, rgba(255, 107, 0, 0.1) 100%);
-      border: 1px solid rgba(255, 69, 0, 0.3);
+      background: linear-gradient(135deg, rgba(255, 99, 71, 0.1) 0%, rgba(255, 140, 90, 0.1) 100%);
+      border: 1px solid rgba(255, 99, 71, 0.3);
       border-radius: 8px;
       padding: 20px;
       margin: 30px 0;
     }
     .welcome-box h3 {
       margin: 0 0 15px 0;
-      color: #FF6B00;
+      color: #FF6347;
       font-size: 16px;
       font-weight: 700;
     }
@@ -134,9 +137,9 @@
       <svg viewBox="0 0 400 400" class="logo" xmlns="http://www.w3.org/2000/svg">
         <defs>
           <linearGradient id="orangeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" style="stop-color:#CC3300" />
-            <stop offset="50%" style="stop-color:#FF4500" />
-            <stop offset="100%" style="stop-color:#FF6B00" />
+            <stop offset="0%" style="stop-color:#FF6347" />
+            <stop offset="50%" style="stop-color:#FF8C5A" />
+            <stop offset="100%" style="stop-color:#FFB68D" />
           </linearGradient>
           <linearGradient id="tealGrad" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" style="stop-color:#00CED1" />
