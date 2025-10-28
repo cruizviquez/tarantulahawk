@@ -32,7 +32,11 @@ const TarantulaHawkLogo = ({ className = "w-10 h-10" }) => (
   </svg>
 );
 
-const API_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000/api';
+// Use Codespaces public port for backend (port 8000)
+const API_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 
+  (typeof window !== 'undefined' && window.location.hostname.includes('github.dev')
+    ? `https://${window.location.hostname.replace('-3000.app', '-8000.app')}/api`
+    : 'http://localhost:8000/api');
 
 interface UserData {
   id: string;
@@ -365,7 +369,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
 
   const loadHistory = async () => {
     try {
-      const response = await fetch(`${API_URL}/history`, {
+      const response = await fetch(`${API_URL.replace('/api', '')}/api/history`, {
         headers: { 'X-User-ID': user.id }
       });
       if (!response.ok) {

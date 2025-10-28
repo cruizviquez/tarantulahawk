@@ -26,15 +26,12 @@ export default function AuthRedirectHandler() {
       
       if (!accessToken || !refreshToken) return;
 
-      // Clean URL immediately for better UX
-      window.history.replaceState(null, '', window.location.pathname);
-      
-      // Process auth silently via API
+      // Process auth silently via API immediately (no delay)
       const next = encodeURIComponent('/dashboard');
       const at = encodeURIComponent(accessToken);
       const rt = encodeURIComponent(refreshToken);
       
-      // Direct replacement (no intermediate page)
+      // Direct replacement (no intermediate page) - do this FIRST
       window.location.replace(`/api/auth/hash?access_token=${at}&refresh_token=${rt}&next=${next}`);
     } catch (error) {
       // Silent failure - don't disrupt landing page
