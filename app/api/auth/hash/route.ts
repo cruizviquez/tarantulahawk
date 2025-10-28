@@ -1,3 +1,6 @@
+export const runtime = 'nodejs';
+export const maxDuration = 60;
+
 import { NextResponse, type NextRequest } from 'next/server';
 import { cookies } from 'next/headers';
 import { createServerClient } from '@supabase/ssr';
@@ -94,21 +97,9 @@ async function processAuth(
         return cookieStore.getAll();
       },
       setAll(cookiesToSet) {
-        try {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            // Forzar cookies seguras en producción
-            const secureOptions = {
-              ...options,
-              httpOnly: true,
-              secure: process.env.NODE_ENV === 'production',
-              sameSite: 'lax' as const,
-              path: '/',
-            };
-            cookieStore.set(name, value, secureOptions);
-          });
-        } catch (error) {
-          console.error('[AUTH HASH] Cookie error:', error);
-        }
+        cookiesToSet.forEach(({ name, value, options }) =>
+          cookieStore.set(name, value, options)
+        );
       },
     },
   });

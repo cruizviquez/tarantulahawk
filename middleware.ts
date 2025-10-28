@@ -3,13 +3,26 @@ import type { NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
 // Rutas públicas que NO requieren autenticación
-const PUBLIC_ROUTES = ['/', '/auth/callback', '/auth', '/api/auth'];
+const PUBLIC_ROUTES = ['/', '/auth/callback', '/auth/redirect', '/auth', '/login', '/signup'];
+
+// APIs públicas que NO requieren autenticación
+const PUBLIC_API_PREFIXES = ['/api/auth/hash', '/api/auth/logout', '/api/turnstile'];
 
 // Rutas que requieren autenticación
 const PROTECTED_ROUTES = ['/dashboard', '/admin', '/settings'];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  
+  // Archivos estáticos y Next.js internals
+  if (pathname.startsWith('/_next') || pathname.startsWith('/favicon')) {
+    return NextResponse.next();
+  }
+  
+  // APIs públicas: no redirigir, dejar que el handler responda
+  if (PUBLIC_API_PREFIXES.some(prefix => pathname.startsWith(prefix))) {
+    return NextResponse.next();
+  }
   
   // Skip auth check if coming from auth callback or has valid session cookie
   const fromAuth = request.nextUrl.searchParams.get('from') === 'auth';
@@ -301,10 +314,5 @@ function getClientIP(request: NextRequest): string {
 }
 
 export const config = {
-  matcher: [
-    '/dashboard/:path*',
-    '/admin/:path*',
-    '/settings/:path*',
-    '/api/:path*',
-  ],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 };

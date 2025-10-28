@@ -92,7 +92,7 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
       const { error: signInError } = await supabase.auth.signInWithOtp({
         email,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: `${window.location.origin}/auth/redirect`,
           shouldCreateUser: currentMode === 'signup',
           data: currentMode === 'signup' ? {
             name,
