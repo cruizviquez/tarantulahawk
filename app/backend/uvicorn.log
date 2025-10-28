@@ -1,0 +1,7 @@
+INFO:     Will watch for changes in these directories: ['/workspaces/tarantulahawk/app/backend']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [29775] using WatchFiles
+INFO:     Started server process [29809]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     20.163.40.130:0 - "OPTIONS /api/portal/upload HTTP/1.1" 200 OK

@@ -47,8 +47,8 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000", 
         "https://tarantulahawk.ai",
-        "https://*.app.github.dev",  # GitHub Codespaces
-        "https://silver-funicular-wp59w7jgxvvf9j47-3000.app.github.dev"  # Current codespace
+        "https://silver-funicular-wp59w7jgxvvf9j47-3000.app.github.dev",  # Current codespace frontend
+        "https://silver-funicular-wp59w7jgxvvf9j47-8000.app.github.dev",  # Current codespace backend
     ],
     allow_credentials=True,
     allow_methods=["*"],
