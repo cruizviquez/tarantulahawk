@@ -64,8 +64,9 @@ export default async function AuthCallback({
   }
 
   if (!code && !token_hash) {
-    console.warn('[AUTH CALLBACK] No code or token_hash parameter received, redirecting to home');
-    redirect('/?auth_error=no_code');
+    // Silently redirect to home - AuthHashHandler will handle hash-based flow
+    console.log('[AUTH CALLBACK] No server-side auth params, redirecting to handle client-side');
+    redirect('/');
   }
 
   // Create SECURE server-side Supabase client

@@ -136,7 +136,7 @@ export default function SessionMonitor({
     }, 60000); // Check every minute
 
     return () => clearInterval(checkSession);
-  }, []);
+  }, [userId]);
 
   // Warning modal
   if (!showWarning) return null;

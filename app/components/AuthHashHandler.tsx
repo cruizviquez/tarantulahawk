@@ -30,15 +30,11 @@ export default function AuthHashHandler() {
       const at = encodeURIComponent(access_token);
       const rt = encodeURIComponent(refresh_token);
 
-      // Clean URL (remove hash) before navigating
-      try {
-        window.history.replaceState({}, '', window.location.pathname + window.location.search);
-      } catch {}
-
-      // Full navigation so server can set cookies
-      window.location.assign(`/api/auth/hash?access_token=${at}&refresh_token=${rt}&next=${next}`);
-    } catch {
-      // swallow errors to avoid disrupting landing page
+      // Immediate redirect without cleaning URL first (faster)
+      window.location.replace(`/api/auth/hash?access_token=${at}&refresh_token=${rt}&next=${next}`);
+    } catch (error) {
+      // Silent failure - don't disrupt user experience
+      console.warn('[AUTH HASH] Handler error:', error);
     }
   }, [router]);
 
