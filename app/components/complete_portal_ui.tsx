@@ -32,12 +32,6 @@ const TarantulaHawkLogo = ({ className = "w-10 h-10" }) => (
   </svg>
 );
 
-// Use Codespaces public port for backend (port 8000)
-const API_URL = process.env.NEXT_PUBLIC_BACKEND_API_URL || 
-  (typeof window !== 'undefined' && window.location.hostname.includes('github.dev')
-    ? `https://${window.location.hostname.replace('-3000.app', '-8000.app')}/api`
-    : 'http://localhost:8000/api');
-
 interface UserData {
   id: string;
   email: string;
@@ -73,6 +67,20 @@ interface TarantulaHawkPortalProps {
 }
 
 const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) => {
+  // Get backend API URL dynamically (client-side only)
+  const getApiUrl = () => {
+    if (typeof window === 'undefined') return 'http://localhost:8000';
+    
+    // Check if we're in Codespaces
+    if (window.location.hostname.includes('github.dev')) {
+      const backendHost = window.location.hostname.replace('-3000.app', '-8000.app');
+      return `https://${backendHost}`;
+    }
+    
+    return 'http://localhost:8000';
+  };
+  
+  const API_URL = getApiUrl();
   const [language, setLanguage] = useState<'es' | 'en'>('es'); // Default: Spanish
   const [activeTab, setActiveTab] = useState('upload');
   const [user, setUser] = useState<UserData>(initialUser);
@@ -238,7 +246,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
       
       setProcessingProgress(10);
       
-      const response = await fetch(`${API_URL.replace('/api', '')}/api/portal/upload`, {
+      const response = await fetch(`${API_URL}/api/portal/upload`, {
         method: 'POST',
         body: formData,
         headers: {
@@ -334,7 +342,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
     if (!pendingPayment) return;
 
     try {
-      const response = await fetch(`${API_URL}/payment/process`, {
+      const response = await fetch(`${API_URL}/api/payment/process`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -351,7 +359,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
 
       if (result.success) {
         // Reload analysis with full results
-        const analysisResponse = await fetch(`${API_URL}/analysis/${result.analysis_id}`, {
+        const analysisResponse = await fetch(`${API_URL}/api/analysis/${result.analysis_id}`, {
           headers: { 'X-User-ID': user.id }
         });
         
@@ -369,7 +377,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
 
   const loadHistory = async () => {
     try {
-      const response = await fetch(`${API_URL.replace('/api', '')}/api/history`, {
+      const response = await fetch(`${API_URL}/api/history`, {
         headers: { 'X-User-ID': user.id }
       });
       if (!response.ok) {
@@ -386,7 +394,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
 
   const loadApiKeys = async () => {
     try {
-      const response = await fetch(`${API_URL}/enterprise/api-keys`, {
+      const response = await fetch(`${API_URL}/api/enterprise/api-keys`, {
         headers: { 'X-User-ID': user.id }
       });
       if (!response.ok) {
