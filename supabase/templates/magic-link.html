@@ -18,21 +18,24 @@
       padding: 40px 20px;
     }
     .header {
-      text-align: center;
-      padding: 30px 0;
-      background: linear-gradient(135deg, #CC3300 0%, #FF4500 50%, #FF6B00 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      padding: 20px;
+      background: linear-gradient(135deg, #000000 100%);
       border-radius: 12px 12px 0 0;
     }
     .logo {
-      width: 80px;
-      height: 80px;
-      margin: 0 auto 20px;
+      width: 50px;
+      height: 50px;
+      flex-shrink: 0;
     }
     .header h1 {
       margin: 0;
       font-size: 28px;
       font-weight: 900;
-      background: linear-gradient(135deg, #FFFFFF 0%, #20B2AA 100%);
+      background: linear-gradient(135deg, #FF6347 0%, #20B2AA 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
@@ -125,9 +128,9 @@
       <svg viewBox="0 0 400 400" class="logo" xmlns="http://www.w3.org/2000/svg">
         <defs>
           <linearGradient id="orangeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" style="stop-color:#CC3300" />
-            <stop offset="50%" style="stop-color:#FF4500" />
-            <stop offset="100%" style="stop-color:#FF6B00" />
+            <stop offset="0%" style="stop-color:#FF6347" />
+            <stop offset="50%" style="stop-color:#FF8C5A" />
+            <stop offset="100%" style="stop-color:#FFB68D" />
           </linearGradient>
           <linearGradient id="tealGrad" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" style="stop-color:#00CED1" />
@@ -167,7 +170,7 @@
       </div>
 
       <div class="expiry-warning">
-        ⚠️ Este enlace expira en 60 minutos y solo puede usarse una vez
+        ⏱️ Este enlace expira en 10 minutos y solo puede usarse una vez
       </div>
 
       <div class="divider"></div>
@@ -177,7 +180,7 @@
         <ul>
           <li><strong>Sin riesgo de phishing:</strong> No usamos contraseñas que puedan ser robadas</li>
           <li><strong>Un solo uso:</strong> Este enlace se invalida después de usarlo</li>
-          <li><strong>Tiempo limitado:</strong> Expira automáticamente en 1 hora</li>
+          <li><strong>Tiempo limitado:</strong> Expira automáticamente en 10 minutos</li>
           <li><strong>Verificación de email:</strong> Solo tú puedes acceder a este enlace</li>
         </ul>
       </div>
