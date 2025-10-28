@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from 'react';
 import OnboardingForm from './OnboardingForm';
-import AuthHashHandler from './AuthHashHandler';
+// AuthHashHandler removido - ya no necesario con PKCE flow
+// Si ves errores de auth, verifica que Supabase esté en "Server-Side Auth" mode
 import AIChat from './AIChat';
 import { Globe, Shield, Zap, TrendingUp, CheckCircle, Brain, Mail } from 'lucide-react';
 
@@ -77,8 +78,7 @@ export default function TarantulaHawkWebsite() {
 
   return (
     <>
-    {/* Handle Supabase hash-based auth (when Site URL receives #access_token) */}
-    <AuthHashHandler />
+    {/* AuthHashHandler removido - con PKCE flow el servidor maneja todo en /auth/callback */}
     <div className="min-h-screen bg-black text-white">
       <nav className="fixed top-0 w-full bg-black/95 backdrop-blur-sm border-b border-gray-800 z-50">
         <div className="max-w-7xl mx-auto px-6 py-4">

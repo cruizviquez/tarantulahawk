@@ -13,7 +13,8 @@ export async function middleware(request: NextRequest) {
   
   // Skip auth check if coming from auth callback or has valid session cookie
   const fromAuth = request.nextUrl.searchParams.get('from') === 'auth';
-  const hasSessionCookie = request.cookies.has('sb-jhjlxjaicjorzeaqdbsv-auth-token'); // Reemplaza con tu project ID
+  // Buscar cualquier cookie de sesión de Supabase (funciona con cualquier project ID)
+  const hasSessionCookie = request.cookies.getAll().some(c => c.name.startsWith('sb-') && c.name.includes('-auth-token'));
   
   // 1. VERIFICAR AUTENTICACIÓN PRIMERO
   const isProtectedRoute = PROTECTED_ROUTES.some(route => pathname.startsWith(route));
@@ -97,7 +98,7 @@ async function quickVerifyAuth(request: NextRequest): Promise<NextResponse | nul
   try {
     // Solo verifica que exista una cookie de sesión válida
     // La validación completa se hace en la página destino
-    const sessionCookie = request.cookies.get('sb-jhjlxjaicjorzeaqdbsv-auth-token');
+    const sessionCookie = request.cookies.getAll().find(c => c.name.startsWith('sb-') && c.name.includes('-auth-token'));
     
     if (!sessionCookie || !sessionCookie.value) {
       const url = request.nextUrl.clone();
