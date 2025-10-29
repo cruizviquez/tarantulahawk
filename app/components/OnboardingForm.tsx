@@ -89,10 +89,16 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
       }
 
       // Send Magic Link via Supabase OTP
+      const redirectUrl = typeof window !== 'undefined' 
+        ? `${window.location.origin}/auth/redirect`
+        : 'https://silver-funicular-wp59w7jgxvvf9j47-3000.app.github.dev/auth/redirect';
+      
+      console.log('[ONBOARDING] emailRedirectTo:', redirectUrl);
+      
       const { error: signInError } = await supabase.auth.signInWithOtp({
         email,
         options: {
-          emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || window.location.origin}/auth/redirect`,
+          emailRedirectTo: redirectUrl,
           shouldCreateUser: currentMode === 'signup',
           data: currentMode === 'signup' ? {
             name,

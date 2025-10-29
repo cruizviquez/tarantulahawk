@@ -89,6 +89,8 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
   const [processingStage, setProcessingStage] = useState<string>(''); // '', 'uploading', 'validating', 'ml_supervised', 'ml_unsupervised', 'ml_reinforcement', 'generating_report', 'complete'
   const [processingProgress, setProcessingProgress] = useState<number>(0);
   const [selectedAmount, setSelectedAmount] = useState<number>(500); // Default to $500
+  const [fileReadyForAnalysis, setFileReadyForAnalysis] = useState<boolean>(false);
+  const [uploadedFileId, setUploadedFileId] = useState<string | null>(null);
 
   // Initialize API URL (client-side only, in useEffect to avoid SSR)
   useEffect(() => {
@@ -240,26 +242,36 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
     }
     
     try {
-      // PASO 1: Parse Excel con nuevo endpoint
+      // Solo validar archivo (NO procesarlo aún)
       const formData = new FormData();
       formData.append('file', file);
       
-      setProcessingProgress(10);
+      setProcessingStage('uploading');
+      setProcessingProgress(50);
       
-      const parseResponse = await fetch('/api/excel/parse', {
-        method: 'POST',
-        body: formData,
-        credentials: 'same-origin'
+      console.log('📤 Validando archivo:', {
+        fileName: file.name,
+        size: file.size,
+        userId: user.id
       });
       
-      // Manejo robusto de errores
-      if (!parseResponse.ok) {
-        const errorText = await parseResponse.text();
-        let errorMessage = `Error ${parseResponse.status}`;
+      const response = await fetch(`${API_URL}/api/portal/validate`, {
+        method: 'POST',
+        headers: {
+          'X-User-ID': user.id,
+        },
+        body: formData,
+      });
+      
+      setProcessingProgress(100);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = `Error ${response.status}`;
         
         try {
           const errorJson = JSON.parse(errorText);
-          errorMessage = errorJson.error || errorJson.message || errorMessage;
+          errorMessage = errorJson.detail || errorJson.error || errorJson.message || errorMessage;
         } catch {
           errorMessage = errorText || errorMessage;
         }
@@ -267,93 +279,22 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
         throw new Error(errorMessage);
       }
       
-      const parseResult = await parseResponse.json();
-      
-      if (!parseResult.success) {
-        throw new Error(parseResult.error || 'Error desconocido al parsear Excel');
-      }
-      
-      console.log('📊 Excel parseado:', {
-        fileName: parseResult.fileName,
-        rowCount: parseResult.rowCount,
-        columns: parseResult.columns
-      });
-      
-      // Stage 2: Validating
-      setProcessingStage('validating');
-      setProcessingProgress(20);
-      
-      // PASO 2: Enviar datos parseados al backend Python
-      const response = await fetch(`${API_URL}/api/portal/upload`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-User-ID': user.id,
-        },
-        body: JSON.stringify({
-          fileName: parseResult.fileName,
-          data: parseResult.data,
-          rowCount: parseResult.rowCount
-        }),
-        credentials: 'same-origin'
-      });
-      
       const result = await response.json();
+      
+      console.log('✅ Archivo validado:', result);
 
       if (response.ok && result.success) {
-        // Stage 3: ML Supervised (simulate progress)
-        setProcessingStage('ml_supervised');
-        setProcessingProgress(30);
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        setProcessingProgress(45);
-        
-        // Stage 4: ML Unsupervised
-        setProcessingStage('ml_unsupervised');
-        setProcessingProgress(55);
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        setProcessingProgress(70);
-        
-        // Stage 5: ML Reinforcement
-        setProcessingStage('ml_reinforcement');
-        setProcessingProgress(75);
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        setProcessingProgress(85);
-        
-        // Stage 6: Generating Report
-        setProcessingStage('generating_report');
-        setProcessingProgress(90);
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        setProcessingProgress(95);
-        
-        // Stage 7: Complete
-        setProcessingStage('complete');
-        setProcessingProgress(100);
-        await new Promise(resolve => setTimeout(resolve, 800));
-        
-        // Success - balance was deducted in backend
-        setCurrentAnalysis({
-          success: true,
-          analysis_id: result.analysis_id,
-          resumen: result.resumen,
-          transacciones: result.transacciones || [],
-          costo: result.costo,
-          xml_path: result.xml_path
-        });
-        
-        // Update user balance
-        setUser(prev => ({
-          ...prev,
-          balance: prev.balance - result.costo
-        }));
-        
-        // Refresh balance from server to ensure accuracy
-        await refreshUserBalance();
-        
-        // Clear processing state
+        // Archivo listo para análisis - esperar confirmación del usuario
+        setUploadedFileId(result.file_id);
+        setFileReadyForAnalysis(true);
         setProcessingStage('');
         setProcessingProgress(0);
+        setIsLoading(false);
         
-        setActiveTab('dashboard');
+        alert(language === 'es'
+          ? `✅ Archivo validado: ${txnCount} transacciones\nCosto estimado: $${cost.toFixed(2)}\nTu saldo: $${user.balance.toFixed(2)}\n\nHaz clic en "Analizar con IA" para continuar.`
+          : `✅ File validated: ${txnCount} transactions\nEstimated cost: $${cost.toFixed(2)}\nYour balance: $${user.balance.toFixed(2)}\n\nClick "Analyze with AI" to continue.`);
+        return; // No procesar todavía
       } else if (response.status === 402 || result.requiere_pago) {
         // Payment required
         setInsufficientFunds(true);
@@ -371,8 +312,102 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
       setProcessingStage('');
       setProcessingProgress(0);
       alert(language === 'es'
-        ? `Error al procesar archivo: ${message}`
-        : `Error uploading file: ${message}`);
+        ? `Error al validar archivo: ${message}`
+        : `Error validating file: ${message}`);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAnalyzeWithAI = async () => {
+    if (!selectedFile || !uploadedFileId) {
+      alert('No file selected');
+      return;
+    }
+
+    setIsLoading(true);
+    setFileReadyForAnalysis(false);
+
+    try {
+      // Send file for processing
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      
+      setProcessingStage('ml_supervised');
+      setProcessingProgress(10);
+      console.log('🤖 Iniciando análisis con IA...');
+      
+      const response = await fetch(`${API_URL}/api/portal/upload`, {
+        method: 'POST',
+        headers: {
+          'X-User-ID': user.id,
+        },
+        body: formData,
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        let errorMessage = `Error ${response.status}`;
+        try {
+          const errorJson = JSON.parse(errorText);
+          errorMessage = errorJson.detail || errorJson.error || errorJson.message || errorMessage;
+        } catch {
+          errorMessage = errorText || errorMessage;
+        }
+        throw new Error(errorMessage);
+      }
+      
+      const result = await response.json();
+      console.log('✅ Análisis completado:', result);
+
+      if (result.success) {
+        // Progress through ML stages
+        setProcessingStage('ml_unsupervised');
+        setProcessingProgress(45);
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        setProcessingStage('ml_reinforcement');
+        setProcessingProgress(75);
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        setProcessingStage('generating_report');
+        setProcessingProgress(90);
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        setProcessingStage('complete');
+        setProcessingProgress(100);
+        
+        // Success
+        setCurrentAnalysis({
+          success: true,
+          analysis_id: result.analysis_id,
+          resumen: result.resumen,
+          transacciones: result.transacciones || [],
+          costo: result.costo,
+          xml_path: result.xml_path
+        });
+        
+        // Update user balance
+        setUser(prev => ({
+          ...prev,
+          balance: prev.balance - result.costo
+        }));
+        
+        await refreshUserBalance();
+        
+        setProcessingStage('');
+        setProcessingProgress(0);
+        setActiveTab('dashboard');
+      } else {
+        throw new Error(result.error || 'Analysis failed');
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      setProcessingStage('');
+      setProcessingProgress(0);
+      alert(language === 'es'
+        ? `Error en análisis: ${message}`
+        : `Analysis error: ${message}`);
     } finally {
       setIsLoading(false);
     }
@@ -806,22 +841,16 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
                             ? `Tu saldo es suficiente. Después del procesamiento tendrás $${(user.balance - estimatedCost).toFixed(2)} USD disponibles.`
                             : `Your balance is sufficient. After processing you'll have $${(user.balance - estimatedCost).toFixed(2)} USD available.`}
                         </div>
-                        <button 
-                          onClick={() => {
-                            if (selectedFile) {
-                              // Trigger actual upload
-                              const input = document.getElementById('file-upload') as HTMLInputElement;
-                              if (input) input.value = '';
-                              handleFileUpload(selectedFile);
-                            }
-                          }}
-                          disabled={isLoading}
-                          className="px-6 py-2 bg-gradient-to-r from-teal-600 to-teal-500 hover:from-teal-700 hover:to-teal-600 rounded-lg font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                          {isLoading 
-                            ? (language === 'es' ? 'Procesando...' : 'Processing...') 
-                            : (language === 'es' ? 'Iniciar Análisis AI' : 'Start AI Analysis')}
-                        </button>
+                        {fileReadyForAnalysis && (
+                          <button 
+                            onClick={handleAnalyzeWithAI}
+                            disabled={isLoading}
+                            className="px-6 py-3 bg-gradient-to-r from-teal-600 to-blue-600 hover:from-teal-700 hover:to-blue-700 rounded-lg font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                          >
+                            <Zap className="w-4 h-4" />
+                            {language === 'es' ? 'Analizar con IA' : 'Analyze with AI'}
+                          </button>
+                        )}
                       </div>
                     </div>
                   )}

@@ -5,3 +5,39 @@ INFO:     Started server process [29809]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     20.163.40.130:0 - "OPTIONS /api/portal/upload HTTP/1.1" 200 OK
+INFO:     47.150.25.188:0 - "OPTIONS /api/portal/upload HTTP/1.1" 200 OK
+INFO:     47.150.25.188:0 - "POST /api/portal/upload HTTP/1.1" 401 Unauthorized
+INFO:     47.150.25.188:0 - "OPTIONS /api/portal/upload HTTP/1.1" 200 OK
+INFO:     47.150.25.188:0 - "POST /api/portal/upload HTTP/1.1" 401 Unauthorized
+INFO:     47.150.25.188:0 - "OPTIONS /api/portal/upload HTTP/1.1" 200 OK
+INFO:     47.150.25.188:0 - "POST /api/portal/upload HTTP/1.1" 401 Unauthorized
+INFO:     47.150.25.188:0 - "POST /api/portal/upload HTTP/1.1" 401 Unauthorized
+INFO:     47.150.25.188:0 - "POST /api/portal/upload HTTP/1.1" 401 Unauthorized
+WARNING:  WatchFiles detected changes in 'api/enhanced_main_api.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [29809]
+INFO:     Started server process [66276]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'api/enhanced_main_api.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [66276]
+INFO:     Started server process [66795]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     47.150.25.188:0 - "OPTIONS /api/portal/upload HTTP/1.1" 200 OK
+✅ Auto-registered new user: 41dcb67b-e4e5-4749-9c11-accb3090868d
+INFO:     47.150.25.188:0 - "POST /api/portal/upload HTTP/1.1" 200 OK
+INFO:     47.150.25.188:0 - "POST /api/portal/upload HTTP/1.1" 200 OK
+WARNING:  WatchFiles detected changes in 'api/enhanced_main_api.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [66795]
+INFO:     Started server process [72284]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.

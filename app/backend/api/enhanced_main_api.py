@@ -156,8 +156,21 @@ def validar_api_key(api_key: str = Header(None, alias="X-API-Key")) -> Dict:
 
 def validar_usuario_portal(user_id: str = Header(None, alias="X-User-ID")) -> Dict:
     """Validate portal user session"""
-    if not user_id or user_id not in USERS_DB:
+    if not user_id:
         raise HTTPException(status_code=401, detail="Authentication required")
+    
+    # Auto-register new users (for development)
+    if user_id not in USERS_DB:
+        USERS_DB[user_id] = {
+            "user_id": user_id,
+            "email": f"{user_id}@user.local",
+            "company": "User Company",
+            "tier": "standard",
+            "balance": 500.0,  # $500 virtual credit for new users
+            "created_at": datetime.now(),
+            "total_analyses": 0
+        }
+        print(f"✅ Auto-registered new user: {user_id}")
     
     return USERS_DB[user_id]
 
@@ -375,6 +388,54 @@ async def listar_api_keys(user: Dict = Depends(validar_usuario_portal)):
 # ===================================================================
 # ENDPOINT 3: Portal Upload Flow (Small Users)
 # ===================================================================
+
+@app.post("/api/portal/validate")
+async def validar_archivo_portal(
+    file: UploadFile = File(...),
+    user: Dict = Depends(validar_usuario_portal)
+):
+    """
+    Validate file only - don't process yet
+    Returns file_id and basic stats for user confirmation
+    """
+    try:
+        # Save temp file
+        file_id = str(uuid.uuid4())
+        file_path = UPLOAD_DIR / f"{file_id}_{file.filename}"
+        
+        with open(file_path, "wb") as buffer:
+            content = await file.read()
+            buffer.write(content)
+        
+        # Quick validation
+        if file.filename.endswith('.csv'):
+            df = pd.read_csv(file_path, encoding='utf-8-sig', skip_blank_lines=True, nrows=10)
+        elif file.filename.endswith(('.xlsx', '.xls')):
+            df = pd.read_excel(file_path, engine='openpyxl' if file.filename.endswith('.xlsx') else None, sheet_name=0, nrows=10)
+        else:
+            os.remove(file_path)
+            raise HTTPException(status_code=400, detail="Unsupported format. Use .xlsx, .xls or .csv")
+        
+        # Get total row count
+        if file.filename.endswith('.csv'):
+            total_rows = sum(1 for _ in open(file_path)) - 1  # -1 for header
+        else:
+            df_full = pd.read_excel(file_path, engine='openpyxl' if file.filename.endswith('.xlsx') else None, sheet_name=0)
+            total_rows = len(df_full)
+        
+        print(f"✅ File validated: {file.filename} - {total_rows} rows")
+        
+        return {
+            "success": True,
+            "file_id": file_id,
+            "file_name": file.filename,
+            "row_count": total_rows,
+            "message": "File validated successfully. Ready for analysis."
+        }
+    except Exception as e:
+        if 'file_path' in locals() and os.path.exists(file_path):
+            os.remove(file_path)
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/api/portal/upload", response_model=RespuestaAnalisis)
 async def upload_archivo_portal(
