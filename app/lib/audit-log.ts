@@ -3,7 +3,7 @@ import { getServiceSupabase } from './supabaseServer';
 
 export interface AuditEvent {
   user_id: string | null;
-  action: 'registration' | 'login' | 'logout' | 'report_generated' | 'transaction_uploaded' | 'export_xml' | 'api_key_created' | 'api_key_used' | 'api_key_rotated' | 'password_reset' | 'account_upgraded';
+  action: 'registration' | 'login' | 'logout' | 'report_generated' | 'transaction_uploaded' | 'export_xml' | 'api_key_created' | 'api_key_used' | 'api_key_rotated' | 'password_reset' | 'account_upgraded' | 'credits_purchased';
   metadata?: Record<string, any>;
   ip_address?: string;
   user_agent?: string;
