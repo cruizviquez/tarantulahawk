@@ -41,6 +41,12 @@ dash-bootstrap-components==1.6.0
 # === SECURITY ===
 python-jose[cryptography]==3.3.0  # JWT tokens
 passlib[bcrypt]==1.7.4             # Password hashing
+bcrypt==4.1.2                       # Direct bcrypt for password hashing
+slowapi==0.1.9                      # Rate limiting middleware
+
+# === SUPABASE INTEGRATION ===
+supabase==2.3.4                     # Supabase Python client
+postgrest==0.16.2                   # PostgreSQL REST API client
 
 # === TESTING / DEV TOOLS ===
 pytest==8.3.3
