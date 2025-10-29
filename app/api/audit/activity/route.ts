@@ -277,8 +277,13 @@ function extractBehavioralFeatures(
   const f6 = 1 - Math.min(uniqueAgents / 3, 1);
 
   // Feature 7: Action repetition rate
-  const mostCommonAction = Math.max(...Object.values(actionCounts));
-  const f7 = mostCommonAction / recentLogs.length;
+  const actionCountValues = Object.values(actionCounts) as number[];
+  const mostCommonAction = actionCountValues.length > 0 
+    ? Math.max(...actionCountValues) 
+    : 0;
+  const f7 = recentLogs.length > 0 
+    ? mostCommonAction / recentLogs.length 
+    : 0;
 
   return [f1, f2, f3, f4, f5, f6, f7];
 }

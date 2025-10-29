@@ -167,7 +167,7 @@ export default async function AuthCallback({
     // Check if profile exists
     const { data: existingProfile } = await supabaseAdmin
       .from('profiles')
-      .select('id, credits_gifted')
+      .select('id, credits_gifted, name, company')
       .eq('id', userId)
       .single();
 
