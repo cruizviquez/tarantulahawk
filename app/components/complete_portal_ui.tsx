@@ -91,6 +91,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
   const [selectedAmount, setSelectedAmount] = useState<number>(500); // Default to $500
   const [fileReadyForAnalysis, setFileReadyForAnalysis] = useState<boolean>(false);
   const [uploadedFileId, setUploadedFileId] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<{type: 'success' | 'error' | 'info' | 'warning', message: string} | null>(null);
 
   // Initialize API URL (client-side only, in useEffect to avoid SSR)
   useEffect(() => {
@@ -291,18 +292,24 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
         setProcessingProgress(0);
         setIsLoading(false);
         
-        alert(language === 'es'
-          ? `✅ Archivo validado: ${txnCount} transacciones\nCosto estimado: $${cost.toFixed(2)}\nTu saldo: $${user.balance.toFixed(2)}\n\nHaz clic en "Analizar con IA" para continuar.`
-          : `✅ File validated: ${txnCount} transactions\nEstimated cost: $${cost.toFixed(2)}\nYour balance: $${user.balance.toFixed(2)}\n\nClick "Analyze with AI" to continue.`);
+        setStatusMessage({
+          type: 'success',
+          message: language === 'es'
+            ? `Archivo validado: ${txnCount} transacciones. Costo: $${cost.toFixed(2)}. Haz clic en "Analizar con IA" para continuar.`
+            : `File validated: ${txnCount} transactions. Cost: $${cost.toFixed(2)}. Click "Analyze with AI" to continue.`
+        });
         return; // No procesar todavía
       } else if (response.status === 402 || result.requiere_pago) {
         // Payment required
         setInsufficientFunds(true);
         setProcessingStage('');
         setProcessingProgress(0);
-        alert(language === 'es'
-          ? `Fondos insuficientes. Costo estimado: $${cost.toFixed(2)}. Tu saldo: $${user.balance.toFixed(2)}. Por favor agrega fondos.`
-          : `Insufficient funds. Estimated cost: $${cost.toFixed(2)}. Your balance: $${user.balance.toFixed(2)}. Please add funds.`);
+        setStatusMessage({
+          type: 'error',
+          message: language === 'es'
+            ? `Fondos insuficientes. Costo: $${cost.toFixed(2)}, Saldo: $${user.balance.toFixed(2)}.`
+            : `Insufficient funds. Cost: $${cost.toFixed(2)}, Balance: $${user.balance.toFixed(2)}.`
+        });
         setActiveTab('add-funds');
       } else {
         throw new Error(result.error || 'Error processing file');
@@ -311,9 +318,12 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
       const message = error instanceof Error ? error.message : 'Unknown error';
       setProcessingStage('');
       setProcessingProgress(0);
-      alert(language === 'es'
-        ? `Error al validar archivo: ${message}`
-        : `Error validating file: ${message}`);
+      setStatusMessage({
+        type: 'error',
+        message: language === 'es'
+          ? `Error al validar archivo: ${message}`
+          : `Error validating file: ${message}`
+      });
     } finally {
       setIsLoading(false);
     }
@@ -384,7 +394,8 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
           resumen: result.resumen,
           transacciones: result.transacciones || [],
           costo: result.costo,
-          xml_path: result.xml_path
+          xml_path: result.xml_path,
+          file_name: selectedFile.name
         });
         
         // Update user balance
@@ -405,9 +416,12 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
       const message = error instanceof Error ? error.message : 'Unknown error';
       setProcessingStage('');
       setProcessingProgress(0);
-      alert(language === 'es'
-        ? `Error en análisis: ${message}`
-        : `Analysis error: ${message}`);
+      setStatusMessage({
+        type: 'error',
+        message: language === 'es'
+          ? `Error en análisis: ${message}`
+          : `Analysis error: ${message}`
+      });
     } finally {
       setIsLoading(false);
     }
@@ -808,8 +822,39 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
                     </div>
                   </div>
                   
-                  {/* Warning or Success Message */}
-                  {insufficientFunds ? (
+                  {/* Status Message Box */}
+                  {statusMessage ? (
+                    <div className={`rounded-lg p-4 flex items-start gap-3 ${
+                      statusMessage.type === 'success' ? 'bg-teal-900/20 border border-teal-800/30' :
+                      statusMessage.type === 'error' ? 'bg-red-900/20 border border-red-800/30' :
+                      statusMessage.type === 'warning' ? 'bg-orange-900/20 border border-orange-800/30' :
+                      'bg-blue-900/20 border border-blue-800/30'
+                    }`}>
+                      {statusMessage.type === 'success' && <CheckCircle className="w-5 h-5 text-teal-400 flex-shrink-0 mt-0.5" />}
+                      {statusMessage.type === 'error' && <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />}
+                      {statusMessage.type === 'warning' && <AlertTriangle className="w-5 h-5 text-orange-400 flex-shrink-0 mt-0.5" />}
+                      <div className="flex-1">
+                        <div className={`text-sm ${
+                          statusMessage.type === 'success' ? 'text-gray-300' :
+                          statusMessage.type === 'error' ? 'text-gray-300' :
+                          statusMessage.type === 'warning' ? 'text-gray-300' :
+                          'text-gray-300'
+                        }`}>
+                          {statusMessage.message}
+                        </div>
+                        {fileReadyForAnalysis && statusMessage.type === 'success' && (
+                          <button 
+                            onClick={handleAnalyzeWithAI}
+                            disabled={isLoading}
+                            className="mt-3 px-6 py-3 bg-gradient-to-r from-teal-600 to-blue-600 hover:from-teal-700 hover:to-blue-700 rounded-lg font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                          >
+                            <Zap className="w-4 h-4" />
+                            {language === 'es' ? 'Analizar con IA' : 'Analyze with AI'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ) : insufficientFunds ? (
                     <div className="bg-red-900/20 border border-red-800/30 rounded-lg p-4 flex items-start gap-3">
                       <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
                       <div>

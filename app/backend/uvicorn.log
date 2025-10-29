@@ -41,3 +41,49 @@ INFO:     Finished server process [66795]
 INFO:     Started server process [72284]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'api/enhanced_main_api.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [72284]
+INFO:     Started server process [73635]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     47.150.25.188:0 - "OPTIONS /api/portal/validate HTTP/1.1" 200 OK
+✅ Auto-registered new user: 41dcb67b-e4e5-4749-9c11-accb3090868d
+✅ File validated: dataset_pld_lfpiorpi_0k.csv - 249 rows
+INFO:     47.150.25.188:0 - "POST /api/portal/validate HTTP/1.1" 200 OK
+INFO:     47.150.25.188:0 - "OPTIONS /api/portal/upload HTTP/1.1" 200 OK
+INFO:     47.150.25.188:0 - "POST /api/portal/upload HTTP/1.1" 200 OK
+INFO:     47.150.25.188:0 - "OPTIONS /api/history HTTP/1.1" 200 OK
+INFO:     47.150.25.188:0 - "GET /api/history HTTP/1.1" 200 OK
+INFO:     47.150.25.188:0 - "GET /api/history HTTP/1.1" 200 OK
+INFO:     47.150.25.188:0 - "GET /api/history HTTP/1.1" 200 OK
+INFO:     47.150.25.188:0 - "GET /api/history HTTP/1.1" 200 OK
+INFO:     47.150.25.188:0 - "GET /api/history HTTP/1.1" 200 OK
+INFO:     47.150.25.188:0 - "GET /api/history HTTP/1.1" 200 OK
+INFO:     47.150.25.188:0 - "GET /api/history HTTP/1.1" 200 OK
+INFO:     47.150.25.188:0 - "GET /api/history HTTP/1.1" 200 OK
+INFO:     47.150.25.188:0 - "GET /api/history HTTP/1.1" 200 OK
+INFO:     47.150.25.188:0 - "GET /api/history HTTP/1.1" 200 OK
+INFO:     47.150.25.188:0 - "GET /api/history HTTP/1.1" 200 OK
+INFO:     47.150.25.188:0 - "GET /api/history HTTP/1.1" 200 OK
+INFO:     47.150.25.188:0 - "GET /api/history HTTP/1.1" 200 OK
+INFO:     47.150.25.188:0 - "GET /api/history HTTP/1.1" 200 OK
+INFO:     47.150.25.188:0 - "GET /api/history HTTP/1.1" 200 OK
+WARNING:  WatchFiles detected changes in 'api/enhanced_main_api.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [73635]
+INFO:     Started server process [79083]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+WARNING:  WatchFiles detected changes in 'api/enhanced_main_api.py'. Reloading...
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [79083]
+INFO:     Started server process [82000]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.

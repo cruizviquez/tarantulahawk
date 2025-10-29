@@ -504,7 +504,8 @@ async def upload_archivo_portal(
             "resultados": resultados,
             "costo": costo,
             "pagado": not requiere_pago,
-            "timestamp": datetime.now()
+            "timestamp": datetime.now(),
+            "file_name": file.filename
         }
         
         # Generate payment if needed
