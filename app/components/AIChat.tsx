@@ -223,7 +223,7 @@ export default function AIChat({ language }: AIChatProps) {
       <button
         onClick={() => setIsOpen(true)}
         role="chat-button"
-        className="fixed bottom-6 right-6 bg-gradient-to-r from-red-600 to-orange-500 text-white rounded-full p-4 shadow-2xl hover:from-red-700 hover:to-orange-600 transition-all z-50 animate-pulse"
+        className="fixed bottom-6 right-6 bg-gradient-to-r from-blue-600 to-emerald-500 text-white rounded-full p-4 shadow-2xl hover:from-blue-700 hover:to-emerald-600 transition-all z-50 animate-pulse"
       >
         <MessageSquare className="w-6 h-6" />
       </button>
@@ -234,7 +234,7 @@ export default function AIChat({ language }: AIChatProps) {
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-gray-800">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-gradient-to-r from-red-600 to-orange-500 rounded-full flex items-center justify-center">
+              <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-full flex items-center justify-center">
                 <Bot className="w-4 h-4 text-white" />
               </div>
               <div>
@@ -256,7 +256,7 @@ export default function AIChat({ language }: AIChatProps) {
                 <div className={`max-w-xs p-3 rounded-2xl ${
                   message.isBot 
                     ? 'bg-gray-800 text-white' 
-                    : 'bg-gradient-to-r from-red-600 to-orange-500 text-white'
+                    : 'bg-gradient-to-r from-blue-600 to-emerald-500 text-white'
                 }`}>
                   <div className="flex items-start gap-2">
                     {message.isBot && <Bot className="w-4 h-4 mt-0.5 flex-shrink-0" />}
@@ -292,13 +292,13 @@ export default function AIChat({ language }: AIChatProps) {
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyPress={handleKeyPress}
                 placeholder={language === 'en' ? 'Ask about AML, API, pricing...' : 'Pregunta sobre AML, API, precios...'}
-                className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-orange-500 outline-none"
+                className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-emerald-500 outline-none"
                 disabled={isLoading}
               />
               <button
                 onClick={handleSend}
                 disabled={isLoading || !inputText.trim()}
-                className="bg-gradient-to-r from-red-600 to-orange-500 text-white rounded-lg p-2 hover:from-red-700 hover:to-orange-600 transition disabled:opacity-50"
+                className="bg-gradient-to-r from-blue-600 to-emerald-500 text-white rounded-lg p-2 hover:from-blue-700 hover:to-emerald-600 transition disabled:opacity-50"
               >
                 <Send className="w-4 h-4" />
               </button>

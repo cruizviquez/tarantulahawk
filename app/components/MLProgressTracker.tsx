@@ -27,14 +27,14 @@ const stages = {
   ml_supervised: {
     icon: Brain,
     label: { es: 'Modelo Supervisado (IA)', en: 'Supervised ML Model' },
-    color: 'text-orange-400',
-    bgColor: 'bg-orange-900/20',
-    borderColor: 'border-orange-800/30'
+    color: 'text-cyan-400',
+    bgColor: 'bg-cyan-900/20',
+    borderColor: 'border-cyan-800/30'
   },
   ml_unsupervised: {
     icon: TrendingUp,
     label: { es: 'Modelo No Supervisado (Clustering)', en: 'Unsupervised ML (Clustering)' },
-    color: 'text-teal-400',
+    color: 'text-emerald-400',
     bgColor: 'bg-teal-900/20',
     borderColor: 'border-teal-800/30'
   },
@@ -105,7 +105,7 @@ export default function MLProgressTracker({
       <div className="w-full bg-gray-800 rounded-full h-3 overflow-hidden mb-6">
         <div 
           className={`h-full bg-gradient-to-r ${
-            stage === 'ml_supervised' ? 'from-orange-600 to-orange-400' :
+            stage === 'ml_supervised' ? 'from-cyan-600 to-cyan-400' :
             stage === 'ml_unsupervised' ? 'from-teal-600 to-teal-400' :
             stage === 'ml_reinforcement' ? 'from-red-600 to-red-400' :
             'from-blue-600 to-blue-400'
@@ -156,7 +156,7 @@ export default function MLProgressTracker({
           <div className="grid md:grid-cols-3 gap-4 text-sm">
             <div>
               <div className="text-gray-500 mb-1">{language === 'es' ? 'Algoritmo' : 'Algorithm'}</div>
-              <div className="font-mono text-teal-400">
+              <div className="font-mono text-emerald-400">
                 {stage === 'ml_supervised' ? 'XGBoost + RF' :
                  stage === 'ml_unsupervised' ? 'DBSCAN + Isolation Forest' :
                  'PPO + Dynamic Thresholds'}
@@ -164,7 +164,7 @@ export default function MLProgressTracker({
             </div>
             <div>
               <div className="text-gray-500 mb-1">{language === 'es' ? 'Features' : 'Features'}</div>
-              <div className="font-mono text-orange-400">
+              <div className="font-mono text-cyan-400">
                 {stage === 'ml_supervised' ? '27 variables' :
                  stage === 'ml_unsupervised' ? '15 clusters' :
                  '8 thresholds'}

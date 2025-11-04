@@ -9,9 +9,9 @@ const TarantulaHawkLogo = ({ className = "w-12 h-12" }) => (
   <svg viewBox="0 0 400 400" className={className} xmlns="http://www.w3.org/2000/svg">
     <defs>
       <linearGradient id="orangeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" style={{stopColor: '#CC3300'}} />
-        <stop offset="50%" style={{stopColor: '#FF4500'}} />
-        <stop offset="100%" style={{stopColor: '#FF6B00'}} />
+        <stop offset="0%" style={{stopColor: '#3b82f6'}} />
+        <stop offset="50%" style={{stopColor: '#06b6d4'}} />
+        <stop offset="100%" style={{stopColor: '#10b981'}} />
       </linearGradient>
       <linearGradient id="tealGrad" x1="0%" y1="0%" x2="100%" y2="100%">
         <stop offset="0%" style={{stopColor: '#00CED1'}} />
@@ -109,7 +109,7 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: string
     {/* Auth Error Toast */}
     {showAuthError && errorInfo && (
       <div className="fixed top-20 right-6 z-[9999] animate-fade-in">
-        <div className="bg-red-500/90 backdrop-blur-sm border border-red-400 rounded-lg p-4 shadow-2xl max-w-md">
+        <div className="bg-emerald-500/90 backdrop-blur-sm border border-emerald-400 rounded-lg p-4 shadow-2xl max-w-md">
           <div className="flex items-start gap-3">
             <div className="text-2xl">🔒</div>
             <div className="flex-1">
@@ -137,7 +137,7 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: string
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <TarantulaHawkLogo />
-              <span className="text-xl font-black bg-gradient-to-r from-red-500 to-teal-400 bg-clip-text text-transparent">
+              <span className="text-xl font-black bg-gradient-to-r from-emerald-500 to-teal-400 bg-clip-text text-transparent">
                 TARANTULAHAWK
               </span>
             </div>
@@ -185,7 +185,7 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: string
                   {language === 'en' ? 'Login' : 'Ingresar'}
                 </button>
                 <button
-                  className="px-6 py-2 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-semibold hover:from-red-700 hover:to-orange-600 transition"
+                  className="px-6 py-2 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-lg font-semibold hover:from-emerald-700 hover:to-emerald-500 transition"
                   onClick={() => {
                     setOnboardingMode('signup');
                     setShowOnboarding(true);
@@ -201,11 +201,11 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: string
 
       {/* Usage Banner */}
       {usage && usage.subscription_tier !== 'paid' && (
-        <div className={`mt-16 w-full ${usage.freeExceeded ? 'bg-red-900/20 border-red-700/40' : 'bg-teal-900/20 border-teal-700/40'} border-y`}> 
+        <div className={`mt-16 w-full ${usage.freeExceeded ? 'bg-emerald-900/20 border-emerald-700/40' : 'bg-teal-900/20 border-teal-700/40'} border-y`}> 
           <div className="max-w-7xl mx-auto px-6 py-3 flex flex-col sm:flex-row items-start sm:items-center gap-3 justify-between">
             <div className="text-sm">
               {usage.freeExceeded ? (
-                <span className="text-red-300 font-medium">
+                <span className="text-emerald-300 font-medium">
                   {language === 'en' ? 'Free limit reached.' : 'Límite gratis alcanzado.'}
                 </span>
               ) : (
@@ -219,7 +219,7 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: string
             <div className="flex items-center gap-3">
               <a
                 href="/pay"
-                className={`px-4 py-2 rounded-lg text-sm font-semibold ${usage.freeExceeded ? 'bg-gradient-to-r from-red-600 to-orange-500' : 'border border-teal-600 text-teal-300 hover:bg-teal-600/10'}`}
+                className={`px-4 py-2 rounded-lg text-sm font-semibold ${usage.freeExceeded ? 'bg-gradient-to-r from-blue-600 to-emerald-500' : 'border border-teal-600 text-teal-300 hover:bg-teal-600/10'}`}
               >
                 {usage.freeExceeded
                   ? language === 'en' ? 'Upgrade to Continue' : 'Mejorar para Continuar'
@@ -233,14 +233,14 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: string
       <section id="hero" className="pt-32 pb-20 px-6">
         <div className="max-w-7xl mx-auto">
           <div className="text-center">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-red-600/10 border border-red-600/20 rounded-full mb-8">
-              <Zap className="w-4 h-4 text-red-500" />
-              <span className="text-sm text-red-400">{language === 'en' ? 'AI-Powered • Pay-as-you-go • Instant Reports' : 'AI-Powered • Pago por uso • Reportes instantáneos'}</span>
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600/10 border border-emerald-600/20 rounded-full mb-8">
+              <Zap className="w-4 h-4 text-emerald-500" />
+              <span className="text-sm text-cyan-400">{language === 'en' ? 'AI-Powered • Pay-as-you-go • Instant Reports' : 'AI-Powered • Pago por uso • Reportes instantáneos'}</span>
             </div>
             
             <h1 className="text-5xl md:text-7xl font-black mb-6">
-              <span className="bg-gradient-to-r from-red-500 via-orange-500 to-teal-400 bg-clip-text text-transparent">
-                {language === 'en' ? 'AI-Powered AML Compliance Platform' : 'Plataforma de Cumplimiento PLD con IA'}
+              <span className="bg-gradient-to-r from-blue-900 via-blue-500 to-teal-400 bg-clip-text text-transparent">
+                {language === 'en' ? 'AI-Powered AML Compliance System' : 'Plataforma IA para Análisis de PLD'}
               </span>
             </h1>
             
@@ -252,7 +252,7 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: string
 
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <button
-                className="px-8 py-4 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-bold text-lg hover:from-red-700 hover:to-orange-600 transition"
+                className="px-8 py-4 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-lg font-bold text-lg hover:from-emerald-700 hover:to-emerald-500 transition"
                 onClick={() => {
                   setOnboardingMode('signup');
                   setShowOnboarding(true);
@@ -275,11 +275,11 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: string
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mt-20">
             <div className="text-center">
-              <div className="text-4xl font-black text-red-500 mb-2">&lt;100ms</div>
+              <div className="text-4xl font-black text-blue-500 mb-2">&lt;100ms</div>
               <div className="text-gray-400">Transaction Scoring</div>
             </div>
             <div className="text-center">
-              <div className="text-4xl font-black text-orange-500 mb-2">&gt;95%</div>
+              <div className="text-4xl font-black text-emerald-500 mb-2">&gt;95%</div>
               <div className="text-gray-400">Detection Accuracy</div>
             </div>
             <div className="text-center">
@@ -308,7 +308,7 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: string
 
           <div className="grid md:grid-cols-3 gap-8">
             <div className="text-center group">
-              <div className="w-20 h-20 bg-gradient-to-r from-red-600 to-orange-500 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform">
+              <div className="w-20 h-20 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform">
                 <span className="text-2xl font-black text-white">1</span>
               </div>
               <h3 className="text-2xl font-bold mb-4">
@@ -322,7 +322,7 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: string
             </div>
 
             <div className="text-center group">
-              <div className="w-20 h-20 bg-gradient-to-r from-orange-500 to-teal-500 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform">
+              <div className="w-20 h-20 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform">
                 <span className="text-2xl font-black text-white">2</span>
               </div>
               <h3 className="text-2xl font-bold mb-4">
@@ -372,7 +372,7 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: string
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-black mb-4">
-              <span className="bg-gradient-to-r from-red-500 to-teal-400 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-emerald-500 to-teal-400 bg-clip-text text-transparent">
                 {language === 'en' ? 'Solutions for Every Business Size' : 'Soluciones para Cada Tamaño de Empresa'}
               </span>
             </h2>
@@ -390,7 +390,7 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: string
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-black mb-4">
-              <span className="bg-gradient-to-r from-red-500 to-teal-400 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-emerald-500 to-teal-400 bg-clip-text text-transparent">
                 {language === 'en' ? 'Market-Leading AI Models' : 'Modelos de IA Líderes del Mercado'}
               </span>
             </h2>
@@ -431,10 +431,10 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: string
             </div>
 
             <div className="bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-2xl p-8 text-center">
-              <div className="w-16 h-16 bg-gradient-to-r from-red-600 to-orange-500 rounded-2xl flex items-center justify-center mx-auto mb-6">
+              <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-2xl flex items-center justify-center mx-auto mb-6">
                 <span className="text-2xl font-black text-white">R</span>
               </div>
-              <h3 className="text-2xl font-bold mb-4 text-orange-400">
+              <h3 className="text-2xl font-bold mb-4 text-emerald-400">
                 {language === 'en' ? 'Reinforcement Learning' : 'Aprendizaje por Refuerzo'}
               </h3>
               <p className="text-gray-400">
@@ -495,8 +495,8 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: string
             </div>
 
             {/* Mexico AML Section */}
-            <div className="bg-gradient-to-br from-orange-900/20 to-orange-800/10 border border-orange-800/30 rounded-2xl p-8">
-              <h3 className="text-3xl font-bold mb-6 text-orange-400">
+            <div className="bg-gradient-to-br from-emerald-900/20 to-emerald-800/10 border border-emerald-800/30 rounded-2xl p-8">
+              <h3 className="text-3xl font-bold mb-6 text-emerald-400">
                 {language === 'en' ? 'Mexico LFPIORPI Compliance' : 'Cumplimiento LFPIORPI México'}
               </h3>
 
@@ -505,8 +505,8 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: string
                 <div className="min-w-full">
                   {/* Mobile: Stack format */}
                   <div className="block md:hidden space-y-4">
-                    <div className="bg-gray-800/50 rounded-lg p-4 border-l-4 border-orange-500">
-                      <h4 className="font-semibold text-orange-400 mb-2">
+                    <div className="bg-gray-800/50 rounded-lg p-4 border-l-4 border-emerald-500">
+                      <h4 className="font-semibold text-emerald-400 mb-2">
                         {language === 'en' ? 'Transactions Monitoring' : 'Monitoreo de Transacciones'}
                       </h4>
                       <p className="text-gray-300 text-sm mb-3">
@@ -522,8 +522,8 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: string
                       </div>
                     </div>
 
-                    <div className="bg-gray-800/50 rounded-lg p-4 border-l-4 border-orange-500">
-                      <h4 className="font-semibold text-orange-400 mb-2">
+                    <div className="bg-gray-800/50 rounded-lg p-4 border-l-4 border-emerald-500">
+                      <h4 className="font-semibold text-emerald-400 mb-2">
                         {language === 'en' ? 'XML Reports' : 'Reportes XML'}
                       </h4>
                       <p className="text-gray-300 text-sm mb-3">
@@ -539,8 +539,8 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: string
                       </div>
                     </div>
 
-                    <div className="bg-gray-800/50 rounded-lg p-4 border-l-4 border-orange-500">
-                      <h4 className="font-semibold text-orange-400 mb-2">
+                    <div className="bg-gray-800/50 rounded-lg p-4 border-l-4 border-emerald-500">
+                      <h4 className="font-semibold text-emerald-400 mb-2">
                         {language === 'en' ? '10-Year Storage' : 'Custodia 10 años'}
                       </h4>
                       <p className="text-gray-300 text-sm mb-3">
@@ -556,8 +556,8 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: string
                       </div>
                     </div>
 
-                    <div className="bg-gray-800/50 rounded-lg p-4 border-l-4 border-orange-500">
-                      <h4 className="font-semibold text-orange-400 mb-2">
+                    <div className="bg-gray-800/50 rounded-lg p-4 border-l-4 border-emerald-500">
+                      <h4 className="font-semibold text-emerald-400 mb-2">
                         {language === 'en' ? 'Audit and Reporting' : 'Auditoría y Reportes'}
                       </h4>
                       <p className="text-gray-300 text-sm mb-3">
@@ -578,7 +578,7 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: string
                   <div className="hidden md:block">
                     <table className="w-full border-collapse">
                       <thead>
-                        <tr className="bg-gradient-to-r from-orange-600 to-red-600">
+                        <tr className="bg-gradient-to-r from-emerald-600 to-emerald-600">
                           <th className="px-4 py-3 text-left font-bold text-black text-sm rounded-l-lg">
                             {language === 'en' ? 'Law Obligation' : 'Obligación Legal'}
                           </th>
@@ -592,7 +592,7 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: string
                       </thead>
                       <tbody>
                         <tr className="bg-gray-800/30 hover:bg-gray-700/50 transition-colors">
-                          <td className="px-4 py-3 font-medium text-orange-400 border-l-2 border-orange-500 text-sm">
+                          <td className="px-4 py-3 font-medium text-emerald-400 border-l-2 border-emerald-500 text-sm">
                             {language === 'en' ? 'Transactions Monitoring' : 'Monitoreo de Transacciones'}
                           </td>
                           <td className="px-4 py-3 text-gray-300 text-sm">
@@ -605,7 +605,7 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: string
                           </td>
                         </tr>
                         <tr className="bg-gray-800/30 hover:bg-gray-700/50 transition-colors">
-                          <td className="px-4 py-3 font-medium text-orange-400 border-l-2 border-orange-500 text-sm">
+                          <td className="px-4 py-3 font-medium text-emerald-400 border-l-2 border-emerald-500 text-sm">
                             {language === 'en' ? 'XML Reports' : 'Reportes XML'}
                           </td>
                           <td className="px-4 py-3 text-gray-300 text-sm">
@@ -618,7 +618,7 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: string
                           </td>
                         </tr>
                         <tr className="bg-gray-800/30 hover:bg-gray-700/50 transition-colors">
-                          <td className="px-4 py-3 font-medium text-orange-400 border-l-2 border-orange-500 text-sm">
+                          <td className="px-4 py-3 font-medium text-emerald-400 border-l-2 border-emerald-500 text-sm">
                             {language === 'en' ? '10-Year Storage' : 'Custodia 10 años'}
                           </td>
                           <td className="px-4 py-3 text-gray-300 text-sm">
@@ -631,7 +631,7 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: string
                           </td>
                         </tr>
                         <tr className="bg-gray-800/30 hover:bg-gray-700/50 transition-colors">
-                          <td className="px-4 py-3 font-medium text-orange-400 border-l-2 border-orange-500 text-sm">
+                          <td className="px-4 py-3 font-medium text-emerald-400 border-l-2 border-emerald-500 text-sm">
                             {language === 'en' ? 'Audit and Reporting' : 'Auditoría y Reportes'}
                           </td>
                           <td className="px-4 py-3 text-gray-300 text-sm">
@@ -664,9 +664,9 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: string
                 ? 'AI-powered solution for Mexican institutions to assist in compliance with Article 18 obligations under LFPIORPI (reformed July 2025):'
                 : 'Solución potenciada por IA para instituciones mexicanas para asistir en el cumplimiento de las obligaciones del Artículo 18 bajo LFPIORPI (reformado julio 2025):'}
             </p>
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-orange-600/10 border border-orange-600/30 rounded-full mb-8">
-              <Shield className="w-4 h-4 text-orange-400" />
-              <span className="text-sm text-orange-400">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600/10 border border-emerald-600/30 rounded-full mb-8">
+              <Shield className="w-4 h-4 text-emerald-400" />
+              <span className="text-sm text-emerald-400">
                 {language === 'en' ? 'Institutions Remain Legally Responsible for the whole process' : 'Las Instituciones Mantienen la Responsabilidad Legal de todo el proceso'}
               </span>
             </div>
@@ -717,7 +717,7 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: string
             ].map((item, idx) => (
               <div key={idx} className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
                 <div className="flex items-start gap-4 mb-4">
-                  <div className={`w-12 h-12 bg-gradient-to-br ${item.color === 'green' ? 'from-green-600 to-teal-500' : item.color === 'blue' ? 'from-blue-600 to-blue-500' : 'from-red-600 to-orange-500'} rounded-lg flex items-center justify-center flex-shrink-0`}>
+                  <div className={`w-12 h-12 bg-gradient-to-br ${item.color === 'green' ? 'from-green-600 to-teal-500' : item.color === 'blue' ? 'from-blue-600 to-blue-500' : 'from-blue-600 to-emerald-500'} rounded-lg flex items-center justify-center flex-shrink-0`}>
                     <span className="text-white font-black text-lg">{item.num}</span>
                   </div>
                   <div className="flex-1">
@@ -741,8 +741,8 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: string
             ))}
           </div>
 
-          <div className="bg-red-900/10 border border-red-800/30 rounded-xl p-6 mb-8">
-            <h3 className="text-lg font-bold mb-3 text-red-400">
+          <div className="bg-blue-900/10 border border-blue-800/30 rounded-xl p-6 mb-8">
+            <h3 className="text-lg font-bold mb-3 text-cyan-400">
               {language === 'en' ? 'Important Legal Disclaimer - LFPIORPI Compliance' : 'Aviso Legal Importante - Cumplimiento LFPIORPI'}
             </h3>
             <p className="text-sm text-gray-300 leading-relaxed">
@@ -769,7 +769,7 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: string
             <h3 className="text-2xl font-bold mb-6">{language === 'en' ? 'What Makes TarantulaHawk Unique for AML' : 'Lo Que Hace Único a TarantulaHawk para PLD'}</h3>
             <div className="grid md:grid-cols-2 gap-6">
               <div className="flex items-start gap-3 text-left">
-                <CheckCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-1" />
+                <CheckCircle className="w-5 h-5 text-cyan-400 flex-shrink-0 mt-1" />
                 <span className="text-gray-300">
                   {language === 'en' 
                     ? 'Only AML platform combining supervised, unsupervised, and reinforcement learning models'
@@ -777,7 +777,7 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: string
                 </span>
               </div>
               <div className="flex items-start gap-3 text-left">
-                <CheckCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-1" />
+                <CheckCircle className="w-5 h-5 text-cyan-400 flex-shrink-0 mt-1" />
                 <span className="text-gray-300">
                   {language === 'en'
                     ? 'Dual compliance for US (BSA) and Mexico (LFPIORPI, SHCP, CNBV)'
@@ -785,15 +785,15 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: string
                 </span>
               </div>
               <div className="flex items-start gap-3 text-left">
-                <CheckCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-1" />
+                <CheckCircle className="w-5 h-5 text-cyan-400 flex-shrink-0 mt-1" />
                 <span className="text-gray-300">
                   {language === 'en' ? 'Sub-100 millisecond real-time transaction risk scoring and AML monitoring' : 'Scoring de riesgo de transacciones en tiempo real en menos de 100 milisegundos y monitoreo PLD'}
                 </span>
               </div>
               <div className="flex items-start gap-3 text-left">
-                <CheckCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-1" />
+                <CheckCircle className="w-5 h-5 text-cyan-400 flex-shrink-0 mt-1" />
                 <span className="text-gray-300">
-                  {language === 'en' ? 'Self-improving AI system that continuously learns from compliance investigations' : 'Sistema de IA auto-mejorable que aprende continuamente de investigaciones de cumplimiento'}
+                  {language === 'en' ? 'Self-improving AI system that continuously learns from compliance investigations' : 'Plataforma IA auto-mejorable que aprende continuamente de investigaciones de cumplimiento'}
                 </span>
               </div>
             </div>
@@ -815,7 +815,7 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: string
               setOnboardingMode('login');
               setShowOnboarding(true);
             }}
-            className="px-12 py-5 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-bold text-xl hover:from-red-700 hover:to-orange-600 transition shadow-2xl shadow-red-500/50"
+            className="px-12 py-5 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-lg font-bold text-xl hover:from-emerald-700 hover:to-emerald-600 transition shadow-2xl shadow-emerald-500/50"
           >
             {language === 'en' ? 'Access AML Platform' : 'Acceder a Plataforma PLD'}
           </button>

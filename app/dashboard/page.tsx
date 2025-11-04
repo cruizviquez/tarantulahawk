@@ -1,14 +1,72 @@
-import { getAuthUser, getUserProfile } from '@/app/lib/auth';
-import CompletePortalUI from '@/app/components/complete_portal_ui';
-import SessionMonitor from '@/app/components/SessionMonitor';
-import { Suspense } from 'react';
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
+import { redirect } from 'next/navigation'
+import CompletePortalUI from '@/app/components/complete_portal_ui'
+import SessionMonitor from '@/app/components/SessionMonitor'
+import { Suspense } from 'react'
+
+export const dynamic = 'force-dynamic'
 
 export default async function DashboardPage() {
-  // Middleware ya verificó auth, pero doble verificación no daña
-  const { user } = await getAuthUser();
-  const profile = await getUserProfile(user.id);
+  const cookieStore = await cookies()
+  
+  // Validar variables de entorno
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  
+  if (!supabaseUrl || !supabaseKey) {
+    console.error('[DASHBOARD] Missing Supabase environment variables:', {
+      hasUrl: !!supabaseUrl,
+      hasKey: !!supabaseKey
+    })
+    
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center p-6">
+        <div className="bg-gradient-to-br from-gray-900 to-black border border-red-800 rounded-2xl p-8 max-w-md w-full text-center">
+          <div className="text-red-500 text-6xl mb-4">❌</div>
+          <h1 className="text-2xl font-bold text-white mb-4">Error de Configuración</h1>
+          <p className="text-gray-400 mb-6">
+            Faltan variables de entorno de Supabase. Verifica tu archivo .env.local
+          </p>
+          <a 
+            href="/" 
+            className="inline-block px-6 py-3 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-lg font-semibold hover:from-red-700 hover:to-orange-600 transition text-white"
+          >
+            Volver al Inicio
+          </a>
+        </div>
+      </div>
+    )
+  }
+  
+  const supabase = createServerClient(
+    supabaseUrl,
+    supabaseKey,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll()
+        },
+        setAll() {
+          // Read-only en Server Component
+        },
+      },
+    }
+  )
 
-  // Si no hay perfil, mostrar error específico
+  const { data: { user }, error } = await supabase.auth.getUser()
+
+  if (error || !user) {
+    console.log('[DASHBOARD] No session, redirecting to home')
+    redirect('/?auth=error')
+  }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', user.id)
+    .single()
+
   if (!profile) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center p-6">
@@ -16,17 +74,17 @@ export default async function DashboardPage() {
           <div className="text-red-500 text-6xl mb-4">⚠️</div>
           <h1 className="text-2xl font-bold text-white mb-4">Error de Perfil</h1>
           <p className="text-gray-400 mb-6">
-            No se pudo cargar tu perfil. Contacta soporte si el problema persiste.
+            No se pudo cargar tu perfil.
           </p>
           <a 
-            href="/?logout=true" 
-            className="inline-block px-6 py-3 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-semibold hover:from-red-700 hover:to-orange-600 transition text-white"
+            href="/" 
+            className="inline-block px-6 py-3 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-lg font-semibold hover:from-red-700 hover:to-orange-600 transition text-white"
           >
             Volver al Inicio
           </a>
         </div>
       </div>
-    );
+    )
   }
 
   return (
@@ -47,7 +105,7 @@ export default async function DashboardPage() {
         }}
       />
     </Suspense>
-  );
+  )
 }
 
 function DashboardLoading() {
@@ -57,5 +115,5 @@ function DashboardLoading() {
         Cargando dashboard...
       </div>
     </div>
-  );
+  )
 }

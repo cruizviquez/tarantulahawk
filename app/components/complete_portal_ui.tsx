@@ -1,15 +1,17 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { createBrowserClient } from '@supabase/ssr';
 import { calculateTieredCost, PRICING_TIERS, formatPricingSummary } from '../lib/pricing';
-import { Upload, FileSpreadsheet, FileText, BarChart3, Clock, Key, CreditCard, Download, AlertTriangle, CheckCircle, Lock, DollarSign, Zap, Shield, Database } from 'lucide-react';
+import { Upload, FileSpreadsheet, FileText, Download, AlertCircle, AlertTriangle, CheckCircle, CheckCircle2, Database, User, Clock, BarChart3, CreditCard, Lock, TrendingUp, TrendingDown, ChevronDown, X, Menu, Zap } from 'lucide-react';
+
 import MLProgressTracker from './MLProgressTracker';
 import ProfileModal from './ProfileModal';
 
 const TarantulaHawkLogo = ({ className = "w-10 h-10" }) => (
   <svg viewBox="0 0 400 400" className={className} xmlns="http://www.w3.org/2000/svg">
     <defs>
-      <linearGradient id="orangeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <linearGradient id="emeraldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
         <stop offset="0%" style={{stopColor: '#CC3300'}} />
         <stop offset="50%" style={{stopColor: '#FF4500'}} />
         <stop offset="100%" style={{stopColor: '#FF6B00'}} />
@@ -25,9 +27,9 @@ const TarantulaHawkLogo = ({ className = "w-10 h-10" }) => (
     <ellipse cx="200" cy="170" rx="18" ry="20" fill="#0F0F0F"/>
     <ellipse cx="200" cy="145" rx="32" ry="35" fill="#0F0F0F"/>
     <ellipse cx="200" cy="110" rx="22" ry="20" fill="#0A0A0A"/>
-    <ellipse cx="200" cy="215" rx="32" ry="10" fill="url(#orangeGrad)" opacity="0.95"/>
-    <path d="M 168 135 Q 95 90 82 125 Q 75 160 115 170 Q 148 175 168 158 Z" fill="url(#orangeGrad)" opacity="0.9"/>
-    <path d="M 232 135 Q 305 90 318 125 Q 325 160 285 170 Q 252 175 232 158 Z" fill="url(#orangeGrad)" opacity="0.9"/>
+    <ellipse cx="200" cy="215" rx="32" ry="10" fill="url(#emeraldGrad)" opacity="0.95"/>
+    <path d="M 168 135 Q 95 90 82 125 Q 75 160 115 170 Q 148 175 168 158 Z" fill="url(#emeraldGrad)" opacity="0.9"/>
+    <path d="M 232 135 Q 305 90 318 125 Q 325 160 285 170 Q 252 175 232 158 Z" fill="url(#EmeraldGrad)" opacity="0.9"/>
     <ellipse cx="188" cy="108" rx="5" ry="4" fill="#00CED1"/>
     <ellipse cx="212" cy="108" rx="5" ry="4" fill="#00CED1"/>
   </svg>
@@ -68,11 +70,34 @@ interface TarantulaHawkPortalProps {
 }
 
 const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) => {
+  // Supabase client for auth (using @supabase/ssr for compatibility)
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+  
+  // Helper to get auth token
+  const getAuthToken = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        throw new Error(language === 'es' 
+          ? 'Sesión expirada. Por favor inicia sesión nuevamente.' 
+          : 'Session expired. Please login again.');
+      }
+      return session.access_token;
+    } catch (error) {
+      console.error('Error getting auth token:', error);
+      throw error;
+    }
+  };
+  
   // Backend API URL (set in useEffect to guarantee client-side only)
   const [API_URL, setApiUrl] = useState<string>('');
   const [language, setLanguage] = useState<'es' | 'en'>('es'); // Default: Spanish
   const [activeTab, setActiveTab] = useState('upload');
   const [user, setUser] = useState<UserData>(initialUser);
+  const [detectedColumns, setDetectedColumns] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [currentAnalysis, setCurrentAnalysis] = useState<any>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
@@ -256,9 +281,13 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
         userId: user.id
       });
       
+      // Get auth token from Supabase
+      const token = await getAuthToken();
+      
       const response = await fetch(`${API_URL}/api/portal/validate`, {
         method: 'POST',
         headers: {
+          'Authorization': `Bearer ${token}`,
           'X-User-ID': user.id,
         },
         body: formData,
@@ -283,6 +312,12 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
       const result = await response.json();
       
       console.log('✅ Archivo validado:', result);
+      
+      // Guardar columnas detectadas del Excel
+      if (result.columns && Array.isArray(result.columns)) {
+        setDetectedColumns(result.columns);
+        console.log('📋 Columnas detectadas:', result.columns);
+      }
 
       if (response.ok && result.success) {
         // Archivo listo para análisis - esperar confirmación del usuario
@@ -299,16 +334,17 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
             : `File validated: ${txnCount} transactions. Cost: $${cost.toFixed(2)}. Click "Analyze with AI" to continue.`
         });
         return; // No procesar todavía
-      } else if (response.status === 402 || result.requiere_pago) {
-        // Payment required
+      } else if (response.status === 402) {
+        // Payment required (402 status from backend)
+        const errorDetail = result.detail || result;
         setInsufficientFunds(true);
         setProcessingStage('');
         setProcessingProgress(0);
         setStatusMessage({
           type: 'error',
           message: language === 'es'
-            ? `Fondos insuficientes. Costo: $${cost.toFixed(2)}, Saldo: $${user.balance.toFixed(2)}.`
-            : `Insufficient funds. Cost: $${cost.toFixed(2)}, Balance: $${user.balance.toFixed(2)}.`
+            ? `Fondos insuficientes. ${errorDetail.error || 'Saldo insuficiente.'}`
+            : `Insufficient funds. ${errorDetail.error || 'Insufficient balance.'}`
         });
         setActiveTab('add-funds');
       } else {
@@ -329,6 +365,42 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
     }
   };
 
+
+  // ============================================================================
+  // SISTEMA DE PROGRESO EN TIEMPO REAL
+  // ============================================================================
+  const pollProgress = async (analysisId: string) => {
+    const pollInterval = setInterval(async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/portal/progress/${analysisId}`);
+        if (!response.ok) {
+          clearInterval(pollInterval);
+          return;
+        }
+        
+        const progress = await response.json();
+        
+        // Actualizar estados del progreso
+        setProcessingStage(progress.stage);
+        setProcessingProgress(progress.progress);
+        setProgressDetails(progress.details || {});
+        
+        console.log('📊 Progress update:', progress);
+        
+        // Si completó, detener polling
+        if (progress.stage === 'complete' && progress.progress === 100) {
+          clearInterval(pollInterval);
+        }
+      } catch (error) {
+        console.error('Error polling progress:', error);
+        clearInterval(pollInterval);
+      }
+    }, 500); // Poll cada 500ms
+    
+    // Limpiar después de 5 minutos
+    setTimeout(() => clearInterval(pollInterval), 5 * 60 * 1000);
+  };
+
   const handleAnalyzeWithAI = async () => {
     if (!selectedFile || !uploadedFileId) {
       alert('No file selected');
@@ -339,24 +411,27 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
     setFileReadyForAnalysis(false);
 
     try {
-      // Send file for processing
-      const formData = new FormData();
-      formData.append('file', selectedFile);
-      
-      setProcessingStage('ml_supervised');
-      setProcessingProgress(10);
-      console.log('🤖 Iniciando análisis con IA...');
-      
-      const response = await fetch(`${API_URL}/api/portal/upload`, {
-        method: 'POST',
-        headers: {
-          'X-User-ID': user.id,
-        },
-        body: formData,
-      });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
+  	// Get auth token from Supabase
+  	const token = await getAuthToken();
+  
+  	// Send file for processing
+  	const formData = new FormData();
+  	formData.append('file', selectedFile);
+  	setProcessingStage('ml_supervised');
+  	setProcessingProgress(10);
+  	console.log('🤖 Iniciando análisis con IA...');
+  
+  	const response = await fetch(`${API_URL}/api/portal/upload`, {
+    	  method: 'POST',
+    	  headers: {
+      	    'Authorization': `Bearer ${token}`,
+            'X-User-ID': user.id,
+          },
+          body: formData,
+        });
+  
+        if (!response.ok) {
+          const errorText = await response.text();
         let errorMessage = `Error ${response.status}`;
         try {
           const errorJson = JSON.parse(errorText);
@@ -535,7 +610,89 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
     analysis_id: 'demo-analysis-001'
   };
 
-  return (
+  
+  // ============================================================================
+  // COMPONENTE: Detalles del Progreso ML
+  // ============================================================================
+  const ProgressDetailsDisplay = () => {
+    if (!progressDetails || Object.keys(progressDetails).length === 0) return null;
+    
+    return (
+      <div className="mt-4 p-4 bg-gray-800/50 rounded-lg border border-teal-500/30">
+        <h4 className="text-sm font-semibold text-teal-400 mb-3">Detalles del Análisis en Tiempo Real</h4>
+        <div className="space-y-2 text-xs text-gray-300">
+          {progressDetails.total_transacciones !== undefined && (
+            <div className="flex justify-between pb-2 border-b border-gray-700">
+              <span className="text-gray-400">Total de transacciones:</span>
+              <span className="font-mono text-white font-semibold">{progressDetails.total_transacciones.toLocaleString()}</span>
+            </div>
+          )}
+          
+          {progressDetails.casos_detectados_supervisado !== undefined && (
+            <div className="flex justify-between items-center">
+              <span className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                IA Supervisada:
+              </span>
+              <span className="font-mono text-emerald-400 font-semibold">
+                {progressDetails.casos_detectados_supervisado} casos detectados
+              </span>
+            </div>
+          )}
+          
+          {progressDetails.anomalias_adicionales !== undefined && (
+            <div className="flex justify-between items-center">
+              <span className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-green-500"></span>
+                IA No Supervisada:
+              </span>
+              <span className="font-mono text-teal-400 font-semibold">
+                {progressDetails.anomalias_adicionales} anomalías adicionales
+              </span>
+            </div>
+          )}
+          
+          {progressDetails.ajustes_threshold !== undefined && (
+            <div className="flex justify-between items-center">
+              <span className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-yellow-500"></span>
+                IA de Refuerzo:
+              </span>
+              <span className="font-mono text-yellow-400 font-semibold">
+                {progressDetails.ajustes_threshold} thresholds ajustados
+              </span>
+            </div>
+          )}
+          
+          {progressDetails.preocupante !== undefined && (
+            <div className="mt-4 pt-3 border-t border-gray-700">
+              <div className="text-xs text-gray-500 mb-2 text-center">Clasificación Final</div>
+              <div className="grid grid-cols-4 gap-2">
+                <div className="text-center p-2 bg-blue-500/10 rounded">
+                  <div className="text-blue-400 font-bold text-lg">{progressDetails.preocupante}</div>
+                  <div className="text-xs text-gray-500">Preocupante</div>
+                </div>
+                <div className="text-center p-2 bg-emerald-500/10 rounded">
+                  <div className="text-emerald-400 font-bold text-lg">{progressDetails.inusual}</div>
+                  <div className="text-xs text-gray-500">Inusual</div>
+                </div>
+                <div className="text-center p-2 bg-yellow-500/10 rounded">
+                  <div className="text-yellow-400 font-bold text-lg">{progressDetails.relevante}</div>
+                  <div className="text-xs text-gray-500">Relevante</div>
+                </div>
+                <div className="text-center p-2 bg-green-500/10 rounded">
+                  <div className="text-green-400 font-bold text-lg">{progressDetails.limpio}</div>
+                  <div className="text-xs text-gray-500">Limpio</div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+return (
     <div className="min-h-screen bg-black text-white">
       {/* Header */}
       <div className="border-b border-gray-800 bg-gray-900/50 backdrop-blur-sm">
@@ -544,7 +701,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
             <div className="flex items-center gap-3">
               <TarantulaHawkLogo />
               <div>
-                <div className="text-xl font-black bg-gradient-to-r from-red-500 to-teal-400 bg-clip-text text-transparent">
+                <div className="text-xl font-black bg-gradient-to-r from-blue-500 to-teal-400 bg-clip-text text-transparent">
                   TARANTULAHAWK
                 </div>
                 <div className="text-xs text-gray-500">AML Compliance Portal</div>
@@ -604,7 +761,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
                       </button>
                       <button 
                         onClick={() => window.location.href = '/api/auth/logout'}
-                        className="w-full px-4 py-3 text-left hover:bg-red-900/50 transition flex items-center gap-3 text-red-400"
+                        className="w-full px-4 py-3 text-left hover:bg-blue-900/50 transition flex items-center gap-3 text-blue-400"
                       >
                         <Lock className="w-4 h-4" />
                         {language === 'es' ? 'Cerrar Sesión' : 'Logout'}
@@ -625,7 +782,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
             onClick={() => setActiveTab('upload')}
             className={`px-6 py-3 font-semibold border-b-2 transition ${
               activeTab === 'upload' 
-                ? 'border-red-500 text-white' 
+                ? 'border-blue-500 text-white' 
                 : 'border-transparent text-gray-500 hover:text-gray-300'
             }`}
           >
@@ -636,7 +793,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
             onClick={() => setActiveTab('dashboard')}
             className={`px-6 py-3 font-semibold border-b-2 transition ${
               activeTab === 'dashboard' 
-                ? 'border-red-500 text-white' 
+                ? 'border-blue-500 text-white' 
                 : 'border-transparent text-gray-500 hover:text-gray-300'
             }`}
             disabled={!currentAnalysis}
@@ -648,7 +805,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
             onClick={() => setActiveTab('history')}
             className={`px-6 py-3 font-semibold border-b-2 transition ${
               activeTab === 'history' 
-                ? 'border-red-500 text-white' 
+                ? 'border-blue-500 text-white' 
                 : 'border-transparent text-gray-500 hover:text-gray-300'
             }`}
           >
@@ -659,7 +816,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
             onClick={() => setActiveTab('add-funds')}
             className={`px-6 py-3 font-semibold border-b-2 transition ${
               activeTab === 'add-funds' 
-                ? 'border-red-500 text-white' 
+                ? 'border-blue-500 text-white' 
                 : 'border-transparent text-gray-500 hover:text-gray-300'
             }`}
           >
@@ -711,7 +868,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
                       {estimatedTransactions.toLocaleString()} {language === 'es' ? 'transacciones' : 'transactions'}
                     </div>
                     {insufficientFunds && (
-                      <div className="mt-2 text-xs text-red-400 flex items-center justify-center gap-1">
+                      <div className="mt-2 text-xs text-blue-400 flex items-center justify-center gap-1">
                         <AlertTriangle className="w-3 h-3" />
                         {language === 'es' ? 'Fondos insuficientes' : 'Insufficient funds'}
                       </div>
@@ -731,7 +888,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
                 />
                 <label
                   htmlFor="file-upload"
-                  className="inline-block px-6 py-3 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-semibold hover:from-red-700 hover:to-orange-600 transition cursor-pointer"
+                  className="inline-block px-6 py-3 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-lg font-semibold hover:from-blue-700 hover:to-emerald-600 transition cursor-pointer"
                 >
                   {language === 'es' ? 'Seleccionar Archivo' : 'Select File'}
                 </label>
@@ -757,7 +914,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
                     </h3>
                     <button 
                       onClick={clearSelectedFile}
-                      className="px-3 py-1 bg-red-600/20 hover:bg-red-600/30 border border-red-500/50 rounded-lg text-xs text-red-400 hover:text-red-300 transition flex items-center gap-1"
+                      className="px-3 py-1 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/50 rounded-lg text-xs text-blue-400 hover:text-blue-300 transition flex items-center gap-1"
                     >
                       <AlertTriangle className="w-3 h-3" />
                       {language === 'es' ? 'Eliminar Archivo' : 'Remove File'}
@@ -784,7 +941,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
                     {/* Total Cost */}
                     <div className="bg-black/50 border border-gray-800 rounded-lg p-4">
                       <div className="text-xs text-gray-500 mb-1">{language === 'es' ? 'Costo Total' : 'Total Cost'}</div>
-                      <div className="text-xl font-bold text-orange-400">${estimatedCost.toFixed(2)} USD</div>
+                      <div className="text-xl font-bold text-emerald-400">${estimatedCost.toFixed(2)} USD</div>
                     </div>
                     
                     {/* Available Balance */}
@@ -796,7 +953,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
                     {/* Balance After Processing */}
                     <div className="bg-black/50 border border-gray-800 rounded-lg p-4">
                       <div className="text-xs text-gray-500 mb-1">{language === 'es' ? 'Saldo Después' : 'Balance After'}</div>
-                      <div className={`text-xl font-bold ${user.balance >= estimatedCost ? 'text-green-400' : 'text-red-400'}`}>
+                      <div className={`text-xl font-bold ${user.balance >= estimatedCost ? 'text-green-400' : 'text-blue-400'}`}>
                         ${Math.max(0, user.balance - estimatedCost).toFixed(2)} USD
                       </div>
                     </div>
@@ -812,9 +969,9 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
                       <div 
                         className={`h-full transition-all duration-500 ${
                           insufficientFunds 
-                            ? 'bg-gradient-to-r from-red-600 to-red-400' 
+                            ? 'bg-gradient-to-r from-blue-600 to-blue-400' 
                             : estimatedCost / user.balance > 0.8
-                            ? 'bg-gradient-to-r from-orange-600 to-orange-400'
+                            ? 'bg-gradient-to-r from-emerald-600 to-emerald-400'
                             : 'bg-gradient-to-r from-teal-600 to-teal-400'
                         }`}
                         style={{ width: `${Math.min(100, (estimatedCost / user.balance) * 100)}%` }}
@@ -826,13 +983,13 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
                   {statusMessage ? (
                     <div className={`rounded-lg p-4 flex items-start gap-3 ${
                       statusMessage.type === 'success' ? 'bg-teal-900/20 border border-teal-800/30' :
-                      statusMessage.type === 'error' ? 'bg-red-900/20 border border-red-800/30' :
-                      statusMessage.type === 'warning' ? 'bg-orange-900/20 border border-orange-800/30' :
+                      statusMessage.type === 'error' ? 'bg-blue-900/20 border border-blue-800/30' :
+                      statusMessage.type === 'warning' ? 'bg-emerald-900/20 border border-emerald-800/30' :
                       'bg-blue-900/20 border border-blue-800/30'
                     }`}>
                       {statusMessage.type === 'success' && <CheckCircle className="w-5 h-5 text-teal-400 flex-shrink-0 mt-0.5" />}
-                      {statusMessage.type === 'error' && <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />}
-                      {statusMessage.type === 'warning' && <AlertTriangle className="w-5 h-5 text-orange-400 flex-shrink-0 mt-0.5" />}
+                      {statusMessage.type === 'error' && <AlertTriangle className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />}
+                      {statusMessage.type === 'warning' && <AlertTriangle className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />}
                       <div className="flex-1">
                         <div className={`text-sm ${
                           statusMessage.type === 'success' ? 'text-gray-300' :
@@ -855,10 +1012,10 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
                       </div>
                     </div>
                   ) : insufficientFunds ? (
-                    <div className="bg-red-900/20 border border-red-800/30 rounded-lg p-4 flex items-start gap-3">
-                      <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                    <div className="bg-blue-900/20 border border-blue-800/30 rounded-lg p-4 flex items-start gap-3">
+                      <AlertTriangle className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
                       <div>
-                        <div className="font-semibold text-red-400 mb-1">
+                        <div className="font-semibold text-blue-400 mb-1">
                           {language === 'es' ? 'Fondos Insuficientes' : 'Insufficient Funds'}
                         </div>
                         <div className="text-sm text-gray-400">
@@ -868,7 +1025,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
                         </div>
                         <button 
                           onClick={() => setActiveTab('pricing')}
-                          className="mt-3 text-sm px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg transition"
+                          className="mt-3 text-sm px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition"
                         >
                           {language === 'es' ? 'Agregar Fondos' : 'Add Funds'}
                         </button>
@@ -904,15 +1061,36 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
 
               {/* Required Fields Info */}
               <div className="mt-6 p-4 bg-teal-900/20 border border-teal-800/30 rounded-lg">
-                <div className="text-sm font-semibold text-teal-400 mb-2">{language === 'es' ? 'Campos de Datos Requeridos:' : 'Required Data Fields:'}</div>
-                <div className="text-xs text-gray-400 grid grid-cols-2 md:grid-cols-4 gap-2">
-                  <div>• monto</div>
-                  <div>• fecha</div>
-                  <div>• tipo_operacion</div>
-                  <div>• sector_actividad</div>
-                  <div>• frecuencia_mensual</div>
-                  <div>• cliente_id</div>
+                <div className="text-sm font-semibold text-teal-400 mb-2">
+                  {detectedColumns.length > 0 
+                    ? (language === 'es' ? 'Columnas Detectadas en tu Excel:' : 'Columns Detected in your Excel:')
+                    : (language === 'es' ? 'Campos de Datos Requeridos:' : 'Required Data Fields:')}
                 </div>
+                <div className="text-xs text-gray-400 grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {detectedColumns.length > 0 ? (
+                    detectedColumns.map((col, idx) => (
+                      <div key={idx} className="flex items-center gap-1">
+                        <span className="text-green-400">✓</span>
+                        <span>{col}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <>
+                      <div>• monto</div>
+                      <div>• fecha</div>
+                      <div>• tipo_operacion</div>
+                      <div>• sector_actividad</div>
+                      <div>• frecuencia_mensual</div>
+                      <div>• cliente_id</div>
+                    </>
+                  )}
+                </div>
+                {detectedColumns.length > 0 && (
+                  <div className="mt-3 text-xs text-green-400 flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>{language === 'es' ? `${detectedColumns.length} columnas detectadas correctamente` : `${detectedColumns.length} columns detected successfully`}</span>
+                  </div>
+                )}
                 <button className="mt-3 text-xs text-teal-400 hover:text-teal-300 underline">
                   {language === 'es' ? 'Descargar Plantilla de Ejemplo' : 'Download Sample Template'}
                 </button>
@@ -929,7 +1107,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
                   <div className="text-xs text-gray-500 mt-1">{language === 'es' ? 'Precio base' : 'Base price'}</div>
                 </div>
                 <div>
-                  <div className="text-orange-400 mb-1">{language === 'es' ? '2,001 - 5,000 transacciones' : '2,001 - 5,000 transactions'}</div>
+                  <div className="text-emrald-400 mb-1">{language === 'es' ? '2,001 - 5,000 transacciones' : '2,001 - 5,000 transactions'}</div>
                   <div className="text-2xl font-bold text-white">$0.75<span className="text-sm text-gray-500">/txn</span></div>
                   <div className="text-xs text-gray-500 mt-1">{language === 'es' ? 'Descuento 25%' : '25% discount'}</div>
                 </div>
@@ -958,16 +1136,16 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
                 <div className="text-3xl font-black text-white">{mockResults.resumen.total_transacciones.toLocaleString()}</div>
               </div>
               
-              <div className="bg-gradient-to-br from-red-900/30 to-black border border-red-800/50 rounded-xl p-6">
+              <div className="bg-gradient-to-br from-blue-900/30 to-black border border-blue-800/50 rounded-xl p-6">
                 <div className="text-sm text-gray-400 mb-2">{language === 'es' ? 'Alto Riesgo' : 'High Risk'}</div>
-                <div className="text-3xl font-black text-red-400">{mockResults.resumen.preocupante}</div>
-                <div className="text-xs text-red-400 mt-1">{language === 'es' ? 'Requiere acción inmediata' : 'Requires immediate action'}</div>
+                <div className="text-3xl font-black text-blue-400">{mockResults.resumen.preocupante}</div>
+                <div className="text-xs text-blue-400 mt-1">{language === 'es' ? 'Requiere acción inmediata' : 'Requires immediate action'}</div>
               </div>
 
-              <div className="bg-gradient-to-br from-orange-900/30 to-black border border-orange-800/50 rounded-xl p-6">
+              <div className="bg-gradient-to-br from-emerald-900/30 to-black border border-emerald-800/50 rounded-xl p-6">
                 <div className="text-sm text-gray-400 mb-2">{language === 'es' ? 'Inusual' : 'Unusual'}</div>
-                <div className="text-3xl font-black text-orange-400">{mockResults.resumen.inusual}</div>
-                <div className="text-xs text-orange-400 mt-1">{language === 'es' ? 'Revisión recomendada' : 'Review recommended'}</div>
+                <div className="text-3xl font-black text-emerald-400">{mockResults.resumen.inusual}</div>
+                <div className="text-xs text-emerald-400 mt-1">{language === 'es' ? 'Revisión recomendada' : 'Review recommended'}</div>
               </div>
 
               <div className="bg-gradient-to-br from-teal-900/30 to-black border border-teal-800/50 rounded-xl p-6">
@@ -983,21 +1161,21 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
               <div className="space-y-4">
                 <div>
                   <div className="flex justify-between mb-2">
-                    <span className="text-sm font-semibold text-red-400">{language === 'es' ? 'Alto Riesgo (Preocupante)' : 'High Risk (Preocupante)'}</span>
+                    <span className="text-sm font-semibold text-blue-400">{language === 'es' ? 'Alto Riesgo (Preocupante)' : 'High Risk (Preocupante)'}</span>
                     <span className="text-sm font-bold">{mockResults.resumen.preocupante} {language === 'es' ? 'transacciones' : 'transactions'}</span>
                   </div>
                   <div className="h-3 bg-black rounded-full overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-red-600 to-red-500" style={{width: `${(mockResults.resumen.preocupante / mockResults.resumen.total_transacciones) * 100}%`}}></div>
+                    <div className="h-full bg-gradient-to-r from-blue-600 to-blue-500" style={{width: `${(mockResults.resumen.preocupante / mockResults.resumen.total_transacciones) * 100}%`}}></div>
                   </div>
                 </div>
 
                 <div>
                   <div className="flex justify-between mb-2">
-                    <span className="text-sm font-semibold text-orange-400">{language === 'es' ? 'Inusual' : 'Unusual (Inusual)'}</span>
+                    <span className="text-sm font-semibold text-emerald-400">{language === 'es' ? 'Inusual' : 'Unusual (Inusual)'}</span>
                     <span className="text-sm font-bold">{mockResults.resumen.inusual} {language === 'es' ? 'transacciones' : 'transactions'}</span>
                   </div>
                   <div className="h-3 bg-black rounded-full overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-orange-600 to-orange-500" style={{width: `${(mockResults.resumen.inusual / mockResults.resumen.total_transacciones) * 100}%`}}></div>
+                    <div className="h-full bg-gradient-to-r from-emerald-600 to-emerald-500" style={{width: `${(mockResults.resumen.inusual / mockResults.resumen.total_transacciones) * 100}%`}}></div>
                   </div>
                 </div>
 
@@ -1019,7 +1197,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
                 <Download className="w-5 h-5" />
                 {language === 'es' ? 'Descargar Reporte Completo (PDF)' : 'Download Full Report (PDF)'}
               </button>
-              <button className="flex-1 py-4 bg-orange-600 rounded-lg font-semibold hover:bg-orange-700 transition flex items-center justify-center gap-2">
+              <button className="flex-1 py-4 bg-emerald-600 rounded-lg font-semibold hover:bg-emerald-700 transition flex items-center justify-center gap-2">
                 <FileText className="w-5 h-5" />
                 {language === 'es' ? 'Generar XML para UIF' : 'Generate XML for UIF'}
               </button>
@@ -1092,7 +1270,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
                     selectedAmount === 500 && !customAmount ? 'border-teal-500 ring-2 ring-teal-500/50' : 'border-gray-700 hover:border-teal-500'
                   }`}
                 >
-                  <div className="text-3xl font-black mb-2 bg-gradient-to-r from-red-500 to-teal-400 bg-clip-text text-transparent">
+                  <div className="text-3xl font-black mb-2 bg-gradient-to-r from-blue-500 to-teal-400 bg-clip-text text-transparent">
                     $500
                   </div>
                   <div className="text-sm text-teal-400 font-semibold">
@@ -1169,7 +1347,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
                       ? `Integración de pago en proceso. Monto seleccionado: $${selectedAmount.toFixed(2)}. Por favor contacta a soporte para agregar fondos.`
                       : `Payment integration in progress. Selected amount: $${selectedAmount.toFixed(2)}. Please contact support to add funds.`);
                   }}
-                  className="w-full py-4 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-bold hover:from-red-700 hover:to-orange-600 transition flex items-center justify-center gap-3"
+                  className="w-full py-4 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-lg font-bold hover:from-blue-700 hover:to-emerald-600 transition flex items-center justify-center gap-3"
                 >
                   <CreditCard className="w-5 h-5" />
                   {language === 'es' 
@@ -1230,7 +1408,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
                             Created: {new Date(key.created_at).toLocaleDateString()} • {key.requests_count} requests
                           </div>
                         </div>
-                        <div className={`px-3 py-1 rounded text-xs font-bold ${key.active ? 'bg-teal-900/50 text-teal-400' : 'bg-red-900/50 text-red-400'}`}>
+                        <div className={`px-3 py-1 rounded text-xs font-bold ${key.active ? 'bg-teal-900/50 text-teal-400' : 'bg-blue-900/50 text-blue-400'}`}>
                           {key.active ? 'Active' : 'Inactive'}
                         </div>
                       </div>
@@ -1318,7 +1496,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
       {isLoading && (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="text-center">
-            <div className="w-20 h-20 border-4 border-red-600 border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
+            <div className="w-20 h-20 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
             <div className="text-2xl font-bold mb-2">Processing Analysis...</div>
             <div className="text-gray-400">Running 3-layer ML models</div>
           </div>

@@ -1,0 +1,39 @@
+{
+  "accuracy_sin_guardrails": 0.9973354649613643,
+  "accuracy_con_guardrails": 0.9977351452171596,
+  "f1_weighted_sin": 0.9973368737514187,
+  "f1_weighted_con": 0.9977365169493985,
+  "mejora_accuracy": 0.0003996802557952872,
+  "guardrails_info": {
+    "total_aplicados": 2304,
+    "cambios_realizados": 3,
+    "por_acumulacion": 2304,
+    "por_efectivo": 40
+  },
+  "drift_metrics": {
+    "drift_val_chi2": 4.585307451694883,
+    "drift_val_pvalue": 0.10099808468379785,
+    "drift_test_chi2": 3.3910536079284084,
+    "drift_test_pvalue": 0.183502533698019
+  },
+  "confusion_matrix": [
+    [
+      933,
+      2,
+      0
+    ],
+    [
+      0,
+      4252,
+      15
+    ],
+    [
+      0,
+      0,
+      2304
+    ]
+  ],
+  "shap_top_features": null,
+  "version": "2.0",
+  "trained_date": "2025-11-03T15:23:07.902374"
+}

@@ -1,0 +1,286 @@
+{
+  "isolation_forest": {
+    "contamination": 0.04,
+    "n_estimators": 300,
+    "outliers_detected": 6000,
+    "outliers_pct": 0.04
+  },
+  "kmeans": {
+    "best_k": 6,
+    "silhouette_scores": [
+      {
+        "k": 6,
+        "silhouette": 0.16293076333534254,
+        "dbi": 1.5512880596959058,
+        "score": 0.007801957365751955
+      },
+      {
+        "k": 7,
+        "silhouette": 0.14450541154568936,
+        "dbi": 1.6440678365248462,
+        "score": -0.019901372106795268
+      },
+      {
+        "k": 8,
+        "silhouette": 0.15867417541919085,
+        "dbi": 1.5780135517947371,
+        "score": 0.0008728202397171314
+      },
+      {
+        "k": 9,
+        "silhouette": 0.1581099769597295,
+        "dbi": 1.5972390580164562,
+        "score": -0.0016139288419161346
+      },
+      {
+        "k": 10,
+        "silhouette": 0.14647652853835938,
+        "dbi": 1.732407034867487,
+        "score": -0.026764174948389313
+      },
+      {
+        "k": 11,
+        "silhouette": 0.1546431376904956,
+        "dbi": 1.5133713679915084,
+        "score": 0.0033060008913447514
+      },
+      {
+        "k": 12,
+        "silhouette": 0.1332104099443035,
+        "dbi": 1.5393930261934468,
+        "score": -0.02072889267504119
+      },
+      {
+        "k": 13,
+        "silhouette": 0.16014691328571923,
+        "dbi": 1.6589456635727255,
+        "score": -0.005747653071553338
+      },
+      {
+        "k": 14,
+        "silhouette": 0.1421096601478423,
+        "dbi": 1.6238280419635107,
+        "score": -0.0202731440485088
+      }
+    ]
+  },
+  "dbscan": {
+    "eps": 1.3304119399207208,
+    "n_clusters": 180,
+    "n_noise": 10515,
+    "noise_pct": 0.0701
+  },
+  "cluster_analysis": [
+    {
+      "clase": "relevante",
+      "cluster_id": 1,
+      "size": 13271,
+      "monto_promedio": 17598.572269610428,
+      "monto_std": 15038.310123715062,
+      "frecuencia_promedio": 4.016954261170974,
+      "pct_efectivo": 0.2751111446010097,
+      "pct_internacional": 0.0,
+      "sectores_principales": {
+        "inmobiliaria": 4444,
+        "joyeria_metales": 4424,
+        "automotriz": 4403
+      }
+    },
+    {
+      "clase": "relevante",
+      "cluster_id": 2,
+      "size": 5540,
+      "monto_promedio": 17659.724637184117,
+      "monto_std": 14976.729990736794,
+      "frecuencia_promedio": 4.3373646209386285,
+      "pct_efectivo": 0.2792418772563177,
+      "pct_internacional": 0.0,
+      "sectores_principales": {
+        "joyeria_metales": 1923,
+        "automotriz": 1817,
+        "inmobiliaria": 1800
+      }
+    },
+    {
+      "clase": "relevante",
+      "cluster_id": 3,
+      "size": 68,
+      "monto_promedio": 17905.755735294115,
+      "monto_std": 16018.468688149278,
+      "frecuencia_promedio": 6.102941176470588,
+      "pct_efectivo": 0.3235294117647059,
+      "pct_internacional": 0.0,
+      "sectores_principales": {
+        "inmobiliaria": 26,
+        "automotriz": 21,
+        "joyeria_metales": 21
+      }
+    },
+    {
+      "clase": "relevante",
+      "cluster_id": 5,
+      "size": 1179,
+      "monto_promedio": 18251.615572519084,
+      "monto_std": 15220.45368659574,
+      "frecuencia_promedio": 10.853265479219678,
+      "pct_efectivo": 0.2765055131467345,
+      "pct_internacional": 0.0,
+      "sectores_principales": {
+        "automotriz": 404,
+        "joyeria_metales": 400,
+        "inmobiliaria": 375
+      }
+    },
+    {
+      "clase": "inusual",
+      "cluster_id": 1,
+      "size": 42855,
+      "monto_promedio": 71145.3890458523,
+      "monto_std": 60151.69518073497,
+      "frecuencia_promedio": 4.413954031034885,
+      "pct_efectivo": 0.25343600513359,
+      "pct_internacional": 0.12404620231011551,
+      "sectores_principales": {
+        "traslado_valores": 13432,
+        "inmobiliaria": 9239,
+        "automotriz": 9131
+      }
+    },
+    {
+      "clase": "inusual",
+      "cluster_id": 2,
+      "size": 20672,
+      "monto_promedio": 69844.0317071401,
+      "monto_std": 59272.4435107421,
+      "frecuencia_promedio": 5.098200464396285,
+      "pct_efectivo": 0.2526122291021672,
+      "pct_internacional": 0.12287151702786378,
+      "sectores_principales": {
+        "traslado_valores": 6224,
+        "automotriz": 4602,
+        "inmobiliaria": 4594
+      }
+    },
+    {
+      "clase": "inusual",
+      "cluster_id": 3,
+      "size": 556,
+      "monto_promedio": 61192.24120503597,
+      "monto_std": 50782.646783632445,
+      "frecuencia_promedio": 7.66546762589928,
+      "pct_efectivo": 0.25,
+      "pct_internacional": 0.11870503597122302,
+      "sectores_principales": {
+        "inmobiliaria": 169,
+        "traslado_valores": 132,
+        "automotriz": 130
+      }
+    },
+    {
+      "clase": "inusual",
+      "cluster_id": 5,
+      "size": 17917,
+      "monto_promedio": 59141.838633141706,
+      "monto_std": 53609.743445926804,
+      "frecuencia_promedio": 10.009934698889323,
+      "pct_efectivo": 0.2571859128202266,
+      "pct_internacional": 0.11648155383155662,
+      "sectores_principales": {
+        "inmobiliaria": 5164,
+        "automotriz": 5008,
+        "traslado_valores": 3966
+      }
+    },
+    {
+      "clase": "preocupante",
+      "cluster_id": 0,
+      "size": 6037,
+      "monto_promedio": 3296457.0720208716,
+      "monto_std": 1000667.1644319057,
+      "frecuencia_promedio": 6.222130197117774,
+      "pct_efectivo": 0.0998840483683949,
+      "pct_internacional": 0.12605598807354645,
+      "sectores_principales": {
+        "automotriz": 1262,
+        "activos_virtuales": 1207,
+        "joyeria_metales": 1200
+      }
+    },
+    {
+      "clase": "preocupante",
+      "cluster_id": 1,
+      "size": 13990,
+      "monto_promedio": 153052.0181150822,
+      "monto_std": 319006.2115517033,
+      "frecuencia_promedio": 4.46361686919228,
+      "pct_efectivo": 0.24496068620443173,
+      "pct_internacional": 0.09177984274481772,
+      "sectores_principales": {
+        "activos_virtuales": 11744,
+        "traslado_valores": 790,
+        "joyeria_metales": 722
+      }
+    },
+    {
+      "clase": "preocupante",
+      "cluster_id": 2,
+      "size": 7418,
+      "monto_promedio": 149172.66665004045,
+      "monto_std": 312789.0014023275,
+      "frecuencia_promedio": 5.286734968994338,
+      "pct_efectivo": 0.24750606632515504,
+      "pct_internacional": 0.09503909409544352,
+      "sectores_principales": {
+        "activos_virtuales": 5811,
+        "traslado_valores": 581,
+        "joyeria_metales": 525
+      }
+    },
+    {
+      "clase": "preocupante",
+      "cluster_id": 3,
+      "size": 450,
+      "monto_promedio": 366841.2357111111,
+      "monto_std": 929291.5557808921,
+      "frecuencia_promedio": 9.275555555555556,
+      "pct_efectivo": 0.25333333333333335,
+      "pct_internacional": 0.09555555555555556,
+      "sectores_principales": {
+        "activos_virtuales": 214,
+        "joyeria_metales": 76,
+        "traslado_valores": 75
+      }
+    },
+    {
+      "clase": "preocupante",
+      "cluster_id": 4,
+      "size": 9127,
+      "monto_promedio": 80638.71865235017,
+      "monto_std": 170058.1890437777,
+      "frecuencia_promedio": 7.86238632628465,
+      "pct_efectivo": 0.2571491180015339,
+      "pct_internacional": 0.1005806946422702,
+      "sectores_principales": {
+        "inmobiliaria": 1907,
+        "traslado_valores": 1828,
+        "automotriz": 1808
+      }
+    },
+    {
+      "clase": "preocupante",
+      "cluster_id": 5,
+      "size": 10920,
+      "monto_promedio": 89778.3814423077,
+      "monto_std": 161742.82669966223,
+      "frecuencia_promedio": 10.661996336996337,
+      "pct_efectivo": 0.25054945054945055,
+      "pct_internacional": 0.10412087912087913,
+      "sectores_principales": {
+        "activos_virtuales": 5828,
+        "joyeria_metales": 2024,
+        "traslado_valores": 2009
+      }
+    }
+  ],
+  "version": "2.0"
+}

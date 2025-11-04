@@ -212,5 +212,15 @@ export default async function AuthCallback({
   }
 
   // SUCCESS: Redirect directly to dashboard (no intermediate screen)
+  // Set session token cookie for API authentication
+  if (sessionData?.session?.access_token) {
+    cookieStore.set('sb-access-token', sessionData.session.access_token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 60 * 60, // 1 hour
+    });
+  }
   redirect('/dashboard?from=auth');
 }

@@ -48,6 +48,7 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [userExists, setUserExists] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -109,7 +110,28 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
       });
 
       if (signInError) {
-        // Check if user doesn't exist (only in login mode)
+        // Si el usuario ya existe y se intenta signup, mostrar pantalla amigable y enviar Magic Link de login
+        if (currentMode === 'signup' && (
+          signInError.message.includes('already registered') ||
+          signInError.message.includes('already exists') ||
+          signInError.message.includes('Signups not allowed')
+        )) {
+          setUserExists(true);
+          setSuccess(false);
+          setLoading(false);
+          // Enviar Magic Link de login
+          await supabase.auth.signInWithOtp({
+            email,
+            options: {
+              emailRedirectTo: typeof window !== 'undefined' 
+                ? `${window.location.origin}/auth/redirect`
+                : 'https://silver-funicular-wp59w7jgxvvf9j47-3000.app.github.dev/auth/redirect',
+              shouldCreateUser: false,
+            },
+          });
+          return;
+        }
+        // Check if user doesn't exist (solo login)
         if (currentMode === 'login' && (
           signInError.message.includes('User not found') || 
           signInError.message.includes('Signups not allowed') ||
@@ -157,34 +179,26 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
   };
 
   return (
-    <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-50 p-6" onClick={onClose}>
-      <div className="bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-2xl p-8 max-w-md w-full shadow-2xl" onClick={e => e.stopPropagation()}>
-        <button onClick={onClose} className="absolute top-6 right-8 text-gray-500 hover:text-white text-2xl">×</button>
+    <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-6" onClick={onClose}>
+      <div className="bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-2xl max-w-md w-full shadow-2xl relative flex flex-col" style={{ minHeight: '400px', maxHeight: '95vh', overflowY: 'auto', padding: '2rem 1rem' }} onClick={e => e.stopPropagation()}>
+        <button onClick={onClose} className="absolute top-4 right-6 text-gray-500 hover:text-white text-2xl z-10">×</button>
         <TarantulaHawkLogo />
-        {currentMode === 'signup' ? (
-          <>
-            <h2 className="text-2xl font-black mb-2 text-center bg-gradient-to-r from-red-500 to-teal-400 bg-clip-text text-transparent">
-              Regístrate y Obtén $500 USD Gratis
-            </h2>
-            <p className="text-gray-400 text-center mb-6">
-              Crea tu cuenta y recibe $500 USD en créditos virtuales para probar la plataforma de AML. Sin tarjeta de crédito.
-            </p>
-          </>
-        ) : (
-          <>
-            <h2 className="text-2xl font-black mb-4 text-center bg-gradient-to-r from-red-500 to-teal-400 bg-clip-text text-transparent">
-              TarantulaHawk
-            </h2>
-            {/* Login mode: we intentionally remove the descriptive subtitle for a cleaner look */}
-          </>
-        )}
-        {success ? (
-          <div className="text-center py-12">
-            <div className="text-green-500 text-5xl mb-4">�</div>
-              <h2 className="text-2xl font-bold mb-2 text-green-400">¡Magic Link Enviado!</h2>
-              <p className="text-gray-400 mb-4">Hemos enviado un enlace seguro a:</p>
+        {userExists ? (
+          <div className="text-center py-8 flex flex-col justify-center items-center h-full">
+            <div className="text-yellow-400 text-5xl mb-4">⚠️</div>
+            <h2 className="text-2xl font-bold mb-2 text-yellow-400">Usuario ya registrado</h2>
+            <p className="text-gray-400 mb-4">Este correo ya tiene una cuenta. Hemos enviado un Magic Link para iniciar sesión sin contraseña.</p>
             <p className="text-white font-semibold mb-4 bg-gray-800 rounded-lg p-3">{email}</p>
-            
+            <button onClick={onClose} className="px-6 py-3 bg-gradient-to-r from-teal-500 to-orange-500 rounded-lg font-semibold hover:from-teal-600 hover:to-orange-600 transition w-full mt-4">
+              Entendido
+            </button>
+          </div>
+        ) : success ? (
+          <div className="text-center py-8 flex flex-col justify-center items-center h-full">
+            <div className="text-green-500 text-5xl mb-4">✔️</div>
+            <h2 className="text-2xl font-bold mb-2 text-green-400">¡Magic Link Enviado!</h2>
+            <p className="text-gray-400 mb-4">Hemos enviado un enlace seguro a:</p>
+            <p className="text-white font-semibold mb-4 bg-gray-800 rounded-lg p-3">{email}</p>
             {currentMode === 'signup' && (
               <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 mb-4">
                 <h3 className="text-green-400 font-semibold mb-2">🎁 $500 USD en Créditos Virtuales</h3>
@@ -196,7 +210,6 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
                 </ul>
               </div>
             )}
-            
             <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-6">
               <h3 className="text-blue-400 font-semibold mb-2">🛡️ Seguridad Mejorada</h3>
               <ul className="text-gray-400 text-sm text-left space-y-1">
@@ -206,14 +219,11 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
                 <li>✅ Acceso seguro en segundos</li>
               </ul>
             </div>
-            
             <p className="text-gray-500 text-sm mb-6">
-              <strong>Paso siguiente:</strong> Revisa tu bandeja de entrada y haz clic en el Magic Link.
-              <br />
+              <strong>Paso siguiente:</strong> Revisa tu bandeja de entrada y haz clic en el Magic Link.<br />
               ⏱️ <strong>El enlace expira en 10 minutos</strong> y solo puede usarse una vez por seguridad.
             </p>
-            
-            <button onClick={onClose} className="px-6 py-3 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-semibold hover:from-red-700 hover:to-orange-600 transition w-full">
+            <button onClick={onClose} className="px-6 py-3 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-semibold hover:from-red-700 hover:to-orange-600 transition w-full mt-4">
               Entendido
             </button>
           </div>

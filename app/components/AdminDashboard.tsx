@@ -99,7 +99,7 @@ export default function AdminDashboard() {
     <div className="min-h-screen bg-black text-white p-6">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-red-500 to-orange-500 bg-clip-text text-transparent">
+        <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-blue-500 to-emerald-500 bg-clip-text text-transparent">
           TarantulaHawk Admin
         </h1>
         <p className="text-gray-400">Panel de administración de clientes y transacciones</p>
@@ -125,7 +125,7 @@ export default function AdminDashboard() {
 
         <div className="bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-xl p-6">
           <div className="flex items-center justify-between mb-2">
-            <Activity className="w-8 h-8 text-orange-400" />
+            <Activity className="w-8 h-8 text-emerald-400" />
             <span className="text-3xl font-bold">{stats.totalTransactions.toLocaleString()}</span>
           </div>
           <p className="text-gray-400 text-sm">Transacciones Procesadas</p>
@@ -148,7 +148,7 @@ export default function AdminDashboard() {
             onClick={() => setActiveTab(tab)}
             className={`px-6 py-3 font-semibold transition ${
               activeTab === tab
-                ? 'text-orange-500 border-b-2 border-orange-500'
+                ? 'text-emerald-500 border-b-2 border-emerald-500'
                 : 'text-gray-400 hover:text-white'
             }`}
           >
@@ -172,13 +172,13 @@ export default function AdminDashboard() {
                 placeholder="Buscar por email, nombre o empresa..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 bg-gray-900 border border-gray-800 rounded-lg focus:outline-none focus:border-orange-500"
+                className="w-full pl-10 pr-4 py-3 bg-gray-900 border border-gray-800 rounded-lg focus:outline-none focus:border-emerald-500"
               />
             </div>
             <select
               value={filterTier}
               onChange={(e) => setFilterTier(e.target.value)}
-              className="px-4 py-3 bg-gray-900 border border-gray-800 rounded-lg focus:outline-none focus:border-orange-500"
+              className="px-4 py-3 bg-gray-900 border border-gray-800 rounded-lg focus:outline-none focus:border-emerald-500"
             >
               <option value="all">Todos los tiers</option>
               <option value="free">Free</option>
@@ -267,7 +267,7 @@ export default function AdminDashboard() {
                     <td className="p-4 text-center">
                       <button
                         onClick={() => setSelectedUser(user)}
-                        className="px-3 py-1 bg-orange-600 hover:bg-orange-700 rounded text-sm transition"
+                        className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 rounded text-sm transition"
                       >
                         Ver Detalle
                       </button>
@@ -285,7 +285,7 @@ export default function AdminDashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-xl p-6">
             <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-              <TrendingUp className="w-6 h-6 text-orange-500" />
+              <TrendingUp className="w-6 h-6 text-emerald-500" />
               Ingresos por Mes
             </h3>
             <div className="text-gray-400">Gráfico de ingresos mensuales (implementar con Recharts/Chart.js)</div>
@@ -305,7 +305,7 @@ export default function AdminDashboard() {
                     </div>
                     <div className="w-full bg-gray-800 rounded-full h-2">
                       <div
-                        className="bg-gradient-to-r from-orange-500 to-red-500 h-2 rounded-full"
+                        className="bg-gradient-to-r from-emerald-500 to-blue-500 h-2 rounded-full"
                         style={{ width: `${percentage}%` }}
                       />
                     </div>

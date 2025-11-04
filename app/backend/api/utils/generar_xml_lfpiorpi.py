@@ -16,7 +16,7 @@ import json
 def generar_xml_incompleto(df: pd.DataFrame, 
                            rfc_emisor: str = "XAXX010101000",
                            razon_social: str = "Entidad Ejemplo S.A. de C.V.",
-                           out_dir: str = "backend/outputs/xml_avisos") -> Path:
+                           out_dir: str = "app/backend/outputs/xml") -> Path:
     """
     STAGE 1: Generate incomplete XML (only cliente_id)
     
