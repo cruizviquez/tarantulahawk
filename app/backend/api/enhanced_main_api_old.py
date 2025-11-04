@@ -23,9 +23,6 @@ import hmac
 import time
 from pathlib import Path
 
-from dotenv import load_dotenv
-load_dotenv()  # Cargar .env explícitamente
-
 # Security imports
 import bcrypt
 from jose import jwt, JWTError
@@ -33,7 +30,6 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 import xml.etree.ElementTree as ET
-import httpx  # Para verificar con Supabase API
 
 # Use shared pricing utility that reads config/pricing.json
 try:
@@ -53,31 +49,6 @@ except Exception:
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production-min-32-chars")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
-
-# Supabase Configuration
-SUPABASE_URL = os.getenv("NEXT_PUBLIC_SUPABASE_URL", "")
-SUPABASE_JWT_SECRET = os.getenv("SUPABASE_JWT_SECRET", "")
-SUPABASE_ANON_KEY = os.getenv("NEXT_PUBLIC_SUPABASE_ANON_KEY", "")
-SUPABASE_SERVICE_ROLE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
-
-# Initialize Supabase Admin Client (for billing operations)
-supabase_admin = None
-try:
-    from supabase import create_client, Client
-    if SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY:
-        supabase_admin = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
-        print(f"✅ Supabase Admin Client inicializado")
-    else:
-        print("⚠️  WARNING: Supabase Service Role Key no configurado - billing deshabilitado")
-except ImportError:
-    print("⚠️  WARNING: supabase-py no instalado - ejecuta: pip install supabase")
-
-if not SUPABASE_URL:
-    print("⚠️  WARNING: SUPABASE_URL not configured")
-if not SUPABASE_JWT_SECRET:
-    print("⚠️  WARNING: SUPABASE_JWT_SECRET not configured")
-else:
-    print(f"✅ Supabase configurado: {SUPABASE_URL[:30]}...")
 
 # Rate Limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -99,10 +70,10 @@ security = HTTPBearer()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:3000",                    # ✅ Local development
-        "https://tarantulahawk.ai",                 # ✅ Production (si lo despliegas)
-        "https://*.app.github.dev",                 # ✅ Codespaces (por si vuelves a usar)
-        "http://192.168.4.40:3000",                 # ✅ Tu red local (vi este IP en el output de npm)
+        "http://localhost:3000", 
+        "https://tarantulahawk.ai",
+        "https://silver-funicular-wp59w7jgxvvf9j47-3000.app.github.dev",  # Current codespace frontend
+        "https://silver-funicular-wp59w7jgxvvf9j47-8000.app.github.dev",  # Current codespace backend
     ],
     allow_credentials=True,
     allow_methods=["*"],
@@ -249,235 +220,6 @@ class PagoRequest(BaseModel):
 # AUTHENTICATION & AUTHORIZATION
 # ===================================================================
 
-
-# ===================================================================
-# SUPABASE BILLING FUNCTIONS
-# ===================================================================
-
-def obtener_billing_usuario(user_id: str) -> Optional[Dict[str, Any]]:
-    """
-    Obtiene información de billing del usuario desde Supabase
-    
-    Returns:
-        Dict con: balance, monthly_quota, quota_used, quota_reset_date, is_first_month
-    """
-    if not supabase_admin:
-        print("⚠️  Supabase Admin no disponible")
-        return None
-    
-    try:
-        response = supabase_admin.table("user_billing").select("*").eq("user_id", user_id).execute()
-        
-        if response.data and len(response.data) > 0:
-            billing = response.data[0]
-            
-            # Check si necesita reset mensual
-            reset_date = datetime.fromisoformat(billing["quota_reset_date"].replace('Z', '+00:00'))
-            if datetime.now(reset_date.tzinfo) > reset_date:
-                # Reset quota mensual
-                if not billing["is_first_month"]:
-                    supabase_admin.table("user_billing").update({
-                        "balance": 0.0,
-                        "quota_used": 0,
-                        "quota_reset_date": (datetime.now() + timedelta(days=30)).isoformat()
-                    }).eq("user_id", user_id).execute()
-                    
-                    billing["balance"] = 0.0
-                    billing["quota_used"] = 0
-                else:
-                    # Primer mes termina, marcar como no-primer-mes y reset
-                    supabase_admin.table("user_billing").update({
-                        "is_first_month": False,
-                        "balance": 0.0,
-                        "quota_used": 0,
-                        "quota_reset_date": (datetime.now() + timedelta(days=30)).isoformat()
-                    }).eq("user_id", user_id).execute()
-                    
-                    billing["is_first_month"] = False
-                    billing["balance"] = 0.0
-                    billing["quota_used"] = 0
-            
-            return billing
-        else:
-            # Usuario no tiene billing, crear con $500 gratis (primer mes)
-            new_billing = {
-                "user_id": user_id,
-                "balance": 500.0,
-                "monthly_quota": 500,
-                "quota_used": 0,
-                "quota_reset_date": (datetime.now() + timedelta(days=30)).isoformat(),
-                "is_first_month": True,
-                "plan_type": "free_trial"
-            }
-            supabase_admin.table("user_billing").insert(new_billing).execute()
-            return new_billing
-            
-    except Exception as e:
-        print(f"❌ Error obteniendo billing: {e}")
-        return None
-
-
-def calcular_costo_actualizado(num_transacciones: int, billing: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Calcula el costo según el nuevo modelo de pricing
-    
-    Modelo:
-    - Primer mes: $500 USD gratis (máx 500 transacciones)
-    - 0-500 txns: $500/mes
-    - 501-1,000 txns: $500 + $1/txn extra
-    - 1,001-2,000 txns: $1,000/mes flat
-    - 2,001-3,000 txns: $2,000/mes flat
-    - 3,001-10,000 txns: $3,000/mes flat
-    - 10,001+ txns: $0.30/txn
-    
-    Returns:
-        Dict con: costo, within_quota, requires_payment
-    """
-    quota_remaining = billing["monthly_quota"] - billing["quota_used"]
-    is_first_month = billing.get("is_first_month", False)
-    
-    # Si es primer mes y aún tiene quota gratis
-    if is_first_month and quota_remaining > 0:
-        if num_transacciones <= quota_remaining:
-            return {
-                "costo": 0.0,
-                "within_quota": True,
-                "requires_payment": False,
-                "quota_remaining_after": quota_remaining - num_transacciones
-            }
-        else:
-            # Excede quota gratuita en primer mes
-            txns_over_quota = num_transacciones - quota_remaining
-            
-            # Calcular costo de transacciones extra
-            if txns_over_quota <= 500:
-                costo = 500.0
-            elif txns_over_quota <= 1000:
-                costo = 500.0 + (txns_over_quota - 500) * 1.0
-            elif txns_over_quota <= 2000:
-                costo = 1000.0
-            elif txns_over_quota <= 3000:
-                costo = 2000.0
-            elif txns_over_quota <= 10000:
-                costo = 3000.0
-            else:
-                costo = txns_over_quota * 0.30
-            
-            return {
-                "costo": costo,
-                "within_quota": False,
-                "requires_payment": costo > billing["balance"],
-                "quota_remaining_after": 0
-            }
-    else:
-        # No es primer mes o ya no tiene quota gratis
-        total_txns = billing["quota_used"] + num_transacciones
-        
-        if total_txns <= 500:
-            costo = 500.0
-        elif total_txns <= 1000:
-            costo = 500.0 + (total_txns - 500) * 1.0
-        elif total_txns <= 2000:
-            costo = 1000.0
-        elif total_txns <= 3000:
-            costo = 2000.0
-        elif total_txns <= 10000:
-            costo = 3000.0
-        else:
-            costo = total_txns * 0.30
-        
-        return {
-            "costo": costo,
-            "within_quota": False,
-            "requires_payment": costo > billing["balance"],
-            "quota_remaining_after": 0
-        }
-
-
-def cobrar_transacciones(user_id: str, num_transacciones: int, descripcion: str) -> Dict[str, Any]:
-    """
-    Cobra el análisis de transacciones al usuario y actualiza Supabase
-    
-    Returns:
-        Dict con: success, balance_after, quota_remaining, charged, error (si falla)
-    """
-    if not supabase_admin:
-        return {
-            "success": False,
-            "error": "Billing system no disponible"
-        }
-    
-    try:
-        # Obtener billing actual
-        billing = obtener_billing_usuario(user_id)
-        if not billing:
-            return {
-                "success": False,
-                "error": "No se pudo obtener información de billing"
-            }
-        
-        # Calcular costo
-        calculo = calcular_costo_actualizado(num_transacciones, billing)
-        costo = calculo["costo"]
-        
-        # Verificar si requiere pago
-        if calculo["requires_payment"]:
-            return {
-                "success": False,
-                "error": f"Saldo insuficiente. Necesitas ${costo:.2f}, tienes ${billing['balance']:.2f}",
-                "required_amount": costo,
-                "current_balance": billing["balance"]
-            }
-        
-        # Cobrar (si no está dentro de quota gratuita)
-        if not calculo["within_quota"]:
-            nuevo_balance = billing["balance"] - costo
-            nueva_quota_used = billing["quota_used"] + num_transacciones
-            
-            supabase_admin.table("user_billing").update({
-                "balance": nuevo_balance,
-                "quota_used": nueva_quota_used
-            }).eq("user_id", user_id).execute()
-            
-            # Registrar transacción
-            supabase_admin.table("billing_transactions").insert({
-                "user_id": user_id,
-                "amount": -costo,
-                "transaction_type": "charge",
-                "description": f"{descripcion} - {num_transacciones} transacciones",
-                "balance_after": nuevo_balance
-            }).execute()
-            
-            return {
-                "success": True,
-                "balance_after": nuevo_balance,
-                "quota_remaining": calculo["quota_remaining_after"],
-                "charged": costo
-            }
-        else:
-            # Dentro de quota mensual gratuita, no cobrar
-            nueva_quota_used = billing["quota_used"] + num_transacciones
-            
-            supabase_admin.table("user_billing").update({
-                "quota_used": nueva_quota_used
-            }).eq("user_id", user_id).execute()
-            
-            return {
-                "success": True,
-                "balance_after": billing["balance"],
-                "quota_remaining": calculo["quota_remaining_after"],
-                "charged": 0.0
-            }
-            
-    except Exception as e:
-        print(f"❌ Error cobrando transacciones: {e}")
-        return {
-            "success": False,
-            "error": str(e)
-        }
-
-
-
 def generar_api_key() -> tuple:
     """Generate secure API key and secret"""
     api_key = f"thk_{secrets.token_urlsafe(32)}"
@@ -604,193 +346,6 @@ def validar_usuario_portal(
     except Exception:
         # Fallback to X-User-ID for backwards compatibility (development only)
         raise HTTPException(status_code=401, detail="Authentication required")
-
-"""
-✅ FUNCIÓN PARA COPIAR Y PEGAR EN enhanced_main_api.py
-
-Instrucciones:
-1. Abrir enhanced_main_api.py
-2. Buscar la línea 348 (después de la función validar_usuario_portal)
-3. Copiar y pegar TODO este código
-4. Guardar archivo
-"""
-
-# ===================================================================
-# ✅ NUEVO: VALIDACIÓN JWT DE SUPABASE
-# ===================================================================
-
-async def verificar_token_supabase(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
-) -> Dict:
-    """
-    Valida JWT token de Supabase
-    
-    Esta función verifica que el token JWT sea válido y pertenezca a un usuario
-    autenticado en Supabase. Soporta dos métodos de validación:
-    
-    1. Verificación local con JWT Secret (más rápido, recomendado)
-    2. Verificación remota con API de Supabase (más lento, más seguro)
-    
-    Returns:
-        Dict con user_id, email, tier, balance
-        
-    Raises:
-        HTTPException 401 si el token es inválido o expirado
-    """
-    try:
-        token = credentials.credentials
-        
-        print(f"[AUTH] Verificando token: {token[:20]}...")
-        
-        # ========== MÉTODO 1: Verificación Local con JWT Secret ==========
-        if SUPABASE_JWT_SECRET:
-            try:
-                payload = jwt.decode(
-                    token,
-                    SUPABASE_JWT_SECRET,
-                    algorithms=['HS256'],
-                    audience='authenticated',
-                    options={"verify_aud": True}
-                )
-                
-                user_id = payload.get('sub')
-                email = payload.get('email')
-                role = payload.get('role')
-                
-                if not user_id:
-                    raise HTTPException(
-                        status_code=401,
-                        detail='Token inválido: no contiene user_id'
-                    )
-                
-                print(f"[AUTH] ✅ Usuario autenticado: {email} (ID: {user_id[:8]}..., Role: {role})")
-                
-                # TODO: En producción, obtener tier y balance de Supabase profiles table
-                # Por ahora, usar valores por defecto
-                return {
-                    "user_id": user_id,
-                    "email": email,
-                    "role": role,
-                    "tier": "free",  # Default tier
-                    "balance": 500.0  # Default balance
-                }
-                
-            except jwt.ExpiredSignatureError:
-                print("[AUTH] ❌ Token expirado")
-                raise HTTPException(
-                    status_code=401,
-                    detail='Token expirado. Por favor inicia sesión nuevamente.'
-                )
-            except jwt.InvalidAudienceError:
-                print("[AUTH] ❌ Audience inválida")
-                raise HTTPException(
-                    status_code=401,
-                    detail='Token inválido: audience no coincide'
-                )
-            except jwt.JWTError as e:
-                print(f"[AUTH] ❌ JWT Error: {e}")
-                raise HTTPException(
-                    status_code=401,
-                    detail=f'Token inválido: {str(e)}'
-                )
-        
-        # ========== MÉTODO 2: Verificación con API de Supabase ==========
-        else:
-            print("[AUTH] ⚠️  JWT Secret no configurado, usando API de Supabase")
-            
-            if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
-                raise HTTPException(
-                    status_code=500,
-                    detail='Configuración de Supabase incompleta'
-                )
-            
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    f"{SUPABASE_URL}/auth/v1/user",
-                    headers={
-                        "Authorization": f"Bearer {token}",
-                        "apikey": SUPABASE_SERVICE_ROLE_KEY
-                    },
-                    timeout=5.0  # 5 segundos timeout
-                )
-                
-                if response.status_code == 401:
-                    print("[AUTH] ❌ Token rechazado por Supabase")
-                    raise HTTPException(
-                        status_code=401,
-                        detail='Token inválido o expirado'
-                    )
-                elif response.status_code != 200:
-                    print(f"[AUTH] ❌ Error de Supabase: {response.status_code}")
-                    raise HTTPException(
-                        status_code=500,
-                        detail='Error verificando token con Supabase'
-                    )
-                
-                user_data = response.json()
-                user_id = user_data.get('id')
-                email = user_data.get('email')
-                role = user_data.get('role', 'authenticated')
-                
-                if not user_id:
-                    raise HTTPException(
-                        status_code=401,
-                        detail='Respuesta de Supabase inválida'
-                    )
-                
-                print(f"[AUTH] ✅ Usuario verificado vía API: {email} (ID: {user_id[:8]}...)")
-                
-                return {
-                    "user_id": user_id,
-                    "email": email,
-                    "role": role,
-                    "tier": "free",
-                    "balance": 500.0
-                }
-    
-    except HTTPException:
-        # Re-raise HTTP exceptions (already formatted)
-        raise
-    except httpx.TimeoutException:
-        print("[AUTH] ❌ Timeout verificando con Supabase")
-        raise HTTPException(
-            status_code=504,
-            detail='Timeout verificando autenticación'
-        )
-    except Exception as e:
-        print(f"[AUTH] ❌ Error inesperado: {type(e).__name__}: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f'Error interno de autenticación: {str(e)}'
-        )
-
-
-# Alias for backwards compatibility
-validar_supabase_jwt = verificar_token_supabase
-
-# ===================================================================
-# EJEMPLO DE USO EN ENDPOINTS
-# ===================================================================
-
-# ANTES:
-# @app.post("/api/portal/validate")
-# async def validar_archivo(
-#     file: UploadFile = File(...),
-#     user: Dict = Depends(validar_supabase_jwt)  # ❌ Viejo
-# ):
-
-# DESPUÉS:
-# @app.post("/api/portal/validate")
-# async def validar_archivo(
-#     file: UploadFile = File(...),
-#     user: Dict = Depends(validar_supabase_jwt)  # ✅ Nuevo
-# ):
-#     user_id = user["user_id"]
-#     email = user["email"]
-#     # ... resto del código
-
-
-
 
 # ===================================================================
 # DATA VALIDATION & ENRICHMENT (LFPIORPI Compliant)
@@ -964,8 +519,7 @@ def validar_enriquecer_datos(df: pd.DataFrame) -> pd.DataFrame:
 def procesar_transacciones_core(
     df: pd.DataFrame, 
     cliente_info: Dict = None,
-    user_tier: str = "free",
-    analysis_id: str = None
+    user_tier: str = "free"
 ) -> Dict:
     """
     Core ML processing using 3-layer architecture:
@@ -975,19 +529,7 @@ def procesar_transacciones_core(
     """
     
     total_txns = len(df)
-    if not analysis_id:
-        analysis_id = str(uuid.uuid4())
-
-    # Dict para tracking de progreso en tiempo real
-    ANALYSIS_PROGRESS = {}    
-    
-    # Initialize progress tracking
-    ANALYSIS_PROGRESS[analysis_id] = {
-        "stage": "validating",
-        "progress": 5,
-        "message": "Validando datos...",
-        "details": {"total_transacciones": total_txns}
-    }
+    analysis_id = str(uuid.uuid4())
     
     print(f"\n{'='*70}")
     print(f"🤖 ANÁLISIS ML - {total_txns} transacciones")
@@ -1010,13 +552,6 @@ def procesar_transacciones_core(
     # ============================================================
     # LAYER 1: SUPERVISED MODEL
     # ============================================================
-    ANALYSIS_PROGRESS[analysis_id].update({
-        "stage": "ml_supervised",
-        "progress": 30,
-        "message": "Aplicando IA Supervisada...",
-        "details": {"casos_analizados": 0}
-    })
-    
     if ML_MODELS["supervisado"] is not None:
         try:
             print("\n🔵 Capa 1: Modelo Supervisado (Ensemble Stacking)")
@@ -1039,14 +574,8 @@ def procesar_transacciones_core(
                 X_scaled = scaler.transform(df_features)
                 predictions = model.predict_proba(X_scaled)
                 scores_supervisado = predictions[:, 1] if predictions.shape[1] > 1 else predictions[:, 0]
-                casos_detectados = int((scores_supervisado > 0.5).sum())
-                ANALYSIS_PROGRESS[analysis_id].update({
-                    "progress": 45,
-                    "details": {"casos_detectados_supervisado": casos_detectados}
-                })
                 print(f"   ✅ {len(scores_supervisado)} predicciones generadas")
                 print(f"   📊 Score promedio: {scores_supervisado.mean():.3f}")
-                print(f"   🎯 Casos detectados: {casos_detectados}")
         except Exception as e:
             print(f"   ⚠️ Error en modelo supervisado: {e}")
             scores_supervisado = np.random.rand(total_txns) * 0.3  # Fallback
@@ -1057,12 +586,6 @@ def procesar_transacciones_core(
     # ============================================================
     # LAYER 2: UNSUPERVISED MODEL
     # ============================================================
-    ANALYSIS_PROGRESS[analysis_id].update({
-        "stage": "ml_unsupervised",
-        "progress": 55,
-        "message": "Aplicando IA No Supervisada (Detección de Anomalías)...",
-    })
-    
     if ML_MODELS["no_supervisado"] is not None:
         try:
             print("\n🟢 Capa 2: Modelo No Supervisado (Anomaly Detection)")
@@ -1086,16 +609,8 @@ def procesar_transacciones_core(
                         # Convert to [0,1] range (lower = more anomalous)
                         scores_no_supervisado = 1 - ((anomaly_scores - anomaly_scores.min()) / 
                                                     (anomaly_scores.max() - anomaly_scores.min() + 1e-10))
-                        anomalias = int((scores_no_supervisado > 0.7).sum())
-                        ANALYSIS_PROGRESS[analysis_id].update({
-                            "progress": 70,
-                            "details": {
-                                "casos_detectados_supervisado": ANALYSIS_PROGRESS[analysis_id]["details"].get("casos_detectados_supervisado", 0),
-                                "anomalias_adicionales": anomalias
-                            }
-                        })
                         print(f"   ✅ {len(scores_no_supervisado)} anomalías detectadas")
-                        print(f"   📊 Anomalías detectadas: {anomalias}")
+                        print(f"   📊 Anomalías detectadas: {(scores_no_supervisado > 0.7).sum()}")
         except Exception as e:
             print(f"   ⚠️ Error en modelo no supervisado: {e}")
             scores_no_supervisado = np.random.rand(total_txns) * 0.4
@@ -1106,12 +621,6 @@ def procesar_transacciones_core(
     # ============================================================
     # LAYER 3: REINFORCEMENT LEARNING
     # ============================================================
-    ANALYSIS_PROGRESS[analysis_id].update({
-        "stage": "ml_reinforcement",
-        "progress": 80,
-        "message": "Aplicando IA de Refuerzo (Ajuste de Thresholds)...",
-    })
-    
     if ML_MODELS["refuerzo"] is not None:
         try:
             print("\n🟡 Capa 3: Modelo Refuerzo (Q-Learning Thresholds)")
@@ -1141,17 +650,8 @@ def procesar_transacciones_core(
                 else:
                     scores_refuerzo[i] = score
             
-            ajustes = int((scores_refuerzo != (scores_supervisado + scores_no_supervisado) / 2).sum())
-            ANALYSIS_PROGRESS[analysis_id].update({
-                "progress": 90,
-                "details": {
-                    **ANALYSIS_PROGRESS[analysis_id]["details"],
-                    "ajustes_threshold": ajustes
-                }
-            })
             print(f"   ✅ {total_txns} ajustes adaptativos aplicados")
             print(f"   📊 Score final promedio: {scores_refuerzo.mean():.3f}")
-            print(f"   ⚙️  Thresholds ajustados: {ajustes} transacciones")
         except Exception as e:
             print(f"   ⚠️ Error en modelo refuerzo: {e}")
             scores_refuerzo = (scores_supervisado + scores_no_supervisado) / 2
@@ -1162,12 +662,6 @@ def procesar_transacciones_core(
     # ============================================================
     # FINAL SCORING & CLASSIFICATION
     # ============================================================
-    ANALYSIS_PROGRESS[analysis_id].update({
-        "stage": "generating_report",
-        "progress": 95,
-        "message": "Generando reporte final...",
-    })
-    
     print(f"\n{'='*70}")
     print("📊 CLASIFICACIÓN FINAL")
     print(f"{'='*70}")
@@ -1287,20 +781,6 @@ def procesar_transacciones_core(
             },
             "razones": [r for r in razones if r]
         })
-    
-    # Mark as complete
-    ANALYSIS_PROGRESS[analysis_id].update({
-        "stage": "complete",
-        "progress": 100,
-        "message": "Análisis completado",
-        "details": {
-            **ANALYSIS_PROGRESS[analysis_id]["details"],
-            "preocupante": int(preocupante),
-            "inusual": int(inusual),
-            "relevante": int(relevante),
-            "limpio": int(limpio)
-        }
-    })
     
     # Generate official LFPIORPI XML if reportable transactions exist
     if resultados["resumen"]["preocupante"] > 0:
@@ -1543,7 +1023,7 @@ async def login_usuario(request: Request, email: str, password: str):
 async def generar_nueva_api_key(
     company: str,
     tier: str = "enterprise",
-    user: Dict = Depends(validar_supabase_jwt)
+    user: Dict = Depends(validar_usuario_portal)
 ):
     """Generate API key for enterprise customers"""
     
@@ -1570,7 +1050,7 @@ async def generar_nueva_api_key(
     }
 
 @app.get("/api/enterprise/api-keys")
-async def listar_api_keys(user: Dict = Depends(validar_supabase_jwt)):
+async def listar_api_keys(user: Dict = Depends(validar_usuario_portal)):
     """List all API keys for user"""
     
     keys = [
@@ -1594,12 +1074,8 @@ async def listar_api_keys(user: Dict = Depends(validar_supabase_jwt)):
 @app.post("/api/portal/validate")
 async def validar_archivo_portal(
     file: UploadFile = File(...),
-    x_user_id: str = Header(None, alias="X-User-ID")
+    user: Dict = Depends(validar_usuario_portal)
 ):
-    """
-    PUBLIC ENDPOINT - Validate file structure before upload
-    No auth required since it only validates format, doesn't process data
-    """
     """
     Validate file only - don't process yet
     Returns file_id and basic stats for user confirmation
@@ -1629,18 +1105,13 @@ async def validar_archivo_portal(
             df_full = pd.read_excel(file_path, engine='openpyxl' if file.filename.endswith('.xlsx') else None, sheet_name=0)
             total_rows = len(df_full)
         
-        # Get column names from the dataframe
-        columns = df.columns.tolist()
-        
-        print(f"✅ File validated: {file.filename} - {total_rows} rows, {len(columns)} columns")
-        print(f"📋 Columns detected: {columns}")
+        print(f"✅ File validated: {file.filename} - {total_rows} rows")
         
         return {
             "success": True,
             "file_id": file_id,
             "file_name": file.filename,
             "row_count": total_rows,
-            "columns": columns,  # ← Columnas del Excel
             "message": "File validated successfully. Ready for analysis."
         }
     except Exception as e:
@@ -1653,7 +1124,7 @@ async def validar_archivo_portal(
 async def upload_archivo_portal(
     request: Request,
     file: UploadFile = File(...),
-    user: Dict = Depends(validar_supabase_jwt)
+    user: Dict = Depends(validar_usuario_portal)
 ):
     """
     SMALL USER FLOW - Portal Upload
@@ -1705,55 +1176,52 @@ async def upload_archivo_portal(
         # STEP 1: Validate and enrich data
         df = validar_enriquecer_datos(df)
         
-        # Generate analysis_id first
-        analysis_id = str(uuid.uuid4())
+        # STEP 2: Process transactions with ML
+        resultados = procesar_transacciones_core(df, None, user.get("tier", "standard"))
         
-        # STEP 2: Process transactions with ML (with progress tracking)
-        resultados = procesar_transacciones_core(df, None, user.get("tier", "standard"), analysis_id)
+        # Calculate cost
+        costo = calcular_costo(len(df))
+        requiere_pago = costo > user["balance"]
         
-        # Cobrar transacciones usando Supabase billing
-        num_transacciones = len(df)
-        resultado_cobro = cobrar_transacciones(
-            user["user_id"],
-            num_transacciones,
-            f"Análisis de {file.filename}"
-        )
+        analysis_id = resultados["metadata"]["analysis_id"]
         
-        if not resultado_cobro["success"]:
-            # Saldo insuficiente o error
-            raise HTTPException(
-                status_code=402,
-                detail={
-                    "error": resultado_cobro.get("error", "Saldo insuficiente"),
-                    "required_amount": resultado_cobro.get("required_amount", 0),
-                    "current_balance": resultado_cobro.get("current_balance", 0)
-                }
-            )
-        
-        # Save to history
+        # Save to history (locked if payment required)
         ANALYSIS_HISTORY[analysis_id] = {
             "user_id": user["user_id"],
             "resultados": resultados,
-            "charged": resultado_cobro.get("charged", 0),
-            "balance_after": resultado_cobro["balance_after"],
-            "quota_remaining": resultado_cobro["quota_remaining"],
+            "costo": costo,
+            "pagado": not requiere_pago,
             "timestamp": datetime.now(),
             "file_name": file.filename
         }
         
+        # Generate payment if needed
+        payment_id = None
+        if requiere_pago:
+            payment_id = str(uuid.uuid4())
+            PENDING_PAYMENTS[payment_id] = {
+                "analysis_id": analysis_id,
+                "user_id": user["user_id"],
+                "amount": costo - user["balance"],
+                "status": "pending",
+                "created_at": datetime.now()
+            }
+        else:
+            # Deduct from balance
+            USERS_DB[user["user_id"]]["balance"] -= costo
+        
         # Clean up
         os.remove(file_path)
         
-        # ✅ CRÍTICO: Siempre retornar resultados completos después de cobrar exitosamente
         return RespuestaAnalisis(
             success=True,
             analysis_id=analysis_id,
             resumen=resultados["resumen"],
-            transacciones=resultados["transacciones"],  # ✅ Todas las transacciones
-            xml_path=resultados.get("xml_path"),  # ✅ XML completo
-            costo=resultado_cobro.get("charged", 0),
-            requiere_pago=False,  # ✅ Ya se cobró
-            payment_id=None,
+            transacciones=resultados["transacciones"][:10] if requiere_pago else resultados["transacciones"],
+            xml_path=None if requiere_pago else resultados.get("xml_path"),
+            costo=costo,
+            requiere_pago=requiere_pago,
+            payment_id=payment_id,
             timestamp=datetime.now()
         )
         
@@ -1791,15 +1259,11 @@ async def analizar_transacciones_api(
         # STEP 1: Validate and enrich data
         df = validar_enriquecer_datos(df)
         
-        # Generate analysis_id
-        analysis_id = str(uuid.uuid4())
-        
-        # STEP 2: Process with ML (with progress tracking)
+        # STEP 2: Process with ML
         resultados = procesar_transacciones_core(
             df, 
             lote.cliente_info, 
-            api_data["tier"],
-            analysis_id
+            api_data["tier"]
         )
         
         # Calculate cost (billed monthly for enterprise)
@@ -1963,7 +1427,7 @@ async def analizar_batch(
 @app.post("/api/payment/process")
 async def procesar_pago(
     pago: PagoRequest,
-    user: Dict = Depends(validar_supabase_jwt)
+    user: Dict = Depends(validar_usuario_portal)
 ):
     """Process payment and unlock results"""
     
@@ -1998,7 +1462,7 @@ async def procesar_pago(
 async def agregar_saldo(
     amount: float,
     payment_token: str,
-    user: Dict = Depends(validar_supabase_jwt)
+    user: Dict = Depends(validar_usuario_portal)
 ):
     """Add balance to user account"""
     
@@ -2021,7 +1485,7 @@ async def agregar_saldo(
 @app.get("/api/analysis/{analysis_id}")
 async def obtener_analisis(
     analysis_id: str,
-    user: Dict = Depends(validar_supabase_jwt)
+    user: Dict = Depends(validar_usuario_portal)
 ):
     """Get analysis results (if paid)"""
     
@@ -2040,7 +1504,7 @@ async def obtener_analisis(
 
 @app.get("/api/history")
 async def obtener_historial(
-    user: Dict = Depends(validar_supabase_jwt),
+    user: Dict = Depends(validar_usuario_portal),
     limit: int = 50
 ):
     """Get user analysis history"""
@@ -2067,7 +1531,7 @@ async def obtener_historial(
 @app.get("/api/xml/{analysis_id}")
 async def descargar_xml(
     analysis_id: str,
-    user: Dict = Depends(validar_supabase_jwt)
+    user: Dict = Depends(validar_usuario_portal)
 ):
     """Download XML report"""
     
@@ -2118,7 +1582,7 @@ async def health_check():
     }
 
 @app.get("/api/stats")
-async def obtener_estadisticas(user: Dict = Depends(validar_supabase_jwt)):
+async def obtener_estadisticas(user: Dict = Depends(validar_usuario_portal)):
     """User statistics"""
     
     user_analyses = [a for a in ANALYSIS_HISTORY.values() if a["user_id"] == user["user_id"]]
