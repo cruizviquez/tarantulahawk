@@ -34,6 +34,10 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 import xml.etree.ElementTree as ET
 import httpx  # Para verificar con Supabase API
+# Import validador_enriquecedor from utils
+import sys
+sys.path.insert(0, str(Path(__file__).parent / "utils"))
+from validador_enriquecedor import enrich_features, validar_estructura, add_sector
 
 # Use shared pricing utility that reads config/pricing.json
 try:
@@ -155,29 +159,29 @@ def cargar_modelos_ml():
     models_dir = Path(__file__).parent.parent / "outputs"
     
     try:
-        # Load Supervised Model (Ensemble Stacking)
-        supervised_path = models_dir / "modelo_ensemble_stack.pkl"
+        # Load Supervised Model (Ensemble Stacking V2)
+        supervised_path = models_dir / "modelo_ensemble_stack_v2.pkl"
         if supervised_path.exists():
             ML_MODELS["supervisado"] = joblib.load(supervised_path)
-            print("✅ Modelo Supervisado cargado")
+            print(f"✅ Modelo Supervisado V2 cargado: {supervised_path.name}")
         else:
-            print("⚠️ modelo_ensemble_stack.pkl no encontrado")
+            print(f"⚠️ {supervised_path.name} no encontrado")
         
-        # Load Unsupervised Model (Isolation Forest + KMeans)
-        unsupervised_path = models_dir / "modelo_no_supervisado_th.pkl"
+        # Load Unsupervised Model Bundle V2 (Isolation Forest + KMeans)
+        unsupervised_path = models_dir / "no_supervisado_bundle_v2.pkl"
         if unsupervised_path.exists():
             ML_MODELS["no_supervisado"] = joblib.load(unsupervised_path)
-            print("✅ Modelo No Supervisado cargado")
+            print(f"✅ Modelo No Supervisado Bundle V2 cargado: {unsupervised_path.name}")
         else:
-            print("⚠️ modelo_no_supervisado_th.pkl no encontrado")
+            print(f"⚠️ {unsupervised_path.name} no encontrado")
         
-        # Load Reinforcement Learning Model (Q-Learning)
-        rl_path = models_dir / "modelo_refuerzo_th.pkl"
+        # Load Reinforcement Learning Bundle V2 (Q-Learning)
+        rl_path = models_dir / "refuerzo_bundle_v2.pkl"
         if rl_path.exists():
             ML_MODELS["refuerzo"] = joblib.load(rl_path)
-            print("✅ Modelo Refuerzo cargado")
+            print(f"✅ Modelo Refuerzo Bundle V2 cargado: {rl_path.name}")
         else:
-            print("⚠️ modelo_refuerzo_th.pkl no encontrado")
+            print(f"⚠️ {rl_path.name} no encontrado")
             
         return True
     except Exception as e:
@@ -812,7 +816,7 @@ def validar_enriquecer_datos(df: pd.DataFrame) -> pd.DataFrame:
     """
     LFPIORPI-Compliant Data Validation & Enrichment
     
-    Based on: validador_enriquecedor.py (production-ready version)
+    Now uses validador_enriquecedor.py from utils/ with 26+ features
     
     Step 1: Validate structure and clean data
     Step 2: Enrich with ML-required features
@@ -820,142 +824,30 @@ def validar_enriquecer_datos(df: pd.DataFrame) -> pd.DataFrame:
     
     Returns clean DataFrame ready for ML processing
     """
+    # Load config
+    config_path = Path(__file__).parent.parent / "models" / "config_modelos.json"
+    with open(config_path, 'r', encoding='utf-8') as f:
+        cfg = json.load(f)
     
-    print(f"\n{'='*70}")
-    print("🧹 VALIDACIÓN Y ENRIQUECIMIENTO LFPIORPI")
-    print(f"{'='*70}")
+    # Step 1: Validate structure
+    df_valid, report = validar_estructura(df)
+    if not report["archivo_valido"]:
+        error_msg = "; ".join(report["errores"])
+        raise HTTPException(status_code=400, detail=f"Validación falló: {error_msg}")
     
-    df_clean = df.copy()
-    original_count = len(df_clean)
+    # Print warnings
+    for warning in report.get("advertencias", []):
+        print(f"⚠️ {warning}")
     
-    # ========== STEP 1: VALIDATION & CLEANING ==========
+    # Step 2: sector_actividad is now provided in the uploaded file (no random generation)
+    # Skip add_sector() since user provides sector_actividad column
     
-    # Clean column names
-    df_clean.columns = df_clean.columns.str.lower().str.strip()
+    # Step 3: Enrich features (26+ features)
+    print("🔧 Enriqueciendo con validador_enriquecedor.py (26+ features)...")
+    df_enriched = enrich_features(df_valid, cfg)
     
-    # 1.1 Validate and convert: monto (numeric, positive)
-    if 'monto' in df_clean.columns:
-        df_clean['monto'] = pd.to_numeric(df_clean['monto'], errors='coerce')
-        invalidos = df_clean['monto'].isna() | (df_clean['monto'] <= 0)
-        if invalidos.sum() > 0:
-            print(f"   ⚠️  Removidas {invalidos.sum()} filas con monto inválido")
-            df_clean = df_clean[~invalidos]
-    
-    # 1.2 Validate: fecha (convert to datetime)
-    if 'fecha' in df_clean.columns:
-        df_clean['fecha'] = pd.to_datetime(df_clean['fecha'], errors='coerce')
-        invalidos = df_clean['fecha'].isna()
-        if invalidos.sum() > 0:
-            print(f"   ⚠️  Removidas {invalidos.sum()} filas con fecha inválida")
-            df_clean = df_clean[~invalidos]
-    
-    # 1.3 Validate: tipo_operacion (string, not empty)
-    if 'tipo_operacion' in df_clean.columns:
-        df_clean['tipo_operacion'] = df_clean['tipo_operacion'].astype(str).str.strip().str.lower()
-        invalidos = (df_clean['tipo_operacion'] == '') | (df_clean['tipo_operacion'] == 'nan')
-        if invalidos.sum() > 0:
-            print(f"   ⚠️  Removidas {invalidos.sum()} filas sin tipo_operacion")
-            df_clean = df_clean[~invalidos]
-    
-    # 1.4 Validate: sector_actividad (string, not empty)
-    if 'sector_actividad' in df_clean.columns:
-        df_clean['sector_actividad'] = df_clean['sector_actividad'].astype(str).str.strip().str.lower()
-        invalidos = (df_clean['sector_actividad'] == '') | (df_clean['sector_actividad'] == 'nan')
-        if invalidos.sum() > 0:
-            print(f"   ⚠️  Removidas {invalidos.sum()} filas sin sector")
-            df_clean = df_clean[~invalidos]
-    
-    # 1.5 Validate: frecuencia_mensual (integer, positive, default=1)
-    if 'frecuencia_mensual' not in df_clean.columns:
-        df_clean['frecuencia_mensual'] = 1
-    else:
-        df_clean['frecuencia_mensual'] = pd.to_numeric(df_clean['frecuencia_mensual'], errors='coerce')
-        df_clean['frecuencia_mensual'] = df_clean['frecuencia_mensual'].fillna(1).astype(int)
-        df_clean.loc[df_clean['frecuencia_mensual'] < 1, 'frecuencia_mensual'] = 1
-    
-    # 1.6 Validate: cliente_id (integer, positive)
-    if 'cliente_id' in df_clean.columns:
-        df_clean['cliente_id'] = pd.to_numeric(df_clean['cliente_id'], errors='coerce')
-        invalidos = df_clean['cliente_id'].isna() | (df_clean['cliente_id'] <= 0)
-        if invalidos.sum() > 0:
-            print(f"   ⚠️  Removidas {invalidos.sum()} filas sin cliente_id")
-            df_clean = df_clean[~invalidos]
-        df_clean['cliente_id'] = df_clean['cliente_id'].astype(int)
-    
-    # 1.7 Remove duplicates
-    duplicados = df_clean.duplicated(subset=['monto', 'fecha', 'cliente_id'], keep='first')
-    if duplicados.sum() > 0:
-        print(f"   ⚠️  Removidos {duplicados.sum()} registros duplicados")
-        df_clean = df_clean[~duplicados]
-    
-    # 1.8 Remove completely empty rows
-    df_clean = df_clean.dropna(how='all')
-    
-    # ========== STEP 2: ENRICHMENT - ML FEATURES ==========
-    
-    print(f"\n   🔧 Enriqueciendo features ML...")
-    
-    # 2.1 EsEfectivo (cash operations - critical for LFPIORPI)
-    df_clean['EsEfectivo'] = df_clean['tipo_operacion'].str.contains(
-        'efectivo|cash|dinero', case=False, na=False
-    ).astype(int)
-    
-    # 2.2 EsInternacional (international transfers)
-    df_clean['EsInternacional'] = df_clean['tipo_operacion'].str.contains(
-        'internacional|extranjero|foreign', case=False, na=False
-    ).astype(int)
-    
-    # 2.3 SectorAltoRiesgo (high-risk sectors per LFPIORPI)
-    df_clean['SectorAltoRiesgo'] = df_clean['sector_actividad'].isin(
-        SECTORES_ALTO_RIESGO
-    ).astype(int)
-    
-    # 2.4 MontoAlto (amount >= 100k)
-    df_clean['MontoAlto'] = (df_clean['monto'] >= 100_000).astype(int)
-    
-    # 2.5 MontoRelevante (LFPIORPI threshold = 170k)
-    df_clean['MontoRelevante'] = (df_clean['monto'] >= UMBRAL_RELEVANTE).astype(int)
-    
-    # 2.6 MontoMuyAlto (amount >= 500k)
-    df_clean['MontoMuyAlto'] = (df_clean['monto'] >= 500_000).astype(int)
-    
-    # 2.7 EsEstructurada (structuring pattern: 150k-170k range)
-    df_clean['EsEstructurada'] = (
-        (df_clean['monto'] >= UMBRAL_ESTRUCTURACION_MIN) & 
-        (df_clean['monto'] <= UMBRAL_ESTRUCTURACION_MAX)
-    ).astype(int)
-    
-    # 2.8 FrecuenciaAlta (high frequency)
-    df_clean['FrecuenciaAlta'] = (df_clean['frecuencia_mensual'] > 20).astype(int)
-    
-    # 2.9 FrecuenciaBaja (low frequency - potential one-time large)
-    df_clean['FrecuenciaBaja'] = (df_clean['frecuencia_mensual'] <= 3).astype(int)
-    
-    # ========== SUMMARY ==========
-    
-    cleaned_count = len(df_clean)
-    removed_total = original_count - cleaned_count
-    
-    print(f"\n   ✅ Features agregadas:")
-    print(f"      - EsEfectivo: {df_clean['EsEfectivo'].sum()} operaciones")
-    print(f"      - EsInternacional: {df_clean['EsInternacional'].sum()} transferencias")
-    print(f"      - SectorAltoRiesgo: {df_clean['SectorAltoRiesgo'].sum()} en alto riesgo")
-    print(f"      - MontoRelevante (≥$170k): {df_clean['MontoRelevante'].sum()} transacciones")
-    print(f"      - EsEstructurada (posibles): {df_clean['EsEstructurada'].sum()} transacciones")
-    
-    print(f"\n   📊 Resumen:")
-    print(f"      Originales: {original_count:,}")
-    print(f"      Válidas: {cleaned_count:,}")
-    print(f"      Removidas: {removed_total:,}")
-    print(f"{'='*70}\n")
-    
-    if len(df_clean) == 0:
-        raise HTTPException(
-            status_code=400,
-            detail="No quedan registros válidos después de validación"
-        )
-    
-    return df_clean
+    print(f"✅ Enriquecimiento completo: {len(df_enriched)} filas, {len(df_enriched.columns)} columnas")
+    return df_enriched
 
 # ===================================================================
 # CORE PROCESSING FUNCTION (Shared by both flows)

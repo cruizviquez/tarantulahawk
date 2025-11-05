@@ -41,9 +41,9 @@ const stages = {
   ml_reinforcement: {
     icon: Brain,
     label: { es: 'Aprendizaje por Refuerzo (Optimización)', en: 'Reinforcement Learning (Optimization)' },
-    color: 'text-red-400',
-    bgColor: 'bg-red-900/20',
-    borderColor: 'border-red-800/30'
+    color: 'text-blue-400',
+    bgColor: 'bg-blue-900/20',
+    borderColor: 'border-blue-800/30'
   },
   generating_report: {
     icon: Database,
@@ -107,7 +107,7 @@ export default function MLProgressTracker({
           className={`h-full bg-gradient-to-r ${
             stage === 'ml_supervised' ? 'from-cyan-600 to-cyan-400' :
             stage === 'ml_unsupervised' ? 'from-teal-600 to-teal-400' :
-            stage === 'ml_reinforcement' ? 'from-red-600 to-red-400' :
+            stage === 'ml_reinforcement' ? 'from-blue-600 to-blue-400' :
             'from-blue-600 to-blue-400'
           } transition-all duration-500`}
           style={{ width: `${progress}%` }}

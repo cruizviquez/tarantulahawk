@@ -99,7 +99,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 10. Preparar respuesta exitosa
+    // 10. Validar columnas obligatorias
+    const requiredColumns = ['cliente_id', 'monto', 'fecha', 'tipo_operacion', 'sector_actividad'];
+    const fileColumns = Object.keys(jsonData[0] as object).map(col => col.toLowerCase().trim());
+    const missingColumns = requiredColumns.filter(req => !fileColumns.includes(req));
+    
+    if (missingColumns.length > 0) {
+      return NextResponse.json(
+        { 
+          success: false,
+          error: `Faltan columnas obligatorias: ${missingColumns.join(', ')}`,
+          requiredColumns,
+          foundColumns: fileColumns,
+          missingColumns
+        },
+        { status: 400 }
+      );
+    }
+
+    // 11. Preparar respuesta exitosa
     const response = {
       success: true,
       fileName: file.name,

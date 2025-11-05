@@ -71,7 +71,7 @@ export default function PayPage() {
   return (
     <div className="min-h-screen bg-black text-white flex items-center justify-center p-6">
       <div className="max-w-md w-full bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-2xl p-8 shadow-2xl">
-        <h1 className="text-2xl font-black mb-2 text-center bg-gradient-to-r from-red-500 to-teal-400 bg-clip-text text-transparent">Acceso a TarantulaHawk</h1>
+        <h1 className="text-2xl font-black mb-2 text-center bg-gradient-to-r from-blue-500 to-teal-400 bg-clip-text text-transparent">Acceso a TarantulaHawk</h1>
         <p className="text-gray-400 text-center mb-6">Desbloquea el acceso completo al dashboard y generación de reportes.</p>
 
         {paid ? (
@@ -83,7 +83,7 @@ export default function PayPage() {
         ) : (
           <>
             {error && (
-              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-red-400 text-center text-sm mb-4">
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 text-blue-400 text-center text-sm mb-4">
                 {error}
               </div>
             )}

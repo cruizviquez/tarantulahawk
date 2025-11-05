@@ -88,7 +88,7 @@ export const metadata: Metadata = {
   category: "Financial Technology",
   other: {
     "application-name": "TarantulaHawk AI/ML AML Platform",
-    "msapplication-TileColor": "#CC3300",
+    "msapplication-TileColor": "#065f46",
     "theme-color": "#000000",
   },
 };

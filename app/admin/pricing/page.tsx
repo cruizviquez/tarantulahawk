@@ -142,7 +142,7 @@ export default function AdminPricingPage() {
           </div>
 
           {error && (
-            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md text-red-700 text-sm">
+            <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-md text-blue-700 text-sm">
               {error}
             </div>
           )}
@@ -204,7 +204,7 @@ export default function AdminPricingPage() {
                     </div>
                     <button
                       onClick={() => removeTier(idx)}
-                      className="mt-5 text-red-600 hover:text-red-700 text-sm font-medium"
+                      className="mt-5 text-blue-600 hover:text-blue-700 text-sm font-medium"
                     >
                       Eliminar
                     </button>

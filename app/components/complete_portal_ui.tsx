@@ -12,9 +12,9 @@ const TarantulaHawkLogo = ({ className = "w-10 h-10" }) => (
   <svg viewBox="0 0 400 400" className={className} xmlns="http://www.w3.org/2000/svg">
     <defs>
       <linearGradient id="emeraldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" style={{stopColor: '#CC3300'}} />
-        <stop offset="50%" style={{stopColor: '#FF4500'}} />
-        <stop offset="100%" style={{stopColor: '#FF6B00'}} />
+        <stop offset="0%" style={{stopColor: '#065f46'}} />
+        <stop offset="50%" style={{stopColor: '#047857'}} />
+        <stop offset="100%" style={{stopColor: '#10B981'}} />
       </linearGradient>
       <linearGradient id="tealGrad" x1="0%" y1="0%" x2="100%" y2="100%">
         <stop offset="0%" style={{stopColor: '#00CED1'}} />
@@ -29,7 +29,7 @@ const TarantulaHawkLogo = ({ className = "w-10 h-10" }) => (
     <ellipse cx="200" cy="110" rx="22" ry="20" fill="#0A0A0A"/>
     <ellipse cx="200" cy="215" rx="32" ry="10" fill="url(#emeraldGrad)" opacity="0.95"/>
     <path d="M 168 135 Q 95 90 82 125 Q 75 160 115 170 Q 148 175 168 158 Z" fill="url(#emeraldGrad)" opacity="0.9"/>
-    <path d="M 232 135 Q 305 90 318 125 Q 325 160 285 170 Q 252 175 232 158 Z" fill="url(#EmeraldGrad)" opacity="0.9"/>
+    <path d="M 232 135 Q 305 90 318 125 Q 325 160 285 170 Q 252 175 232 158 Z" fill="url(#emeraldGrad)" opacity="0.9"/>
     <ellipse cx="188" cy="108" rx="5" ry="4" fill="#00CED1"/>
     <ellipse cx="212" cy="108" rx="5" ry="4" fill="#00CED1"/>
   </svg>
@@ -182,15 +182,21 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
         credentials: 'same-origin'
       });
       
-      if (response.ok) {
-        const result = await response.json();
-        if (result.success && result.rowCount !== undefined) {
-          return {
-            rows: result.rowCount,
-            fileName: file.name,
-            fileSize: file.size
-          };
-        }
+      const result = await response.json();
+      
+      if (!response.ok || !result.success) {
+        // Show error for missing columns
+        const errorMsg = result.error || 'Error al procesar el archivo';
+        alert(errorMsg);
+        throw new Error(errorMsg);
+      }
+      
+      if (result.success && result.rowCount !== undefined) {
+        return {
+          rows: result.rowCount,
+          fileName: file.name,
+          fileSize: file.size
+        };
       }
       
       // Fallback: estimación por tamaño

@@ -8,9 +8,9 @@ const TarantulaHawkLogo = ({ className = "w-10 h-10 mb-4 mx-auto" }) => (
   <svg viewBox="0 0 400 400" className={className} xmlns="http://www.w3.org/2000/svg">
     <defs>
       <linearGradient id="orangeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" style={{stopColor: '#CC3300'}} />
-        <stop offset="50%" style={{stopColor: '#FF4500'}} />
-        <stop offset="100%" style={{stopColor: '#FF6B00'}} />
+        <stop offset="0%" style={{stopColor: '#065f46'}} />
+        <stop offset="50%" style={{stopColor: '#10b981'}} />
+        <stop offset="100%" style={{stopColor: '#34d399'}} />
       </linearGradient>
       <linearGradient id="tealGrad" x1="0%" y1="0%" x2="100%" y2="100%">
         <stop offset="0%" style={{stopColor: '#00CED1'}} />
@@ -90,9 +90,10 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
       }
 
       // Send Magic Link via Supabase OTP
-      const redirectUrl = typeof window !== 'undefined' 
-        ? `${window.location.origin}/auth/redirect`
-        : 'https://silver-funicular-wp59w7jgxvvf9j47-3000.app.github.dev/auth/redirect';
+      const baseUrl = (typeof window !== 'undefined' && window.location.origin)
+        ? window.location.origin
+        : (process.env.NEXT_PUBLIC_SITE_URL || 'https://tarantulahawk.cloud');
+      const redirectUrl = `${baseUrl.replace(/\/$/, '')}/auth/callback`;
       
       console.log('[ONBOARDING] emailRedirectTo:', redirectUrl);
       
@@ -123,9 +124,7 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
           await supabase.auth.signInWithOtp({
             email,
             options: {
-              emailRedirectTo: typeof window !== 'undefined' 
-                ? `${window.location.origin}/auth/redirect`
-                : 'https://silver-funicular-wp59w7jgxvvf9j47-3000.app.github.dev/auth/redirect',
+              emailRedirectTo: redirectUrl,
               shouldCreateUser: false,
             },
           });
@@ -189,7 +188,7 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
             <h2 className="text-2xl font-bold mb-2 text-yellow-400">Usuario ya registrado</h2>
             <p className="text-gray-400 mb-4">Este correo ya tiene una cuenta. Hemos enviado un Magic Link para iniciar sesión sin contraseña.</p>
             <p className="text-white font-semibold mb-4 bg-gray-800 rounded-lg p-3">{email}</p>
-            <button onClick={onClose} className="px-6 py-3 bg-gradient-to-r from-teal-500 to-orange-500 rounded-lg font-semibold hover:from-teal-600 hover:to-orange-600 transition w-full mt-4">
+            <button onClick={onClose} className="px-6 py-3 bg-gradient-to-r from-teal-500 to-emerald-500 rounded-lg font-semibold hover:from-teal-600 hover:to-emerald-600 transition w-full mt-4">
               Entendido
             </button>
           </div>
@@ -223,14 +222,14 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
               <strong>Paso siguiente:</strong> Revisa tu bandeja de entrada y haz clic en el Magic Link.<br />
               ⏱️ <strong>El enlace expira en 10 minutos</strong> y solo puede usarse una vez por seguridad.
             </p>
-            <button onClick={onClose} className="px-6 py-3 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-semibold hover:from-red-700 hover:to-orange-600 transition w-full mt-4">
+            <button onClick={onClose} className="px-6 py-3 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-lg font-semibold hover:from-blue-700 hover:to-emerald-600 transition w-full mt-4">
               Entendido
             </button>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-5">
             {error && (
-              <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-red-400 text-center text-sm">
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 text-blue-400 text-center text-sm">
                 <div className="font-semibold mb-1">❌ Error</div>
                 {error}
               </div>
@@ -245,7 +244,7 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
                     value={name} 
                     onChange={e => setName(e.target.value)} 
                     required 
-                    className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none" 
+                    className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-emerald-500 outline-none" 
                   />
                 </div>
                 
@@ -256,7 +255,7 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
                     value={company} 
                     onChange={e => setCompany(e.target.value)} 
                     required 
-                    className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none" 
+                    className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-emerald-500 outline-none" 
                   />
                   <p className="text-gray-500 text-xs mt-1">� Solo para uso empresarial</p>
                 </div>
@@ -270,7 +269,7 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
                 value={email} 
                 onChange={e => setEmail(e.target.value)} 
                 required 
-                className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-orange-500 outline-none"
+                    className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-emerald-500 outline-none"
               />
               <p className="text-gray-500 text-xs mt-1">� Cualquier dominio de email es aceptado</p>
             </div>
@@ -291,7 +290,7 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
             <button 
               type="submit" 
               disabled={loading || !captchaToken || (currentMode === 'signup' && (!name.trim() || !company.trim()))}
-              className="w-full py-4 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-bold hover:from-red-700 hover:to-orange-600 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full py-4 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-lg font-bold hover:from-blue-700 hover:to-emerald-600 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? 'Enviando Magic Link...' : currentMode === 'signup' ? '✨ Crear Cuenta y Obtener $500 USD' : '🔐 Enviar Enlace de Acceso'}
             </button>

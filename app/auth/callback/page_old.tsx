@@ -48,13 +48,13 @@ export default async function AuthCallback({
     return (
       <div className="min-h-screen bg-black flex items-center justify-center p-6">
         <div className="bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-2xl p-8 max-w-md w-full text-center">
-          <div className="text-red-500 text-6xl mb-4">⚠️</div>
+          <div className="text-blue-500 text-6xl mb-4">⚠️</div>
           <h1 className="text-2xl font-bold text-white mb-4">Error de Verificación</h1>
           <p className="text-gray-400 mb-6">{error_description || error || 'Error desconocido'}</p>
           <div className="text-xs text-gray-600 mb-4">Error: {error}</div>
           <a 
             href="/" 
-            className="inline-block px-6 py-3 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-semibold hover:from-red-700 hover:to-orange-600 transition text-white"
+            className="inline-block px-6 py-3 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-lg font-semibold hover:from-blue-700 hover:to-emerald-600 transition text-white"
           >
             Volver al Inicio
           </a>
@@ -120,7 +120,7 @@ export default async function AuthCallback({
     return (
       <div className="min-h-screen bg-black flex items-center justify-center p-6">
         <div className="bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-2xl p-8 max-w-md w-full text-center">
-          <div className="text-red-500 text-6xl mb-4">❌</div>
+          <div className="text-blue-500 text-6xl mb-4">❌</div>
           <h1 className="text-2xl font-bold text-white mb-4">Error de Autenticación</h1>
           <p className="text-gray-400 mb-6">No pudimos verificar tu cuenta. El enlace puede haber expirado o ya fue usado.</p>
           <div className="text-xs text-gray-600 mb-4 font-mono">
@@ -128,7 +128,7 @@ export default async function AuthCallback({
           </div>
           <a 
             href="/" 
-            className="inline-block px-6 py-3 bg-gradient-to-r from-red-600 to-orange-500 rounded-lg font-semibold hover:from-red-700 hover:to-orange-600 transition text-white"
+            className="inline-block px-6 py-3 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-lg font-semibold hover:from-blue-700 hover:to-emerald-600 transition text-white"
           >
             Volver al Inicio
           </a>

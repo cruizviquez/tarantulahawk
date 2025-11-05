@@ -68,7 +68,7 @@ Tu enlace de acceso seguro a TarantulaHawk ⏱️ (Expira en 10 min)
 #### Body (HTML):
 ```html
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-  <h2 style="color: #CC3300;">🔐 Acceso Seguro a TarantulaHawk</h2>
+  <h2 style="color: #047857;">🔐 Acceso Seguro a TarantulaHawk</h2>
   
   <p>Hola,</p>
   
@@ -76,7 +76,7 @@ Tu enlace de acceso seguro a TarantulaHawk ⏱️ (Expira en 10 min)
   
   <div style="text-align: center; margin: 30px 0;">
     <a href="{{ .ConfirmationURL }}" 
-       style="background: linear-gradient(to right, #CC3300, #FF6B00); 
+       style="background: linear-gradient(to right, #047857, #10B981); 
               color: white; 
               padding: 15px 30px; 
               text-decoration: none; 

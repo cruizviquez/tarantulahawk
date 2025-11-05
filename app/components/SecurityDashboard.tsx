@@ -49,8 +49,8 @@ export default function SecurityDashboard() {
   };
 
   const getRiskColor = (score: number) => {
-    if (score >= 71) return 'text-red-500 bg-red-500/10 border-red-500/30';
-    if (score >= 51) return 'text-orange-500 bg-orange-500/10 border-orange-500/30';
+    if (score >= 71) return 'text-blue-500 bg-blue-500/10 border-blue-500/30';
+    if (score >= 51) return 'text-emerald-500 bg-emerald-500/10 border-emerald-500/30';
     if (score >= 21) return 'text-yellow-500 bg-yellow-500/10 border-yellow-500/30';
     return 'text-green-500 bg-green-500/10 border-green-500/30';
   };
@@ -75,7 +75,7 @@ export default function SecurityDashboard() {
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
-          <Shield className="w-10 h-10 text-red-500" />
+          <Shield className="w-10 h-10 text-blue-500" />
           <div>
             <h1 className="text-3xl font-bold">🤖 AI Security Dashboard</h1>
             <p className="text-gray-400">Monitoreo de anomalías en tiempo real</p>
@@ -103,10 +103,10 @@ export default function SecurityDashboard() {
 
             <div className="bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-xl p-6">
               <div className="flex items-center gap-3 mb-2">
-                <Shield className="w-5 h-5 text-red-400" />
+                <Shield className="w-5 h-5 text-blue-400" />
                 <span className="text-gray-400 text-sm">Alto Riesgo</span>
               </div>
-              <div className="text-3xl font-bold text-red-400">{stats.high_risk_users}</div>
+              <div className="text-3xl font-bold text-blue-400">{stats.high_risk_users}</div>
             </div>
 
             <div className="bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-xl p-6">
@@ -122,7 +122,7 @@ export default function SecurityDashboard() {
         {/* Suspicious Users Table */}
         <div className="bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-xl p-6">
           <h2 className="text-2xl font-bold mb-6 flex items-center gap-3">
-            <AlertTriangle className="w-6 h-6 text-red-500" />
+                <AlertTriangle className="w-6 h-6 text-blue-500" />
             Actividad Sospechosa (Últimas 24h)
           </h2>
 
@@ -160,12 +160,12 @@ export default function SecurityDashboard() {
                         <div className="text-xs mt-1">{getRiskLabel(user.risk_score)}</div>
                       </td>
                       <td className="py-4 px-4 text-center">
-                        <span className={user.total_actions_24h > 100 ? 'text-red-400 font-bold' : 'text-white'}>
+                          <span className={user.total_actions_24h > 100 ? 'text-blue-400 font-bold' : 'text-white'}>
                           {user.total_actions_24h}
                         </span>
                       </td>
                       <td className="py-4 px-4 text-center">
-                        <span className={user.unique_ips_24h > 3 ? 'text-orange-400 font-bold' : 'text-white'}>
+                        <span className={user.unique_ips_24h > 3 ? 'text-emerald-400 font-bold' : 'text-white'}>
                           {user.unique_ips_24h}
                         </span>
                       </td>
@@ -198,8 +198,8 @@ export default function SecurityDashboard() {
 
         {/* AI Rules Info */}
         <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-gradient-to-br from-red-900/20 to-black border border-red-500/30 rounded-xl p-6">
-            <h3 className="text-xl font-bold mb-4 text-red-400">🔥 Reglas Críticas</h3>
+          <div className="bg-gradient-to-br from-blue-900/20 to-black border border-blue-500/30 rounded-xl p-6">
+            <h3 className="text-xl font-bold mb-4 text-blue-400">🔥 Reglas Críticas</h3>
             <ul className="space-y-2 text-sm text-gray-300">
               <li>• <strong>&gt;100 acciones</strong> en 24h → +30 risk score</li>
               <li>• <strong>&gt;3 IPs diferentes</strong> en 15 min → +30 risk score</li>

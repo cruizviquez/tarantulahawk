@@ -37,11 +37,11 @@ export default function HealthPage() {
       {loading && <p>Checking…</p>}
       {!loading && data && (
         <div className="space-y-4">
-          <div className={`px-4 py-2 rounded ${data.ok ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+          <div className={`px-4 py-2 rounded ${data.ok ? "bg-green-50 text-green-700" : "bg-blue-50 text-blue-700"}`}>
             {data.ok ? "All required tables are present." : "Some checks failed. See details below."}
           </div>
           {data.note && <p className="text-sm text-slate-500">{data.note}</p>}
-          {data.error && <p className="text-sm text-red-600">Error: {data.error}</p>}
+          {data.error && <p className="text-sm text-blue-600">Error: {data.error}</p>}
           <div className="border rounded">
             <table className="w-full text-sm">
               <thead>

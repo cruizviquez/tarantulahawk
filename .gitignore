@@ -39,3 +39,30 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+node_modules
+
+# python / backend virtualenvs and caches
+venv/
+.venv/
+ENV/
+env/
+app/backend/venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+
+# backend generated artifacts
+app/backend/outputs/
+app/backend/uploads/
+app/backend/history/
+
+# workspace generated artifacts
+outputs/
+uploads/
+history/
+
+# jupyter
+.ipynb_checkpoints/
