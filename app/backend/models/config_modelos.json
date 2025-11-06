@@ -1,6 +1,6 @@
 {
   "data": {
-    "dataset_enriched_path": "uploads/enriched/dataset_pld_lfpiorpi_30000_enriched_v2.csv"
+    "dataset_enriched_path": "outputs/enriched/dataset_enriched_latest.csv"
   },
   "lfpiorpi": {
     "uma_diaria": 113.14,
@@ -33,13 +33,13 @@
       "calibration_method": "isotonic",
       "temporal_split": {
         "enabled": true,
-        "months_test": 3,
-        "months_val": 3
+        "months_test": 2,
+        "months_val": 2
       },
       "test_size": 0.2,
       "cv_folds": 3,
-      "threshold_preocupante": 0.1,
-      "threshold_inusual": 0.1,
+      "threshold_preocupante": 0.50,
+      "threshold_inusual": 0.35,
       "enable_shap": true
     },
     "no_supervisado": {
@@ -61,11 +61,11 @@
       "grid_max": 0.9,
       "val_months": 2,
       "cost_weights": {
-        "FN_preocupante": 5000.0,
-        "FP_preocupante": 50.0,
-        "FN_inusual": 500.0,
-        "FP_inusual": 10.0,
-        "penalty_norma": 10000.0
+        "FN_preocupante": 10000.0,
+        "FP_preocupante": 100.0,
+        "FN_inusual": 1500.0,
+        "FP_inusual": 20.0,
+        "penalty_norma": 50000.0
       }
     },
     "drift_detection": {

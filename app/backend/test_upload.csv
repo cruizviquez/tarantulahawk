@@ -1,0 +1,11 @@
+cliente_id,monto,fecha,tipo_operacion,sector_actividad
+CLI001,45000,2025-01-15,efectivo,casa_cambio
+CLI002,180000,2025-01-16,transferencia_nacional,inmobiliaria
+CLI003,95000,2025-01-17,tarjeta,joyeria_metales
+CLI004,12000,2025-01-18,transferencia_nacional,servicios_financieros
+CLI005,250000,2025-01-19,transferencia_internacional,activos_virtuales
+CLI006,8000,2025-01-20,efectivo,automotriz
+CLI007,165000,2025-01-21,efectivo,traslado_valores
+CLI008,75000,2025-01-22,tarjeta,inmobiliaria
+CLI009,320000,2025-01-23,transferencia_nacional,casa_cambio
+CLI010,15000,2025-01-24,efectivo,servicios_financieros

@@ -46,6 +46,10 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: string
     if (!authError) return null;
     
     const messages: Record<string, { title: { es: string; en: string }, message: { es: string; en: string } }> = {
+      timeout: {
+        title: { es: 'Sesión expirada por inactividad', en: 'Session expired due to inactivity' },
+        message: { es: 'Por seguridad, tu sesión se cerró tras 15 minutos sin actividad. Inicia sesión de nuevo para continuar.', en: 'For your security, your session ended after 15 minutes of inactivity. Please log in again.' }
+      },
       link_expired: {
         title: { es: 'Magic Link Expirado', en: 'Magic Link Expired' },
         message: { es: 'El enlace de autenticación ha expirado. Por favor, solicita un nuevo enlace.', en: 'The authentication link has expired. Please request a new link.' }
@@ -119,6 +123,17 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: string
               <p className="text-sm text-white/90">
                 {errorInfo.message[language]}
               </p>
+              <div className="mt-3">
+                <button
+                  onClick={() => {
+                    setOnboardingMode('login');
+                    setShowOnboarding(true);
+                  }}
+                  className="px-4 py-2 bg-black/20 border border-white/30 rounded-lg text-sm font-semibold hover:bg-black/30 text-white"
+                >
+                  {language === 'en' ? 'Log in' : 'Iniciar sesión'}
+                </button>
+              </div>
             </div>
             <button 
               onClick={() => setShowAuthError(false)}

@@ -13,13 +13,28 @@ import { createServerClient } from '@supabase/ssr';
 
 /**
  * Helper: Get public URL from request
+ * Works in Codespaces, localhost, and Vercel production
  */
 function getPublicUrl(request: NextRequest): string {
-  const forwardedHost = request.headers.get('x-forwarded-host');
-  const forwardedProto = request.headers.get('x-forwarded-proto') || 'https';
-  return forwardedHost 
-    ? `${forwardedProto}://${forwardedHost}`
-    : request.nextUrl.origin;
+  // If NEXT_PUBLIC_SITE_URL is set (production/staging), use it
+  if (process.env.NEXT_PUBLIC_SITE_URL) {
+    return process.env.NEXT_PUBLIC_SITE_URL;
+  }
+
+  const url = new URL(request.url);
+  let host = request.headers.get('x-forwarded-host') || url.host;
+  const proto = request.headers.get('x-forwarded-proto') || url.protocol.replace(':', '') || 'https';
+
+  // GitHub Codespaces: port is in subdomain (-3000), not suffix (:3000)
+  // Some proxies incorrectly append :port, so strip it for .github.dev hosts
+  if (host.includes('.github.dev:')) {
+    host = host.split(':')[0];
+  }
+
+  // Localhost: strip port for consistency (optional, but keeps URLs clean)
+  // Vercel/production: x-forwarded-host won't have port, so no action needed
+
+  return `${proto}://${host}`;
 }
 
 /**
@@ -77,6 +92,7 @@ async function processAuth(
   // Validar configuración de Supabase
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   
   if (!supabaseUrl || !supabaseAnonKey) {
     console.error('[AUTH HASH] Missing Supabase config');
@@ -104,13 +120,39 @@ async function processAuth(
     },
   });
 
+  // Admin client (service role) for used_tokens table (RLS: service-only)
+  const admin = serviceRoleKey
+    ? createServerClient(supabaseUrl, serviceRoleKey, {
+        cookies: {
+          getAll() {
+            return [];
+          },
+          setAll() {},
+        },
+      })
+    : null;
+
   // Check if token already used (prevent replay attacks)
   const tokenHash = access_token.substring(0, 30); // Use first 30 chars as hash
-  const { data: existingUse } = await supabase
-    .from('used_tokens')
-    .select('token_hash')
-    .eq('token_hash', tokenHash)
-    .single();
+  let existingUse: any = null;
+  try {
+    const client = admin || supabase;
+    const { data } = await client
+      .from('used_tokens')
+      .select('token_hash')
+      .eq('token_hash', tokenHash)
+      .maybeSingle();
+    existingUse = data;
+  } catch (e) {
+    console.warn('[AUTH HASH] used_tokens check failed:', (e as any)?.message || e);
+    // Fail closed in production if we expect service role
+    if (process.env.NODE_ENV === 'production') {
+      const publicUrl = getPublicUrl(request);
+      return isRedirect
+        ? NextResponse.redirect(`${publicUrl}/?auth_error=token_check_failed`)
+        : NextResponse.json({ success: false, error: 'Token check failed' }, { status: 500 });
+    }
+  }
   
   if (existingUse) {
     console.warn('[AUTH HASH] Magic link already used');
@@ -167,11 +209,28 @@ async function processAuth(
     }
 
     // Mark token as used (prevent reuse)
-    await supabase.from('used_tokens').insert({
+    if (!admin && process.env.NODE_ENV === 'production') {
+      console.error('[AUTH HASH] Service role key missing; refusing to mark token used');
+      const publicUrl = getPublicUrl(request);
+      return isRedirect
+        ? NextResponse.redirect(`${publicUrl}/?auth_error=server_config`)
+        : NextResponse.json({ success: false, error: 'Server configuration error' }, { status: 500 });
+    }
+    const writer = admin || supabase;
+    const { error: insertErr } = await writer.from('used_tokens').insert({
       token_hash: tokenHash,
       used_at: new Date().toISOString(),
-      expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString() // Expire in 1 hour
+      expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
     });
+    if (insertErr) {
+      console.error('[AUTH HASH] used_tokens insert failed:', insertErr.message);
+      if (process.env.NODE_ENV === 'production') {
+        const publicUrl = getPublicUrl(request);
+        return isRedirect
+          ? NextResponse.redirect(`${publicUrl}/?auth_error=token_mark_failed`)
+          : NextResponse.json({ success: false, error: 'Token mark failed' }, { status: 500 });
+      }
+    }
 
     // Log exitoso (útil para debugging)
     console.log('[AUTH HASH] Success:', {

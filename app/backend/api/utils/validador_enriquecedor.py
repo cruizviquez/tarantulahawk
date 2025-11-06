@@ -16,6 +16,8 @@ import json
 import numpy as np
 import pandas as pd
 from pathlib import Path
+import tempfile
+import shutil
 from datetime import datetime
 
 def log(msg: str):
@@ -190,9 +192,14 @@ def calcular_features_red(df: pd.DataFrame) -> pd.DataFrame:
     
     return df
 
-def enrich_features(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
+def enrich_features(df: pd.DataFrame, cfg: dict, training_mode: bool = True) -> pd.DataFrame:
     """
     ✅ MEJORADO: Features enriquecidas + optimizaciones
+    
+    Args:
+        df: DataFrame validado
+        cfg: Config con parámetros LFPIORPI
+        training_mode: Si True, incluye clasificacion_lfpiorpi; si False (inferencia), la omite
     """
     df = df.copy()
 
@@ -268,7 +275,9 @@ def enrich_features(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
         )
         labels.append("inusual" if es_inu else "relevante")
 
-    df["clasificacion_lfpiorpi"] = labels
+    # Solo agregar clasificación si estamos en modo entrenamiento
+    if training_mode:
+        df["clasificacion_lfpiorpi"] = labels
 
     # Selección final de columnas (ahora con más features)
     columnas_finales = [
@@ -287,9 +296,11 @@ def enrich_features(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
         "ops_relativas", "diversidad_operaciones", "concentracion_temporal",
         # Comportamiento (2)
         "ratio_vs_promedio", "posible_burst",
-        # Label (1)
-        "clasificacion_lfpiorpi",
     ]
+    
+    # Agregar label solo si training_mode
+    if training_mode:
+        columnas_finales.append("clasificacion_lfpiorpi")
     
     # Filtrar columnas que realmente existen
     columnas_finales = [c for c in columnas_finales if c in df.columns]
@@ -303,11 +314,22 @@ def enrich_features(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
 
     return df
 
-def procesar_archivo(input_csv: str, sector_actividad: str, config_path: str | None):
+def procesar_archivo(input_csv: str, sector_actividad: str, config_path: str | None, training_mode: bool = True, analysis_id: str | None = None):
+    """
+    Procesa archivo y genera enriquecido
+    
+    Args:
+        input_csv: Ruta al CSV original
+        sector_actividad: Sector o 'random'
+        config_path: Ruta al config (opcional)
+        training_mode: Si True, incluye clasificacion_lfpiorpi; si False (inferencia), la omite
+        analysis_id: ID único para inferencia (si None, genera timestamp)
+    """
     log("==== INICIO VALIDACIÓN/ENRIQUECIMIENTO V2 (optimizado) ====")
     input_csv = str(Path(input_csv).resolve())
     log(f"Archivo de entrada: {input_csv}")
     log(f"Sector actividad: {sector_actividad}")
+    log(f"Modo: {'ENTRENAMIENTO' if training_mode else 'INFERENCIA'}")
 
     cfg = load_config(config_path)
 
@@ -326,14 +348,47 @@ def procesar_archivo(input_csv: str, sector_actividad: str, config_path: str | N
     df_sys = add_sector(df_valid, sector_actividad, cfg)
 
     log("Enriqueciendo (versión optimizada)…")
-    df_enriched = enrich_features(df_sys, cfg)
+    df_enriched = enrich_features(df_sys, cfg, training_mode=training_mode)
 
-    out_dir = Path(input_csv).parent / "enriched"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / (Path(input_csv).stem + "_enriched_v2.csv")
-    df_enriched.to_csv(out_path, index=False, encoding="utf-8")
-
-    log(f"✅ Enriquecido V2 ({len(df_enriched.columns)} columnas) guardado en: {out_path}")
+    # Determinar directorio de salida según modo
+    # FIXED: Usar misma ruta base que ml_runner.py (app/backend/)
+    base_dir = Path(__file__).resolve().parents[2]  # api/utils/ -> api/ -> backend/
+    
+    if training_mode:
+        # Modo entrenamiento: guardar en enriched/ junto al original
+        out_dir = Path(input_csv).parent / "enriched"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = out_dir / (Path(input_csv).stem + "_enriched_v2.csv")
+        df_enriched.to_csv(out_path, index=False, encoding="utf-8")
+        
+        # También actualizar copia estable para config_modelos.json
+        stable_dir = base_dir / "outputs" / "enriched"
+        stable_dir.mkdir(parents=True, exist_ok=True)
+        stable_path = stable_dir / "dataset_enriched_latest.csv"
+        with tempfile.NamedTemporaryFile("w", delete=False, dir=str(stable_dir), suffix=".csv", encoding="utf-8") as tmpf:
+            df_enriched.to_csv(tmpf.name, index=False, encoding="utf-8")
+            tmp_name = tmpf.name
+        shutil.move(tmp_name, stable_path)
+        
+        log(f"✅ Enriquecido V2 ({len(df_enriched.columns)} columnas) guardado en: {out_path}")
+        log(f"✅ Copia estable actualizada: {stable_path}")
+    else:
+        # Modo inferencia: guardar en pending/ con analysis_id único
+        pending_dir = base_dir / "outputs" / "enriched" / "pending"
+        pending_dir.mkdir(parents=True, exist_ok=True)
+        
+        if not analysis_id:
+            analysis_id = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        
+        out_path = pending_dir / f"{analysis_id}.csv"
+        # Escritura atómica
+        with tempfile.NamedTemporaryFile("w", delete=False, dir=str(pending_dir), suffix=".csv", encoding="utf-8") as tmpf:
+            df_enriched.to_csv(tmpf.name, index=False, encoding="utf-8")
+            tmp_name = tmpf.name
+        shutil.move(tmp_name, out_path)
+        
+        log(f"✅ Enriquecido para inferencia ({len(df_enriched.columns)} columnas) guardado en: {out_path}")
+        log(f"   Analysis ID: {analysis_id}")
     log(f"   Registros: {len(df_enriched):,}")
     log(f"   Columnas nuevas vs V1: +{len(df_enriched.columns) - 16}")
     log("==== FIN VALIDACIÓN/ENRIQUECIMIENTO V2 ====")

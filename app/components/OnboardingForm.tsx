@@ -90,10 +90,37 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
       }
 
       // Send Magic Link via Supabase OTP
-      const baseUrl = (typeof window !== 'undefined' && window.location.origin)
-        ? window.location.origin
-        : (process.env.NEXT_PUBLIC_SITE_URL || 'https://tarantulahawk.cloud');
-      const redirectUrl = `${baseUrl.replace(/\/$/, '')}/auth/callback`;
+      // Build a sanitized base URL that never includes a :port on Codespaces
+      function computePublicBaseUrl(): string {
+        // 1) Prefer env var if present
+        const fromEnv = process.env.NEXT_PUBLIC_SITE_URL;
+        if (fromEnv) {
+          try {
+            const u = new URL(fromEnv);
+            // On Codespaces, ensure no :port is appended (host already encodes -3000)
+            if (u.hostname.endsWith('.app.github.dev')) {
+              return `${u.protocol}//${u.hostname}`;
+            }
+            return `${u.protocol}//${u.host}`; // includes port only when intended
+          } catch {
+            // if malformed, fall back to window
+          }
+        }
+
+        // 2) Fallback to window
+        if (typeof window !== 'undefined') {
+          const proto = window.location.protocol; // includes the trailing ':'
+          const hostname = window.location.hostname; // never includes port
+          // For Codespaces, hostname already contains -3000, so don't add :3000
+          return `${proto}//${hostname}`;
+        }
+
+        // 3) Final fallback
+        return 'https://tarantulahawk.cloud';
+      }
+
+      const baseUrl = computePublicBaseUrl();
+      const redirectUrl = `${baseUrl.replace(/\/$/, '')}/auth/redirect`;
       
       console.log('[ONBOARDING] emailRedirectTo:', redirectUrl);
       

@@ -15,13 +15,15 @@ export default async function Home({
     redirect(`/auth/callback?code=${encodeURIComponent(code)}`);
   }
   
-  // Check for auth errors (show to user)
-  const authError = typeof params.auth_error === 'string' ? params.auth_error : undefined;
+  // Check for auth errors (show to user) and inactivity timeout
+  const authParam = typeof params.auth === 'string' ? params.auth : undefined;
+  const authErrorParam = typeof params.auth_error === 'string' ? params.auth_error : undefined;
+  const authError = authErrorParam || (authParam === 'timeout' ? 'timeout' : undefined);
   if (authError) {
     console.log('[HOME] Auth error:', authError);
   }
   
-  // Check if user explicitly logged out (skip redirect to dashboard)
+  // Check if user explicitly logged out (skip any special handling)
   const loggedOut = typeof params.logout === 'string';
   
   // Check if user is authenticated
@@ -49,16 +51,14 @@ export default async function Home({
     }
   );
 
+  // We still perform the call to hydrate session cookies (SSR),
+  // but we DO NOT redirect away from home if authenticated.
+  // This lets users visit the marketing homepage even when logged in.
   const { data: { user } } = await supabase.auth.getUser();
-
-  // If user is logged in and didn't just logout, redirect to dashboard
-  if (user && !loggedOut) {
-    redirect('/dashboard');
-  }
   
-  // If just logged out, clear the logout param to prevent stuck state
-  if (loggedOut && !user) {
-    console.log('[HOME] User logged out successfully');
+  // Optional: acknowledge logout without referencing undefined variables
+  if (loggedOut) {
+    console.log('[HOME] User logged out flag present');
   }
 
   return (

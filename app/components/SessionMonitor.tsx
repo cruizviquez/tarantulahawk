@@ -15,13 +15,26 @@ export default function SessionMonitor({
   const lastActivityRef = useRef<number>(Date.now())
   const warningShownRef = useRef<boolean>(false)
   const [showWarning, setShowWarning] = useState(false)
+  const lastHeartbeatSentRef = useRef<number>(0)
 
   const WARNING_TIME = 2 * 60 * 1000
+
+  const sendHeartbeat = async () => {
+    try {
+      // Throttle heartbeats to once per 60s
+      const now = Date.now()
+      if (now - lastHeartbeatSentRef.current < 60 * 1000) return
+      lastHeartbeatSentRef.current = now
+      await fetch('/api/heartbeat', { method: 'POST', credentials: 'same-origin' })
+    } catch {}
+  }
 
   const handleActivity = () => {
     lastActivityRef.current = Date.now()
     warningShownRef.current = false
     setShowWarning(false)
+    // Update server-side last-activity
+    void sendHeartbeat()
   }
 
   const handleLogout = async () => {
@@ -42,6 +55,9 @@ export default function SessionMonitor({
       window.addEventListener(event, handleActivity, { passive: true })
     })
 
+    // Initial heartbeat on mount (session active)
+    void sendHeartbeat()
+
     const checkInterval = setInterval(() => {
       const inactiveTime = Date.now() - lastActivityRef.current
 
@@ -52,6 +68,10 @@ export default function SessionMonitor({
 
       if (inactiveTime >= inactivityTimeout) {
         handleLogout()
+      }
+      // Background heartbeat while user is active (< timeout)
+      if (inactiveTime < inactivityTimeout) {
+        void sendHeartbeat()
       }
     }, 30000)
 

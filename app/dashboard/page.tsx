@@ -91,7 +91,7 @@ export default async function DashboardPage() {
     <Suspense fallback={<DashboardLoading />}>
       <SessionMonitor 
         userId={user.id} 
-        inactivityTimeout={10 * 60 * 1000} 
+        inactivityTimeout={15 * 60 * 1000} 
       />
       
       <CompletePortalUI 

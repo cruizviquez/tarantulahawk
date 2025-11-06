@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import { calculateTieredCost, PRICING_TIERS, formatPricingSummary } from '../lib/pricing';
-import { Upload, FileSpreadsheet, FileText, Download, AlertCircle, AlertTriangle, CheckCircle, CheckCircle2, Database, User, Clock, BarChart3, CreditCard, Lock, TrendingUp, TrendingDown, ChevronDown, X, Menu, Zap } from 'lucide-react';
+import { Upload, FileSpreadsheet, FileText, Download, AlertCircle, AlertTriangle, CheckCircle, CheckCircle2, Database, User, Clock, BarChart3, CreditCard, Lock, TrendingUp, TrendingDown, ChevronDown, X, Menu, Zap, Key } from 'lucide-react';
 
 import MLProgressTracker from './MLProgressTracker';
 import ProfileModal from './ProfileModal';
@@ -192,6 +192,10 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
       }
       
       if (result.success && result.rowCount !== undefined) {
+        if (Array.isArray(result.columns)) {
+          const cols = (result.columns as string[]).map(c => c.toLowerCase().trim());
+          setDetectedColumns(cols);
+        }
         return {
           rows: result.rowCount,
           fileName: file.name,
@@ -223,6 +227,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
     setInsufficientFunds(false);
     setProcessingStage('');
     setProcessingProgress(0);
+    setDetectedColumns([]);
     // Reset file input to allow re-uploading
     const input = document.getElementById('file-upload') as HTMLInputElement;
     if (input) input.value = '';
@@ -287,16 +292,12 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
         userId: user.id
       });
       
-      // Get auth token from Supabase
-      const token = await getAuthToken();
-      
+      // Validate does NOT require auth; avoid custom headers to prevent CORS preflight
       const response = await fetch(`${API_URL}/api/portal/validate`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'X-User-ID': user.id,
-        },
         body: formData,
+        // Include credentials so the GitHub Codespaces proxy authorizes the cross-port request
+        credentials: 'include',
       });
       
       setProcessingProgress(100);
@@ -332,6 +333,14 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
         setProcessingStage('');
         setProcessingProgress(0);
         setIsLoading(false);
+        
+        console.log('🎯 Estado actualizado:', {
+          fileReadyForAnalysis: true,
+          uploadedFileId: result.file_id,
+          estimatedTransactions: txnCount,
+          estimatedCost: cost,
+          insufficientFunds: false
+        });
         
         setStatusMessage({
           type: 'success',
@@ -427,13 +436,14 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
   	setProcessingProgress(10);
   	console.log('🤖 Iniciando análisis con IA...');
   
-  	const response = await fetch(`${API_URL}/api/portal/upload`, {
+    	const response = await fetch(`${API_URL}/api/portal/upload`, {
     	  method: 'POST',
     	  headers: {
       	    'Authorization': `Bearer ${token}`,
             'X-User-ID': user.id,
           },
           body: formData,
+          credentials: 'include',
         });
   
         if (!response.ok) {
@@ -490,6 +500,15 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
         setProcessingStage('');
         setProcessingProgress(0);
         setActiveTab('dashboard');
+      } else if (response.status === 402) {
+        // Fondos insuficientes: cambiar a pestaña de fondos con mensaje claro
+        setActiveTab('add-funds');
+        setStatusMessage({
+          type: 'error',
+          message: language === 'es'
+            ? `Fondos insuficientes. ${result?.error || ''}`
+            : `Insufficient funds. ${result?.error || ''}`
+        });
       } else {
         throw new Error(result.error || 'Analysis failed');
       }
@@ -1067,68 +1086,54 @@ return (
 
               {/* Required Fields Info */}
               <div className="mt-6 p-4 bg-teal-900/20 border border-teal-800/30 rounded-lg">
-                <div className="text-sm font-semibold text-teal-400 mb-2">
-                  {detectedColumns.length > 0 
-                    ? (language === 'es' ? 'Columnas Detectadas en tu Excel:' : 'Columns Detected in your Excel:')
-                    : (language === 'es' ? 'Campos de Datos Requeridos:' : 'Required Data Fields:')}
-                </div>
-                <div className="text-xs text-gray-400 grid grid-cols-2 md:grid-cols-4 gap-2">
-                  {detectedColumns.length > 0 ? (
-                    detectedColumns.map((col, idx) => (
-                      <div key={idx} className="flex items-center gap-1">
-                        <span className="text-green-400">✓</span>
-                        <span>{col}</span>
-                      </div>
-                    ))
-                  ) : (
+                {(() => {
+                  const required = ['cliente_id','monto','fecha','tipo_operacion','sector_actividad'];
+                  const detectedSet = new Set(detectedColumns.map(c => c.toLowerCase().trim()));
+                  const found = required.filter(r => detectedSet.has(r));
+                  const missing = required.filter(r => !detectedSet.has(r));
+                  return (
                     <>
-                      <div>• monto</div>
-                      <div>• fecha</div>
-                      <div>• tipo_operacion</div>
-                      <div>• sector_actividad</div>
-                      <div>• frecuencia_mensual</div>
-                      <div>• cliente_id</div>
+                      <div className="text-sm font-semibold text-teal-400 mb-2">
+                        {language === 'es' ? 'Campos de Datos Requeridos:' : 'Required Data Fields:'}
+                      </div>
+                      <div className="text-xs grid grid-cols-2 md:grid-cols-4 gap-2">
+                        {required.map((field) => (
+                          <div key={field} className="flex items-center gap-1">
+                            {detectedColumns.length > 0 ? (
+                              detectedSet.has(field) 
+                                ? <span className="text-green-400">✓</span>
+                                : <span className="text-blue-400">✗</span>
+                            ) : (
+                              <span className="text-gray-500">•</span>
+                            )}
+                            <span className="text-gray-300">{field}</span>
+                          </div>
+                        ))}
+                      </div>
+                      {detectedColumns.length > 0 && (
+                        <div className="mt-3 text-xs flex items-center gap-2">
+                          {missing.length === 0 ? (
+                            <>
+                              <CheckCircle2 className="w-4 h-4 text-teal-400" />
+                              <span className="text-teal-400">{language === 'es' ? 'Todos los campos requeridos presentes' : 'All required fields present'}</span>
+                            </>
+                          ) : (
+                            <>
+                              <AlertTriangle className="w-4 h-4 text-blue-400" />
+                              <span className="text-blue-400">{language === 'es' ? `Faltan: ${missing.join(', ')}` : `Missing: ${missing.join(', ')}`}</span>
+                            </>
+                          )}
+                        </div>
+                      )}
+                      <button className="mt-3 text-xs text-teal-400 hover:text-teal-300 underline">
+                        {language === 'es' ? 'Descargar Plantilla de Ejemplo' : 'Download Sample Template'}
+                      </button>
                     </>
-                  )}
-                </div>
-                {detectedColumns.length > 0 && (
-                  <div className="mt-3 text-xs text-green-400 flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>{language === 'es' ? `${detectedColumns.length} columnas detectadas correctamente` : `${detectedColumns.length} columns detected successfully`}</span>
-                  </div>
-                )}
-                <button className="mt-3 text-xs text-teal-400 hover:text-teal-300 underline">
-                  {language === 'es' ? 'Descargar Plantilla de Ejemplo' : 'Download Sample Template'}
-                </button>
+                  );
+                })()}
               </div>
             </div>
 
-            {/* Transaction-based Pricing Info */}
-            <div className="bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-xl p-6">
-              <h3 className="text-lg font-bold mb-4">{language === 'es' ? 'Precios por Transacción' : 'Transaction-Based Pricing'}</h3>
-              <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
-                <div>
-                  <div className="text-gray-400 mb-1">{language === 'es' ? '1 - 2,000 transacciones' : '1 - 2,000 transactions'}</div>
-                  <div className="text-2xl font-bold text-white">$1.00<span className="text-sm text-gray-500">/txn</span></div>
-                  <div className="text-xs text-gray-500 mt-1">{language === 'es' ? 'Precio base' : 'Base price'}</div>
-                </div>
-                <div>
-                  <div className="text-emrald-400 mb-1">{language === 'es' ? '2,001 - 5,000 transacciones' : '2,001 - 5,000 transactions'}</div>
-                  <div className="text-2xl font-bold text-white">$0.75<span className="text-sm text-gray-500">/txn</span></div>
-                  <div className="text-xs text-gray-500 mt-1">{language === 'es' ? 'Descuento 25%' : '25% discount'}</div>
-                </div>
-                <div>
-                  <div className="text-teal-400 mb-1">{language === 'es' ? '5,001 - 10,000 transacciones' : '5,001 - 10,000 transactions'}</div>
-                  <div className="text-2xl font-bold text-white">$0.50<span className="text-sm text-gray-500">/txn</span></div>
-                  <div className="text-xs text-gray-500 mt-1">{language === 'es' ? 'Descuento 50%' : '50% discount'}</div>
-                </div>
-                <div>
-                  <div className="text-green-400 mb-1">{language === 'es' ? '10,001+ transacciones' : '10,001+ transactions'}</div>
-                  <div className="text-2xl font-bold text-white">$0.35<span className="text-sm text-gray-500">/txn</span></div>
-                  <div className="text-xs text-gray-500 mt-1">{language === 'es' ? 'Descuento 65%' : '65% discount'}</div>
-                </div>
-              </div>
-            </div>
           </div>
         )}
 
@@ -1503,8 +1508,16 @@ return (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="text-center">
             <div className="w-20 h-20 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
-            <div className="text-2xl font-bold mb-2">Processing Analysis...</div>
-            <div className="text-gray-400">Running 3-layer ML models</div>
+            <div className="text-2xl font-bold mb-2">
+              {processingStage === 'uploading' || processingStage === 'validating'
+                ? (language === 'es' ? 'Cargando archivo...' : 'Uploading file...')
+                : (language === 'es' ? 'Analizando con IA...' : 'Analyzing with AI...')}
+            </div>
+            <div className="text-gray-400">
+              {processingStage === 'uploading' || processingStage === 'validating'
+                ? (language === 'es' ? 'Validando formato y columnas requeridas' : 'Validating format and required columns')
+                : (language === 'es' ? 'Ejecutando modelos ML de 3 capas' : 'Running 3-layer ML models')}
+            </div>
           </div>
         </div>
       )}

@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 10. Validar columnas obligatorias
+    // 10. Validar columnas obligatorias (5 campos: incluye cliente_id, excluye frecuencia_mensual)
     const requiredColumns = ['cliente_id', 'monto', 'fecha', 'tipo_operacion', 'sector_actividad'];
     const fileColumns = Object.keys(jsonData[0] as object).map(col => col.toLowerCase().trim());
     const missingColumns = requiredColumns.filter(req => !fileColumns.includes(req));
@@ -126,6 +126,8 @@ export async function POST(request: NextRequest) {
       totalSheets: workbook.SheetNames.length,
       rowCount: jsonData.length,
       columns: Object.keys(jsonData[0] as object),
+      requiredColumns,
+      missingColumns: [],
       data: jsonData,
       preview: jsonData.slice(0, 5), // Primeras 5 filas para preview
     };
