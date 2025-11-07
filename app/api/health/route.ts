@@ -7,7 +7,8 @@ export async function GET() {
 
     async function tableExists(table: string) {
       try {
-        const { error } = await db.from(table as any).select('*', { head: true, count: 'exact' }).limit(1);
+        // Avoid chaining methods so our fallback dummy client type also matches
+        const { error } = await (db as any).from(table as any).select('*', { head: true, count: 'exact' });
         return !error;
       } catch {
         return false;
