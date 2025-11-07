@@ -280,168 +280,85 @@ class PagoRequest(BaseModel):
 
 def obtener_billing_usuario(user_id: str) -> Optional[Dict[str, Any]]:
     """
-    Obtiene información de billing del usuario desde Supabase
+    Obtiene información de billing del usuario desde profiles.account_balance_usd
     
     Returns:
-        Dict con: balance, monthly_quota, quota_used, quota_reset_date, is_first_month
+        Dict con: balance (actual USD balance from profiles)
     """
     if not supabase_admin:
         print("⚠️  Supabase Admin no disponible")
         return None
     
     try:
-        response = supabase_admin.table("user_billing").select("*").eq("user_id", user_id).execute()
+        response = supabase_admin.table("profiles").select("account_balance_usd").eq("id", user_id).execute()
         
         if response.data and len(response.data) > 0:
-            billing = response.data[0]
-            
-            # Check si necesita reset mensual
-            reset_date = datetime.fromisoformat(billing["quota_reset_date"].replace('Z', '+00:00'))
-            if datetime.now(reset_date.tzinfo) > reset_date:
-                # Reset quota mensual
-                if not billing["is_first_month"]:
-                    supabase_admin.table("user_billing").update({
-                        "balance": 0.0,
-                        "quota_used": 0,
-                        "quota_reset_date": (datetime.now() + timedelta(days=30)).isoformat()
-                    }).eq("user_id", user_id).execute()
-                    
-                    billing["balance"] = 0.0
-                    billing["quota_used"] = 0
-                else:
-                    # Primer mes termina, marcar como no-primer-mes y reset
-                    supabase_admin.table("user_billing").update({
-                        "is_first_month": False,
-                        "balance": 0.0,
-                        "quota_used": 0,
-                        "quota_reset_date": (datetime.now() + timedelta(days=30)).isoformat()
-                    }).eq("user_id", user_id).execute()
-                    
-                    billing["is_first_month"] = False
-                    billing["balance"] = 0.0
-                    billing["quota_used"] = 0
-            
-            return billing
-        else:
-            # Usuario no tiene billing, crear con $500 gratis (primer mes)
-            new_billing = {
-                "user_id": user_id,
-                "balance": 500.0,
-                "monthly_quota": 500,
-                "quota_used": 0,
-                "quota_reset_date": (datetime.now() + timedelta(days=30)).isoformat(),
-                "is_first_month": True,
-                "plan_type": "free_trial"
+            balance = float(response.data[0].get("account_balance_usd", 0.0))
+            return {
+                "balance": balance,
+                "user_id": user_id
             }
-            supabase_admin.table("user_billing").insert(new_billing).execute()
-            return new_billing
+        else:
+            print(f"❌ Usuario {user_id} no encontrado en profiles")
+            return None
             
     except Exception as e:
         print(f"❌ Error obteniendo billing: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 
 def calcular_costo_actualizado(num_transacciones: int, billing: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Calcula el costo según el nuevo modelo de pricing
+    Calcula el costo según el modelo de pricing simplificado
     
-    Modelo:
-    - Primer mes: $500 USD gratis (máx 500 transacciones)
-    - 0-500 txns: $500/mes
-    - 501-1,000 txns: $500 + $1/txn extra
-    - 1,001-2,000 txns: $1,000/mes flat
-    - 2,001-3,000 txns: $2,000/mes flat
-    - 3,001-10,000 txns: $3,000/mes flat
-    - 10,001+ txns: $0.30/txn
+    Modelo (from config/pricing.json):
+    - 0-100 txns: $1.00/txn
+    - 101-1,000 txns: $0.75/txn  
+    - 1,001+ txns: $0.50/txn
     
     Returns:
-        Dict con: costo, within_quota, requires_payment
+        Dict con: costo, requires_payment
     """
-    quota_remaining = billing["monthly_quota"] - billing["quota_used"]
-    is_first_month = billing.get("is_first_month", False)
-    
-    # Si es primer mes y aún tiene quota gratis
-    if is_first_month and quota_remaining > 0:
-        if num_transacciones <= quota_remaining:
-            return {
-                "costo": 0.0,
-                "within_quota": True,
-                "requires_payment": False,
-                "quota_remaining_after": quota_remaining - num_transacciones
-            }
-        else:
-            # Excede quota gratuita en primer mes
-            txns_over_quota = num_transacciones - quota_remaining
-            
-            # Calcular costo de transacciones extra
-            if txns_over_quota <= 500:
-                costo = 500.0
-            elif txns_over_quota <= 1000:
-                costo = 500.0 + (txns_over_quota - 500) * 1.0
-            elif txns_over_quota <= 2000:
-                costo = 1000.0
-            elif txns_over_quota <= 3000:
-                costo = 2000.0
-            elif txns_over_quota <= 10000:
-                costo = 3000.0
-            else:
-                costo = txns_over_quota * 0.30
-            
-            return {
-                "costo": costo,
-                "within_quota": False,
-                "requires_payment": costo > billing["balance"],
-                "quota_remaining_after": 0
-            }
+    # Calculate cost using tiered pricing
+    if num_transacciones <= 100:
+        costo = num_transacciones * 1.00
+    elif num_transacciones <= 1000:
+        costo = (100 * 1.00) + ((num_transacciones - 100) * 0.75)
     else:
-        # No es primer mes o ya no tiene quota gratis
-        total_txns = billing["quota_used"] + num_transacciones
-        
-        if total_txns <= 500:
-            costo = 500.0
-        elif total_txns <= 1000:
-            costo = 500.0 + (total_txns - 500) * 1.0
-        elif total_txns <= 2000:
-            costo = 1000.0
-        elif total_txns <= 3000:
-            costo = 2000.0
-        elif total_txns <= 10000:
-            costo = 3000.0
-        else:
-            costo = total_txns * 0.30
-        
-        return {
-            "costo": costo,
-            "within_quota": False,
-            "requires_payment": costo > billing["balance"],
-            "quota_remaining_after": 0
-        }
+        costo = (100 * 1.00) + (900 * 0.75) + ((num_transacciones - 1000) * 0.50)
+    
+    requires_payment = costo > billing["balance"]
+    
+    return {
+        "costo": costo,
+        "requires_payment": requires_payment,
+        "current_balance": billing["balance"]
+    }
 
 
 def cobrar_transacciones(user_id: str, num_transacciones: int, descripcion: str) -> Dict[str, Any]:
     """
-    Cobra el análisis de transacciones al usuario y actualiza Supabase
+    Cobra el análisis de transacciones al usuario y actualiza profiles.account_balance_usd
     
     Returns:
-        Dict con: success, balance_after, quota_remaining, charged, error (si falla)
+        Dict con: success, balance_after, charged, error (si falla)
     """
     if BILLING_DISABLED:
         print("⚠️  [BILLING] Facturación deshabilitada por DISABLE_BILLING - modo desarrollo (sin cobro)")
         return {
             "success": True,
             "balance_after": 500.0,
-            "quota_remaining": 500,
             "charged": 0.0,
             "dev_mode": True
         }
 
     if not supabase_admin:
         print("⚠️  [BILLING] Supabase Admin no disponible - modo desarrollo (sin cobro)")
-        # En desarrollo sin billing configurado, retornar éxito mock
         return {
             "success": True,
             "balance_after": 500.0,
-            "quota_remaining": 500,
             "charged": 0.0,
             "dev_mode": True
         }
@@ -468,45 +385,37 @@ def cobrar_transacciones(user_id: str, num_transacciones: int, descripcion: str)
                 "current_balance": billing["balance"]
             }
         
-        # Cobrar (si no está dentro de quota gratuita)
-        if not calculo["within_quota"]:
-            nuevo_balance = billing["balance"] - costo
-            nueva_quota_used = billing["quota_used"] + num_transacciones
-            
-            supabase_admin.table("user_billing").update({
-                "balance": nuevo_balance,
-                "quota_used": nueva_quota_used
-            }).eq("user_id", user_id).execute()
-            
-            # Registrar transacción
-            supabase_admin.table("billing_transactions").insert({
+        # Cobrar - actualizar account_balance_usd en profiles
+        nuevo_balance = billing["balance"] - costo
+        
+        print(f"💳 Actualizando balance: ${billing['balance']:.2f} - ${costo:.2f} = ${nuevo_balance:.2f}")
+        
+        supabase_admin.table("profiles").update({
+            "account_balance_usd": nuevo_balance
+        }).eq("id", user_id).execute()
+        
+        # Registrar transacción en credit_ledger
+        try:
+            supabase_admin.table("credit_ledger").insert({
                 "user_id": user_id,
                 "amount": -costo,
-                "transaction_type": "charge",
-                "description": f"{descripcion} - {num_transacciones} transacciones",
-                "balance_after": nuevo_balance
-            }).execute()
-            
-            return {
-                "success": True,
+                "transaction_type": "aml_analysis",
+                "description": f"{descripcion} ({num_transacciones} transacciones)",
                 "balance_after": nuevo_balance,
-                "quota_remaining": calculo["quota_remaining_after"],
-                "charged": costo
-            }
-        else:
-            # Dentro de quota mensual gratuita, no cobrar
-            nueva_quota_used = billing["quota_used"] + num_transacciones
-            
-            supabase_admin.table("user_billing").update({
-                "quota_used": nueva_quota_used
-            }).eq("user_id", user_id).execute()
-            
-            return {
-                "success": True,
-                "balance_after": billing["balance"],
-                "quota_remaining": calculo["quota_remaining_after"],
-                "charged": 0.0
-            }
+                "metadata": {
+                    "num_transactions": num_transacciones,
+                    "cost_per_transaction": round(costo / num_transacciones, 4)
+                }
+            }).execute()
+        except Exception as ledger_error:
+            print(f"⚠️  Warning: No se pudo registrar en credit_ledger: {ledger_error}")
+            # Non-critical, continue
+        
+        return {
+            "success": True,
+            "balance_after": nuevo_balance,
+            "charged": costo
+        }
             
     except Exception as e:
         import traceback
@@ -1753,17 +1662,48 @@ async def upload_archivo_portal(
         with open(results_path, 'r', encoding='utf-8') as f:
             resultados = json.load(f)
         
-        # STEP 4: Billing (DISABLED FOR TESTING)
+        # STEP 4: Billing - Check balance and charge user
         num_transacciones = len(df)
-        print(f"💳 [BILLING] DESHABILITADO PARA TESTING - Transacciones: {num_transacciones}")
+        user_id = user["user_id"]
         
-        # Simulate successful billing for testing
-        resultado_cobro = {
-            "success": True,
-            "charged": 0.0,
-            "balance_after": 0.0,
-            "quota_remaining": 999999
-        }
+        print(f"💳 [BILLING] Verificando saldo para {num_transacciones} transacciones...")
+        
+        # Get user billing info
+        billing = obtener_billing_usuario(user_id)
+        if not billing:
+            raise HTTPException(status_code=500, detail="No se pudo obtener información de billing")
+        
+        # Calculate cost
+        calculo = calcular_costo_actualizado(num_transacciones, billing)
+        costo = calculo["costo"]
+        
+        print(f"💰 Costo calculado: ${costo:.2f} | Saldo actual: ${billing['balance']:.2f}")
+        
+        # Check if user has sufficient balance
+        if calculo["requires_payment"]:
+            print(f"❌ Fondos insuficientes - Se requiere pago")
+            # Clean up files
+            os.remove(file_path) if file_path.exists() else None
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "error": f"Saldo insuficiente. Necesitas ${costo:.2f}, tienes ${billing['balance']:.2f}",
+                    "required_amount": costo,
+                    "current_balance": billing["balance"],
+                    "num_transactions": num_transacciones
+                }
+            )
+        
+        # Charge user
+        print(f"💳 Cobrando ${costo:.2f}...")
+        resultado_cobro = cobrar_transacciones(user_id, num_transacciones, f"Análisis AML - {file.filename}")
+        
+        if not resultado_cobro["success"]:
+            print(f"❌ Error al cobrar: {resultado_cobro.get('error')}")
+            os.remove(file_path) if file_path.exists() else None
+            raise HTTPException(status_code=402, detail=resultado_cobro.get("error", "Error al procesar pago"))
+        
+        print(f"✅ Cobrado exitosamente: ${resultado_cobro['charged']:.2f} | Nuevo saldo: ${resultado_cobro['balance_after']:.2f}")
         
         # Save to history
         ANALYSIS_HISTORY[analysis_id] = {

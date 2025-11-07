@@ -116,6 +116,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
   const [selectedAmount, setSelectedAmount] = useState<number>(500); // Default to $500
   const [fileReadyForAnalysis, setFileReadyForAnalysis] = useState<boolean>(false);
   const [uploadedFileId, setUploadedFileId] = useState<string | null>(null);
+  const [fileUploaded, setFileUploaded] = useState<boolean>(false); // Track if file has been uploaded
   const [statusMessage, setStatusMessage] = useState<{type: 'success' | 'error' | 'info' | 'warning', message: string} | null>(null);
 
   // Initialize API URL (client-side only, in useEffect to avoid SSR)
@@ -228,6 +229,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
     setProcessingStage('');
     setProcessingProgress(0);
     setDetectedColumns([]);
+    setFileUploaded(false); // Re-enable upload button
     // Reset file input to allow re-uploading
     const input = document.getElementById('file-upload') as HTMLInputElement;
     if (input) input.value = '';
@@ -330,6 +332,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
         // Archivo listo para análisis - esperar confirmación del usuario
         setUploadedFileId(result.file_id);
         setFileReadyForAnalysis(true);
+        setFileUploaded(true); // Disable upload button until file is cleared
         setProcessingStage('');
         setProcessingProgress(0);
         setIsLoading(false);
@@ -913,7 +916,16 @@ return (
                 />
                 <label
                   htmlFor="file-upload"
-                  className="inline-block px-6 py-3 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-lg font-semibold hover:from-blue-700 hover:to-emerald-600 transition cursor-pointer"
+                  className={`inline-block px-6 py-3 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-lg font-semibold transition ${
+                    fileUploaded || isLoading 
+                      ? 'opacity-50 cursor-not-allowed' 
+                      : 'hover:from-blue-700 hover:to-emerald-600 cursor-pointer'
+                  }`}
+                  onClick={(e) => {
+                    if (fileUploaded || isLoading) {
+                      e.preventDefault();
+                    }
+                  }}
                 >
                   {language === 'es' ? 'Seleccionar Archivo' : 'Select File'}
                 </label>
@@ -1147,22 +1159,29 @@ return (
                 <div className="text-3xl font-black text-white">{mockResults.resumen.total_transacciones.toLocaleString()}</div>
               </div>
               
-              <div className="bg-gradient-to-br from-blue-900/30 to-black border border-blue-800/50 rounded-xl p-6">
-                <div className="text-sm text-gray-400 mb-2">{language === 'es' ? 'Alto Riesgo' : 'High Risk'}</div>
-                <div className="text-3xl font-black text-blue-400">{mockResults.resumen.preocupante}</div>
-                <div className="text-xs text-blue-400 mt-1">{language === 'es' ? 'Requiere acción inmediata' : 'Requires immediate action'}</div>
+              <div className="bg-gradient-to-br from-red-900/30 to-black border border-red-800/50 rounded-xl p-6">
+                <div className="text-sm text-gray-400 mb-2">{language === 'es' ? 'Preocupante' : 'High Risk (Preocupante)'}</div>
+                <div className="text-3xl font-black text-red-400">{mockResults.resumen.preocupante}</div>
+                <div className="text-xs text-red-400 mt-1">{language === 'es' ? 'Requiere acción inmediata' : 'Requires immediate action'}</div>
               </div>
 
-              <div className="bg-gradient-to-br from-emerald-900/30 to-black border border-emerald-800/50 rounded-xl p-6">
-                <div className="text-sm text-gray-400 mb-2">{language === 'es' ? 'Inusual' : 'Unusual'}</div>
-                <div className="text-3xl font-black text-emerald-400">{mockResults.resumen.inusual}</div>
-                <div className="text-xs text-emerald-400 mt-1">{language === 'es' ? 'Revisión recomendada' : 'Review recommended'}</div>
+              <div className="bg-gradient-to-br from-yellow-900/30 to-black border border-yellow-800/50 rounded-xl p-6">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-sm text-gray-400">{language === 'es' ? 'Inusual' : 'Unusual'}</div>
+                  {typeof mockResults.resumen.ai_nuevos_casos === 'number' && (
+                    <div className="text-[10px] px-2 py-1 rounded-full bg-yellow-500/20 text-yellow-300 border border-yellow-600/40">
+                      {language === 'es' ? 'AI nuevos casos' : 'AI new cases'}: {mockResults.resumen.ai_nuevos_casos}
+                    </div>
+                  )}
+                </div>
+                <div className="text-3xl font-black text-yellow-400">{mockResults.resumen.inusual}</div>
+                <div className="text-xs text-yellow-400 mt-1">{language === 'es' ? 'Revisión recomendada' : 'Review recommended'}</div>
               </div>
 
-              <div className="bg-gradient-to-br from-teal-900/30 to-black border border-teal-800/50 rounded-xl p-6">
-                <div className="text-sm text-gray-400 mb-2">{language === 'es' ? 'Limpio' : 'Clean'}</div>
-                <div className="text-3xl font-black text-teal-400">{mockResults.resumen.limpio.toLocaleString()}</div>
-                <div className="text-xs text-gray-500 mt-1">{((mockResults.resumen.limpio / mockResults.resumen.total_transacciones) * 100).toFixed(1)}% {language === 'es' ? 'del total' : 'of total'}</div>
+              <div className="bg-gradient-to-br from-green-900/30 to-black border border-green-800/50 rounded-xl p-6">
+                <div className="text-sm text-gray-400 mb-2">{language === 'es' ? 'Relevante' : 'Relevant'}</div>
+                <div className="text-3xl font-black text-green-400">{mockResults.resumen.relevante}</div>
+                <div className="text-xs text-green-400 mt-1">{language === 'es' ? 'Monitoreo normal' : 'Normal monitoring'}</div>
               </div>
             </div>
 
@@ -1170,33 +1189,40 @@ return (
             <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8">
               <h3 className="text-xl font-bold mb-6">{language === 'es' ? 'Distribución de Riesgo' : 'Risk Distribution'}</h3>
               <div className="space-y-4">
+                {typeof mockResults.resumen.ai_nuevos_casos === 'number' && (
+                  <div className="mb-2 text-xs text-yellow-300">
+                    {language === 'es' ? 'AI detectó ' : 'AI detected '}
+                    <span className="font-semibold">{mockResults.resumen.ai_nuevos_casos}</span>
+                    {language === 'es' ? ' nuevos casos inusuales' : ' new unusual cases'}
+                  </div>
+                )}
                 <div>
                   <div className="flex justify-between mb-2">
-                    <span className="text-sm font-semibold text-blue-400">{language === 'es' ? 'Alto Riesgo (Preocupante)' : 'High Risk (Preocupante)'}</span>
+                    <span className="text-sm font-semibold text-red-400">{language === 'es' ? 'Preocupante' : 'High Risk (Preocupante)'}</span>
                     <span className="text-sm font-bold">{mockResults.resumen.preocupante} {language === 'es' ? 'transacciones' : 'transactions'}</span>
                   </div>
                   <div className="h-3 bg-black rounded-full overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-blue-600 to-blue-500" style={{width: `${(mockResults.resumen.preocupante / mockResults.resumen.total_transacciones) * 100}%`}}></div>
+                    <div className="h-full bg-red-600" style={{width: `${(mockResults.resumen.preocupante / mockResults.resumen.total_transacciones) * 100}%`}}></div>
                   </div>
                 </div>
 
                 <div>
                   <div className="flex justify-between mb-2">
-                    <span className="text-sm font-semibold text-emerald-400">{language === 'es' ? 'Inusual' : 'Unusual (Inusual)'}</span>
+                    <span className="text-sm font-semibold text-yellow-400">{language === 'es' ? 'Inusual' : 'Unusual (Inusual)'}</span>
                     <span className="text-sm font-bold">{mockResults.resumen.inusual} {language === 'es' ? 'transacciones' : 'transactions'}</span>
                   </div>
                   <div className="h-3 bg-black rounded-full overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-emerald-600 to-emerald-500" style={{width: `${(mockResults.resumen.inusual / mockResults.resumen.total_transacciones) * 100}%`}}></div>
+                    <div className="h-full bg-gradient-to-r from-yellow-600 to-yellow-500" style={{width: `${(mockResults.resumen.inusual / mockResults.resumen.total_transacciones) * 100}%`}}></div>
                   </div>
                 </div>
 
                 <div>
                   <div className="flex justify-between mb-2">
-                    <span className="text-sm font-semibold text-yellow-400">{language === 'es' ? 'Relevante' : 'Relevant (Relevante)'}</span>
+                    <span className="text-sm font-semibold text-green-400">{language === 'es' ? 'Relevante' : 'Relevant (Relevante)'}</span>
                     <span className="text-sm font-bold">{mockResults.resumen.relevante} {language === 'es' ? 'transacciones' : 'transactions'}</span>
                   </div>
                   <div className="h-3 bg-black rounded-full overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-yellow-600 to-yellow-500" style={{width: `${(mockResults.resumen.relevante / mockResults.resumen.total_transacciones) * 100}%`}}></div>
+                    <div className="h-full bg-gradient-to-r from-green-600 to-green-500" style={{width: `${(mockResults.resumen.relevante / mockResults.resumen.total_transacciones) * 100}%`}}></div>
                   </div>
                 </div>
               </div>

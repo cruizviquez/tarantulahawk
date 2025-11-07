@@ -90,32 +90,34 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
       }
 
       // Send Magic Link via Supabase OTP
-      // Build a sanitized base URL that never includes a :port on Codespaces
+      // Build the public base URL for email redirects
       function computePublicBaseUrl(): string {
-        // 1) Prefer env var if present
+        // Prefer explicit site URL only if it's not localhost
         const fromEnv = process.env.NEXT_PUBLIC_SITE_URL;
         if (fromEnv) {
           try {
             const u = new URL(fromEnv);
-            // On Codespaces, ensure no :port is appended (host already encodes -3000)
-            if (u.hostname.endsWith('.app.github.dev')) {
-              return `${u.protocol}//${u.hostname}`;
-            }
-            return `${u.protocol}//${u.host}`; // includes port only when intended
+            const isLocal = u.hostname === 'localhost' || u.hostname === '127.0.0.1';
+            if (!isLocal) return u.origin;
+            // If it's localhost, ignore to avoid sending :3000 in emails
           } catch {
-            // if malformed, fall back to window
+            // Malformed; continue to window-based logic
           }
         }
 
-        // 2) Fallback to window
+        // Use current window origin when available
         if (typeof window !== 'undefined') {
-          const proto = window.location.protocol; // includes the trailing ':'
-          const hostname = window.location.hostname; // never includes port
-          // For Codespaces, hostname already contains -3000, so don't add :3000
-          return `${proto}//${hostname}`;
+          const { origin, hostname } = window.location;
+          // In GitHub Codespaces, origin is already a public https domain without a port
+          if (hostname.includes('github.dev')) return origin;
+          // If running locally, avoid embedding :3000 in emails; prefer https without port
+          if (hostname === 'localhost' || hostname === '127.0.0.1') {
+            return 'http://localhost'; // safe placeholder for local testing only
+          }
+          return origin;
         }
 
-        // 3) Final fallback
+        // Fallback to production domain
         return 'https://tarantulahawk.cloud';
       }
 

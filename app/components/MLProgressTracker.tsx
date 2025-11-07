@@ -26,21 +26,24 @@ const stages = {
   },
   ml_supervised: {
     icon: Brain,
-    label: { es: 'Modelo Supervisado (IA)', en: 'Supervised ML Model' },
+    label: { es: 'Etiquetando Operaciones', en: 'Labeling Transactions' },
+    sublabel: { es: '(Modelo Supervisado)', en: '(Supervised Model)' },
     color: 'text-cyan-400',
     bgColor: 'bg-cyan-900/20',
     borderColor: 'border-cyan-800/30'
   },
   ml_unsupervised: {
     icon: TrendingUp,
-    label: { es: 'Modelo No Supervisado (Clustering)', en: 'Unsupervised ML (Clustering)' },
+    label: { es: 'Detectando Anomalías', en: 'Detecting Anomalies' },
+    sublabel: { es: '(Modelo No Supervisado)', en: '(Unsupervised Model)' },
     color: 'text-emerald-400',
     bgColor: 'bg-teal-900/20',
     borderColor: 'border-teal-800/30'
   },
   ml_reinforcement: {
     icon: Brain,
-    label: { es: 'Aprendizaje por Refuerzo (Optimización)', en: 'Reinforcement Learning (Optimization)' },
+    label: { es: 'Ajustando Parámetros', en: 'Adjusting Parameters' },
+    sublabel: { es: '(Aprendizaje por Refuerzo)', en: '(Reinforcement Learning)' },
     color: 'text-blue-400',
     bgColor: 'bg-blue-900/20',
     borderColor: 'border-blue-800/30'
@@ -90,6 +93,11 @@ export default function MLProgressTracker({
           <div className={`text-lg font-bold ${currentStage.color} mb-1`}>
             {currentStage.label[language]}
           </div>
+          {'sublabel' in currentStage && (
+            <div className="text-xs text-gray-400">
+              {currentStage.sublabel[language]}
+            </div>
+          )}
           {fileName && (
             <div className="text-sm text-gray-500 truncate">
               {fileName}

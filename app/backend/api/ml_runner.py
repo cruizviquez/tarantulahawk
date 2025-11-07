@@ -60,7 +60,12 @@ def process_file(csv_path: Path, predictor: TarantulaHawkPredictor) -> bool:
         
         # Ejecutar predictor ML (incluye 3 capas + guardrails)
         log(f"\n   🤖 Ejecutando TarantulaHawk Predictor...")
-        predictions, probas = predictor.predict(df, return_probas=True)
+        pred_out = predictor.predict(df, return_probas=True, return_scores=True)
+        if isinstance(pred_out, tuple) and len(pred_out) == 3:
+            predictions, probas, scores = pred_out
+        else:
+            predictions, probas = pred_out
+            scores = None
         
         # Clasificación
         preocupante = (predictions == "preocupante").sum()
@@ -76,6 +81,12 @@ def process_file(csv_path: Path, predictor: TarantulaHawkPredictor) -> bool:
         # Generar detalle de transacciones (primeras 100)
         transacciones = []
         
+        flags_unsup = None
+        try:
+            flags_unsup = predictor.get_unsupervised_flags()
+        except Exception:
+            flags_unsup = None
+
         for i in range(min(100, len(df))):
             row = df.iloc[i]
             pred = predictions[i]
@@ -83,6 +94,14 @@ def process_file(csv_path: Path, predictor: TarantulaHawkPredictor) -> bool:
             # Obtener probabilidades por clase
             classes = predictor.model.classes_
             proba_dict = {cls: float(probas[i, j]) for j, cls in enumerate(classes)}
+            anomaly_score = float(scores[i]) if scores is not None else None
+            nota = None
+            if flags_unsup is not None:
+                try:
+                    if bool(flags_unsup[i]):
+                        nota = "nuevos casos detectados por AI no_supervisado, validarlo manualmente"
+                except Exception:
+                    pass
             
             transacciones.append({
                 "id": f"TXN-{i+1:05d}",
@@ -91,11 +110,14 @@ def process_file(csv_path: Path, predictor: TarantulaHawkPredictor) -> bool:
                 "tipo_operacion": str(row.get("tipo_operacion", "")),
                 "sector_actividad": str(row.get("sector_actividad", "")),
                 "clasificacion": pred,
-                "probabilidades": proba_dict
+                "probabilidades": proba_dict,
+                "anomaly_score": anomaly_score,
+                "nota": nota
             })
         
         # Guardar resultados
         output_json = PROCESSED_DIR / f"{analysis_id}.json"
+        ai_new = int(flags_unsup.sum()) if isinstance(flags_unsup, (list, tuple, set,)) or hasattr(flags_unsup, 'sum') else 0
         results = {
             "success": True,
             "analysis_id": analysis_id,
@@ -105,7 +127,8 @@ def process_file(csv_path: Path, predictor: TarantulaHawkPredictor) -> bool:
                 "preocupante": int(preocupante),
                 "inusual": int(inusual),
                 "relevante": int(relevante),
-                "limpio": 0  # No usado en clasificación actual
+                "limpio": 0,  # No usado en clasificación actual
+                "ai_nuevos_casos": int(ai_new)
             },
             "transacciones": transacciones,
             "metadata": {

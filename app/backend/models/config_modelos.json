@@ -38,8 +38,8 @@
       },
       "test_size": 0.2,
       "cv_folds": 3,
-      "threshold_preocupante": 0.50,
-      "threshold_inusual": 0.35,
+      "threshold_preocupante": 0.51,
+      "threshold_inusual": 0.45,
       "enable_shap": true
     },
     "no_supervisado": {
@@ -52,13 +52,15 @@
       "analyze_all_classes": true,
       "export_anomaly_features": true,
       "enable_dbscan": true,
-      "enable_pca_anomaly": true
+      "enable_pca_anomaly": true,
+      "use_for_adjustment": true,
+      "anomaly_threshold": 0.85
     },
     "refuerzo": {
       "version": "2.0",
-      "grid_size": 17,
-      "grid_min": 0.1,
-      "grid_max": 0.9,
+      "grid_size": 21,
+      "grid_min": 0.45,
+      "grid_max": 0.65,
       "val_months": 2,
       "cost_weights": {
         "FN_preocupante": 10000.0,

@@ -14,6 +14,8 @@ Uso:
 import os
 import json
 import joblib
+import time
+import logging
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -65,6 +67,19 @@ class TarantulaHawkPredictor:
         if self.verbose:
             print("🤖 TarantulaHawk Predictor - Inicializando...")
         
+        # Configurar logging básico (archivo opcional)
+        log_file = os.environ.get("PREDICTOR_LOG_FILE")
+        if log_file and not logging.getLogger(__name__).handlers:
+            # Crear directorio si no existe
+            log_path = Path(log_file)
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            logging.basicConfig(
+                level=logging.INFO,
+                format="%(asctime)s [%(levelname)s] %(message)s",
+                handlers=[logging.FileHandler(log_file), logging.StreamHandler()]
+            )
+
         # Cargar modelos
         self._load_models()
         
@@ -73,16 +88,45 @@ class TarantulaHawkPredictor:
     
     def _load_models(self):
         """Carga todos los modelos necesarios"""
-        
+
+        def pick_model(patterns: list[str]) -> Path:
+            """Busca el primer archivo que exista según una lista de patrones de prioridad.
+            Si no lo encuentra, usa el más reciente que coincida con un patrón comodín."""
+            # 1) Revisar config explícita si existe
+            modelos_cfg = self.config.get("modelos", {}).get("paths", {})
+            for key in [
+                "supervisado",
+                "no_supervisado",
+                "refuerzo",
+            ]:
+                # Este helper solo respeta si el patrón ya vino resuelto fuera
+                pass
+
+            # 2) Buscar por patrones en orden
+            for pat in patterns:
+                candidate = self.outputs_dir / pat
+                if candidate.exists():
+                    return candidate
+
+            # 3) Glob comodín por prioridad y tomar el más reciente
+            glob_patterns = [p.replace(".pkl", "*.pkl") for p in patterns]
+            matches: list[Path] = []
+            for g in glob_patterns:
+                matches.extend(self.outputs_dir.glob(g))
+            if matches:
+                return max(matches, key=lambda p: p.stat().st_mtime)
+            return None
+
         # 1. Modelo Supervisado (CRÍTICO)
-        sup_path = self.outputs_dir / "modelo_ensemble_stack_v2.pkl"
-        if not sup_path.exists():
-            # Fallback a V1
-            sup_path = self.outputs_dir / "modelo_ensemble_stack.pkl"
-        
-        if not sup_path.exists():
-            raise FileNotFoundError(f"❌ No se encontró modelo supervisado en {sup_path}")
-        
+        sup_path = pick_model([
+            "modelo_ensemble_stack_v3.pkl",
+            "modelo_ensemble_stack_v2.pkl",
+            "modelo_ensemble_stack.pkl",
+        ])
+
+        if not sup_path or not sup_path.exists():
+            raise FileNotFoundError("❌ No se encontró modelo supervisado en outputs/")
+
         self.bundle_sup = joblib.load(sup_path)
         self.model = self.bundle_sup["model"]
         self.scaler = self.bundle_sup["scaler"]
@@ -100,17 +144,25 @@ class TarantulaHawkPredictor:
             print(f"   ✅ Thresholds (config): p={self.thresholds['preocupante']}, i={self.thresholds['inusual']}")
         
         # 3. Modelo de Refuerzo (OPCIONAL - solo para Q-table si se necesita)
-        rl_path = self.outputs_dir / "refuerzo_bundle_v2.pkl"
-        if rl_path.exists():
+        rl_path = pick_model([
+            "refuerzo_bundle_v3.pkl",
+            "refuerzo_bundle_v2.pkl",
+            "refuerzo_bundle.pkl",
+        ])
+        if rl_path and rl_path.exists():
             self.bundle_rl = joblib.load(rl_path)
             if self.verbose:
-                print(f"   ✅ Modelo de refuerzo cargado (Q-table disponible)")
+                print(f"   ✅ Modelo de refuerzo: {rl_path.name}")
         else:
             self.bundle_rl = None
         
         # 4. Modelo No Supervisado (OPCIONAL)
-        ns_path = self.outputs_dir / "no_supervisado_bundle_v2.pkl"
-        if ns_path.exists():
+        ns_path = pick_model([
+            "no_supervisado_bundle_v3.pkl",
+            "no_supervisado_bundle_v2.pkl",
+            "no_supervisado_bundle.pkl",
+        ])
+        if ns_path and ns_path.exists():
             self.bundle_ns = joblib.load(ns_path)
             if self.verbose:
                 print(f"   ✅ Modelo no supervisado: {ns_path.name}")
@@ -175,11 +227,46 @@ class TarantulaHawkPredictor:
         if self.verbose and guardrails_info["corrections"] > 0:
             print(f"   🛡️ Guardrails: {guardrails_info['corrections']} correcciones aplicadas")
         
-        # Calcular anomaly scores si disponible
+        # Calcular anomaly scores si disponible (1D array normalizado 0..1)
         scores = None
-        if return_scores and self.bundle_ns is not None:
-            scores = self._calculate_anomaly_scores(X_scaled)
+        if self.bundle_ns is not None:
+            # Preparar features específicos para no supervisado (20 columnas numéricas/bool)
+            X_ns_scaled = self._prepare_unsupervised_features(df)
+            scores = self._calculate_anomaly_scores(X_ns_scaled)
+
+        # Ajuste opcional por no supervisado (solo eleva relevante -> inusual)
+        self._unsup_flags = np.zeros(len(df), dtype=bool)
+        cfg_ns = self.config.get("modelos", {}).get("no_supervisado", {})
+        use_adj = bool(cfg_ns.get("use_for_adjustment", False))
+        thr_anom = float(cfg_ns.get("anomaly_threshold", 0.9))
+        if use_adj and scores is not None:
+            mask = (predictions == "relevante") & (scores >= thr_anom)
+            if np.any(mask):
+                predictions = predictions.copy()
+                predictions[mask] = "inusual"
+                self._unsup_flags = mask.astype(bool)
+                if self.verbose:
+                    print(f"   🤝 No supervisado: {int(mask.sum())} elevadas a 'inusual' (thr={thr_anom})")
         
+        # Métricas de performance
+        try:
+            start = getattr(self, "_last_predict_start", None)
+        except AttributeError:
+            start = None
+        # Iniciar si no estaba seteado
+        if start is None:
+            self._last_predict_start = time.time()
+            elapsed = None
+        else:
+            elapsed = time.time() - self._last_predict_start
+            self._last_predict_start = time.time()
+
+        if elapsed is not None:
+            n = len(df)
+            if self.verbose:
+                print(f"   ⏱️ Tiempo: {elapsed:.2f}s para {n} trans | {n/elapsed if elapsed>0 else 0:.0f} trans/s")
+            logging.info(f"Tiempo: {elapsed:.2f}s para {n} trans | Throughput: {n/elapsed if elapsed>0 else 0:.0f} trans/s")
+
         # Devolver resultados
         if return_scores and scores is not None:
             return predictions, probas, scores
@@ -214,6 +301,51 @@ class TarantulaHawkPredictor:
         X = X.replace([np.inf, -np.inf], np.nan).fillna(0)
         
         return X
+
+    def _prepare_unsupervised_features(self, df: pd.DataFrame) -> np.ndarray:
+        """
+        Construye el set de features para el modelo NO SUPERVISADO
+        usando exactamente 20 columnas numéricas/bool en este orden:
+          monto, frecuencia_mensual, mes, dia_semana, quincena,
+          monto_6m, ops_6m, monto_max_6m, monto_std_6m,
+          ops_relativas, diversidad_operaciones, concentracion_temporal,
+          ratio_vs_promedio, posible_burst,
+          EsEfectivo, EsInternacional, SectorAltoRiesgo,
+          fin_de_semana, es_nocturno, es_monto_redondo
+
+        Si el bundle no supervisado trae su propio scaler, se usa.
+        De lo contrario, se devuelve sin escalar (float32).
+        """
+        cols = [
+            "monto", "frecuencia_mensual", "mes", "dia_semana", "quincena",
+            "monto_6m", "ops_6m", "monto_max_6m", "monto_std_6m",
+            "ops_relativas", "diversidad_operaciones", "concentracion_temporal",
+            "ratio_vs_promedio", "posible_burst",
+            "EsEfectivo", "EsInternacional", "SectorAltoRiesgo",
+            "fin_de_semana", "es_nocturno", "es_monto_redondo",
+        ]
+
+        X_ns_df = pd.DataFrame(index=df.index)
+        for c in cols:
+            if c in df.columns:
+                X_ns_df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
+            else:
+                X_ns_df[c] = 0.0
+
+        X_ns = X_ns_df[cols].to_numpy(dtype=np.float32)
+
+        ns_scaler = None
+        if getattr(self, "bundle_ns", None):
+            ns_scaler = self.bundle_ns.get("scaler")
+
+        if ns_scaler is not None:
+            try:
+                return ns_scaler.transform(X_ns)
+            except Exception as e:
+                if self.verbose:
+                    print(f"   ⚠️ No se pudo aplicar scaler no supervisado: {e}. Usando sin escalar.")
+
+        return X_ns
     
     def _apply_guardrails(
         self, 
@@ -281,32 +413,75 @@ class TarantulaHawkPredictor:
         
         return predictions, guardrails_info
     
-    def _calculate_anomaly_scores(self, X_scaled: np.ndarray) -> Dict[str, np.ndarray]:
+    def _calculate_anomaly_scores(self, X_scaled: np.ndarray) -> np.ndarray:
         """
-        Calcula scores de anomalía usando modelo no supervisado
+        Calcula score de anomalía normalizado (0..1, mayor = más anómalo)
+        usando los modelos disponibles en el bundle no supervisado.
+        
+        Maneja automáticamente incompatibilidad de features.
         """
         if self.bundle_ns is None:
             return None
-        
+
         iso_model = self.bundle_ns.get("isolation_forest")
         kmeans_model = self.bundle_ns.get("kmeans")
-        
-        scores = {}
-        
+
+        candidates = []
+        # IsolationForest: decision_function mayor = más normal. Invertimos y normalizamos
         if iso_model is not None:
-            scores["anomaly_score_iso"] = iso_model.decision_function(X_scaled)
-            scores["is_outlier_iso"] = (iso_model.predict(X_scaled) == -1).astype(int)
-        
+            try:
+                # Si hay incompatibilidad de features, usar las primeras N que coincidan
+                n_expected = getattr(iso_model, 'n_features_in_', None)
+                if n_expected is not None and X_scaled.shape[1] != n_expected:
+                    if self.verbose:
+                        print(f"   ⚠️ Feature mismatch: usando primeras {n_expected} de {X_scaled.shape[1]} features para IsolationForest")
+                    X_input = X_scaled[:, :n_expected]
+                else:
+                    X_input = X_scaled
+                
+                df_vals = iso_model.decision_function(X_input)
+                inv = -df_vals
+                inv_min, inv_max = float(inv.min()), float(inv.max())
+                norm_iso = (inv - inv_min) / (inv_max - inv_min + 1e-12)
+                candidates.append(norm_iso)
+            except Exception as e:
+                if self.verbose:
+                    print(f"   ⚠️ Error en IsolationForest: {e}")
+
+        # KMeans: distancia al centroide más cercano
         if kmeans_model is not None:
-            scores["cluster_id"] = kmeans_model.predict(X_scaled)
-            centers = kmeans_model.cluster_centers_
-            distances = np.min(
-                [np.linalg.norm(X_scaled - center, axis=1) for center in centers],
-                axis=0
-            )
-            scores["dist_to_cluster"] = distances
-        
+            try:
+                # Mismo manejo de features para KMeans
+                n_expected = getattr(kmeans_model, 'n_features_in_', None)
+                if n_expected is not None and X_scaled.shape[1] != n_expected:
+                    if self.verbose:
+                        print(f"   ⚠️ Feature mismatch: usando primeras {n_expected} de {X_scaled.shape[1]} features para KMeans")
+                    X_input = X_scaled[:, :n_expected]
+                else:
+                    X_input = X_scaled
+                
+                centers = kmeans_model.cluster_centers_
+                dists = np.min(
+                    [np.linalg.norm(X_input - center, axis=1) for center in centers],
+                    axis=0
+                )
+                d_min, d_max = float(dists.min()), float(dists.max())
+                norm_km = (dists - d_min) / (d_max - d_min + 1e-12)
+                candidates.append(norm_km)
+            except Exception as e:
+                if self.verbose:
+                    print(f"   ⚠️ Error en KMeans: {e}")
+
+        if not candidates:
+            return None
+
+        # Combinar tomando el máximo (más conservador: mayor anomalía prevalece)
+        scores = np.maximum.reduce([np.asarray(c) for c in candidates])
         return scores
+
+    def get_unsupervised_flags(self) -> np.ndarray:
+        """Retorna un array booleano indicando qué filas fueron elevadas por no supervisado."""
+        return getattr(self, "_unsup_flags", None)
     
     def predict_batch(
         self,
@@ -364,7 +539,11 @@ class TarantulaHawkPredictor:
             "classes": self.model.classes_.tolist(),
             "thresholds": self.thresholds,
             "config_version": self.config.get("modelos", {}).get("version", "unknown"),
-            "has_unsupervised": self.bundle_ns is not None
+            "has_unsupervised": self.bundle_ns is not None,
+            "unsupervised_adjustment": {
+                "enabled": bool(self.config.get("modelos", {}).get("no_supervisado", {}).get("use_for_adjustment", False)),
+                "anomaly_threshold": float(self.config.get("modelos", {}).get("no_supervisado", {}).get("anomaly_threshold", 0.9))
+            }
         }
         
         return info
