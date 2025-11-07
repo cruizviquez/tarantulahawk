@@ -113,6 +113,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
   const [fileStats, setFileStats] = useState<{rows: number, fileName: string, fileSize: number} | null>(null);
   const [processingStage, setProcessingStage] = useState<string>(''); // '', 'uploading', 'validating', 'ml_supervised', 'ml_unsupervised', 'ml_reinforcement', 'generating_report', 'complete'
   const [processingProgress, setProcessingProgress] = useState<number>(0);
+  const [progressDetails, setProgressDetails] = useState<any>({});
   const [selectedAmount, setSelectedAmount] = useState<number>(500); // Default to $500
   const [fileReadyForAnalysis, setFileReadyForAnalysis] = useState<boolean>(false);
   const [uploadedFileId, setUploadedFileId] = useState<string | null>(null);
