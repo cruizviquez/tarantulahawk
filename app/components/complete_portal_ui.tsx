@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import { calculateTieredCost, PRICING_TIERS, formatPricingSummary } from '../lib/pricing';
-import { Upload, FileSpreadsheet, FileText, Download, AlertCircle, AlertTriangle, CheckCircle, CheckCircle2, Database, User, Clock, BarChart3, CreditCard, Lock, TrendingUp, TrendingDown, ChevronDown, X, Menu, Zap, Key, Shield } from 'lucide-react';
+import { Upload, FileSpreadsheet, FileText, Download, AlertCircle, AlertTriangle, CheckCircle, CheckCircle2, Database, User, Clock, BarChart3, CreditCard, Lock, TrendingUp, TrendingDown, ChevronDown, X, Menu, Zap, Key } from 'lucide-react';
 
 import MLProgressTracker from './MLProgressTracker';
 import ProfileModal from './ProfileModal';
@@ -1400,14 +1400,14 @@ return (
                   }}
                   className="w-full py-4 bg-gray-800 rounded-lg font-bold hover:bg-gray-700 transition flex items-center justify-center gap-3"
                 >
-                  <Shield className="w-5 h-5" />
+                  <Lock className="w-5 h-5" />
                   {language === 'es' ? 'Transferencia Bancaria' : 'Bank Transfer'}
                 </button>
               </div>
 
               {/* Security Note */}
               <div className="mt-6 flex items-start gap-3 text-sm text-gray-400">
-                <Shield className="w-5 h-5 text-teal-400 flex-shrink-0 mt-0.5" />
+                <Lock className="w-5 h-5 text-teal-400 flex-shrink-0 mt-0.5" />
                 <p>
                   {language === 'es' 
                     ? 'Todos los pagos son procesados de forma segura. Tus datos financieros están protegidos con encriptación de nivel bancario.' 
@@ -1486,7 +1486,7 @@ return (
         <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8 max-w-md w-full mx-4">
             <div className="text-center mb-6">
-              <DollarSign className="w-16 h-16 text-teal-400 mx-auto mb-4" />
+              <CreditCard className="w-16 h-16 text-teal-400 mx-auto mb-4" />
               <h3 className="text-2xl font-bold mb-2">Payment Required</h3>
               <p className="text-gray-400">Complete payment to unlock full results</p>
             </div>
