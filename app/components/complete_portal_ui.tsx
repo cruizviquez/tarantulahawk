@@ -70,6 +70,37 @@ interface TarantulaHawkPortalProps {
   user: UserData;
 }
 
+// Transactions produced by an analysis run
+interface AnalysisTransaction {
+  id: string;
+  monto: number;
+  fecha: string;
+  tipo_operacion: string;
+  sector_actividad: string;
+  clasificacion: string;
+  risk_score: number;
+  razones?: string[];
+}
+
+interface MockResults {
+  resumen: {
+    total_transacciones: number;
+    preocupante: number;
+    inusual: number;
+    relevante: number;
+    limpio: number;
+    false_positive_rate: number;
+    processing_time_ms: number;
+    ai_nuevos_casos?: number;
+  };
+  transacciones: AnalysisTransaction[];
+  costo: number;
+  analysis_id: string;
+  success?: boolean;
+  xml_path?: string;
+  file_name?: string;
+}
+
 const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) => {
   // Supabase client for auth (using @supabase/ssr for compatibility)
   const supabase = createBrowserClient(
@@ -100,7 +131,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
   const [user, setUser] = useState<UserData>(initialUser);
   const [detectedColumns, setDetectedColumns] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [currentAnalysis, setCurrentAnalysis] = useState<any>(null);
+  const [currentAnalysis, setCurrentAnalysis] = useState<MockResults | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [showPayment, setShowPayment] = useState(false);
@@ -676,7 +707,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
           headers: { 'X-User-ID': user.id }
         });
         
-        const analysisData = await analysisResponse.json();
+        const analysisData: MockResults = await analysisResponse.json();
         setCurrentAnalysis(analysisData);
         setShowPayment(false);
         setPendingPayment(null);
@@ -739,7 +770,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
   }, [activeTab, user]);
 
   // Mock results for demonstration
-  const mockResults = currentAnalysis || {
+  const mockResults: MockResults = currentAnalysis || {
     resumen: {
       total_transacciones: 15247,
       preocupante: 127,
@@ -1032,7 +1063,7 @@ return (
                 <input
                   type="file"
                   accept=".xlsx,.xls,.csv"
-                  onChange={(e) => {
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                     const file = e.target.files?.[0];
                     if (file) handleFileUpload(file);
                   }}
@@ -1391,9 +1422,9 @@ return (
                     </thead>
                     <tbody>
                       {(mockResults.transacciones || [])
-                        .filter(t => t.clasificacion === classificationFilter)
+                        .filter((t: AnalysisTransaction) => t.clasificacion === classificationFilter)
                         .slice(0, 100)
-                        .map(tx => (
+                        .map((tx: AnalysisTransaction) => (
                           <tr key={tx.id} className="border-b border-gray-900 hover:bg-gray-800/40">
                             <td className="py-2 pr-4 font-mono text-xs">{tx.id}</td>
                             <td className="py-2 pr-4">{tx.fecha}</td>
@@ -1508,7 +1539,7 @@ return (
                     type="number"
                     placeholder="0.00"
                     value={customAmount}
-                    onChange={(e) => {
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                       const val = e.target.value;
                       setCustomAmount(val);
                       if (val && parseFloat(val) > 0) {

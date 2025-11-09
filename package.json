@@ -7,6 +7,7 @@
     "build": "next build --turbopack",
     "start": "next start",
     "deploy": "vercel --prod",
+    "type-check": "tsc --noEmit",
     "smoke": "bash scripts/smoke-test.sh"
   },
   "dependencies": {
