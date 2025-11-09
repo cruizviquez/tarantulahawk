@@ -1496,6 +1496,23 @@ async def validar_archivo_portal(
         
         # Get column names from the dataframe
         columns = df.columns.tolist()
+        required_cols = ["cliente_id", "monto", "fecha", "tipo_operacion", "sector_actividad"]
+        missing = [c for c in required_cols if c not in columns]
+
+        if missing:
+            # Delete temp file since it's invalid
+            try:
+                os.remove(file_path)
+            except Exception:
+                pass
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "Archivo inválido - faltan columnas obligatorias",
+                    "missing_columns": missing,
+                    "required": required_cols
+                }
+            )
         
         print(f"✅ File validated: {file.filename} - {total_rows} rows, {len(columns)} columns")
         print(f"📋 Columns detected: {columns}")
@@ -1508,6 +1525,9 @@ async def validar_archivo_portal(
             "columns": columns,  # ← Columnas del Excel
             "message": "File validated successfully. Ready for analysis."
         }
+    except HTTPException:
+        # Re-raise HTTPException with proper status codes (400, 413, etc.)
+        raise
     except Exception as e:
         if 'file_path' in locals() and os.path.exists(file_path):
             os.remove(file_path)
@@ -1594,6 +1614,23 @@ async def upload_archivo_portal(
         else:
             os.remove(file_path)
             raise HTTPException(status_code=400, detail="Formato no soportado. Use .xlsx, .xls o .csv")
+
+        # REQUIRED COLUMNS ENFORCEMENT (hard stop before enrichment)
+        required_cols = ["cliente_id", "monto", "fecha", "tipo_operacion", "sector_actividad"]
+        missing = [c for c in required_cols if c not in df.columns]
+        if missing:
+            try:
+                os.remove(file_path)
+            except Exception:
+                pass
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "Archivo inválido - faltan columnas obligatorias",
+                    "missing_columns": missing,
+                    "required": required_cols
+                }
+            )
         
         print(f"✅ Archivo cargado: {len(df)} filas, {len(df.columns)} columnas")
         
@@ -1611,9 +1648,10 @@ async def upload_archivo_portal(
             from validador_enriquecedor import procesar_archivo
             
             # Enrich en modo inferencia (no agrega clasificacion_lfpiorpi)
+            # No inventar sector_actividad: exigir columna ya validada
             enriched_path = procesar_archivo(
                 str(file_path),
-                sector_actividad="random",  # O extraerlo del CSV si existe
+                sector_actividad="use_file",  # marcador semántico (ignored if file already has column)
                 config_path=str(config_path),
                 training_mode=False,
                 analysis_id=analysis_id
@@ -1705,13 +1743,13 @@ async def upload_archivo_portal(
         
         print(f"✅ Cobrado exitosamente: ${resultado_cobro['charged']:.2f} | Nuevo saldo: ${resultado_cobro['balance_after']:.2f}")
         
-        # Save to history
+        # Save to history (include costo/pagado for UI and guards)
         ANALYSIS_HISTORY[analysis_id] = {
             "user_id": user["user_id"],
             "resultados": resultados,
-            "charged": resultado_cobro.get("charged", 0),
-            "balance_after": resultado_cobro["balance_after"],
-            "quota_remaining": resultado_cobro["quota_remaining"],
+            "costo": resultado_cobro.get("charged", 0),
+            "pagado": True,
+            "balance_after": resultado_cobro.get("balance_after"),
             "timestamp": datetime.now(),
             "file_name": file.filename
         }
@@ -2032,8 +2070,9 @@ async def obtener_historial(
             "timestamp": data["timestamp"],
             "total_transacciones": data["resultados"]["resumen"]["total_transacciones"],
             "preocupante": data["resultados"]["resumen"]["preocupante"],
-            "costo": data["costo"],
-            "pagado": data["pagado"]
+            "costo": data.get("costo", data.get("charged", 0)),
+            "pagado": data.get("pagado", True),
+            "file_name": data.get("file_name")
         }
         for aid, data in ANALYSIS_HISTORY.items()
         if data["user_id"] == user["user_id"]

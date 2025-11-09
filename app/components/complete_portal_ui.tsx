@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
-import { calculateTieredCost, PRICING_TIERS, formatPricingSummary } from '../lib/pricing';
+import { calculateTieredCost } from '../lib/pricing';
 import { Upload, FileSpreadsheet, FileText, Download, AlertCircle, AlertTriangle, CheckCircle, CheckCircle2, Database, User, Clock, BarChart3, CreditCard, Lock, TrendingUp, TrendingDown, ChevronDown, X, Menu, Zap, Key } from 'lucide-react';
 
 import MLProgressTracker from './MLProgressTracker';
@@ -56,6 +56,7 @@ interface HistoryItem {
   total_transacciones: number;
   costo: number;
   pagado: boolean;
+  file_name?: string;
 }
 
 interface ApiKey {
@@ -119,11 +120,12 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
   const [uploadedFileId, setUploadedFileId] = useState<string | null>(null);
   const [fileUploaded, setFileUploaded] = useState<boolean>(false); // Track if file has been uploaded
   const [statusMessage, setStatusMessage] = useState<{type: 'success' | 'error' | 'info' | 'warning', message: string} | null>(null);
+  const [classificationFilter, setClassificationFilter] = useState<string | null>(null);
 
   // Initialize API URL (client-side only, in useEffect to avoid SSR)
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      // Priority 1: Environment variable (production)
+      // Priority 1: Explicit environment variable (if backend is external Python service)
       if (process.env.NEXT_PUBLIC_BACKEND_API_URL) {
         setApiUrl(process.env.NEXT_PUBLIC_BACKEND_API_URL);
         console.log('[API_URL] Using environment variable:', process.env.NEXT_PUBLIC_BACKEND_API_URL);
@@ -134,10 +136,15 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
         setApiUrl(`https://${backendHost}`);
         console.log('[API_URL] Codespaces detected:', `https://${backendHost}`);
       }
-      // Priority 3: Local development
+      // Priority 3: Production - use Next.js API routes (same origin)
+      else if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        setApiUrl(''); // Empty string means same-origin API routes
+        console.log('[API_URL] Production: using Next.js API routes (same origin)');
+      }
+      // Priority 4: Local development - try Python backend on localhost:8000
       else {
         setApiUrl('http://localhost:8000');
-        console.log('[API_URL] Local development:', 'http://localhost:8000');
+        console.log('[API_URL] Local development: http://localhost:8000');
       }
     }
   }, []);
@@ -187,10 +194,15 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
       const result = await response.json();
       
       if (!response.ok || !result.success) {
-        // Show error for missing columns
-        const errorMsg = result.error || 'Error al procesar el archivo';
-        alert(errorMsg);
-        throw new Error(errorMsg);
+        // Render pretty error in statusMessage box, not browser alert
+        const errorMsg = (result && (result.error || result.detail)) || 'Error al procesar el archivo';
+        setStatusMessage({
+          type: 'error',
+          message: language === 'es' 
+            ? `Validación fallida: ${typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg)}`
+            : `Validation failed: ${typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg)}`
+        });
+        throw new Error(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
       }
       
       if (result.success && result.rowCount !== undefined) {
@@ -211,10 +223,13 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
         fileName: file.name,
         fileSize: file.size
       };
-    } catch {
-      // Error: usar estimación conservadora
+    } catch (e) {
+      // Error: no estimar filas para evitar confusiones (p.ej., "47 transacciones")
+      if (e instanceof Error) console.warn('estimateTransactionsFromFile error:', e.message);
+      // Ensure file is not considered ready after parse/validation error
+      setFileReadyForAnalysis(false);
       return {
-        rows: Math.floor(file.size / 200),
+        rows: 0,
         fileName: file.name,
         fileSize: file.size
       };
@@ -231,6 +246,9 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
     setProcessingProgress(0);
     setDetectedColumns([]);
     setFileUploaded(false); // Re-enable upload button
+    setFileReadyForAnalysis(false);
+    setUploadedFileId(null);
+    setStatusMessage(null);
     // Reset file input to allow re-uploading
     const input = document.getElementById('file-upload') as HTMLInputElement;
     if (input) input.value = '';
@@ -238,10 +256,18 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
 
   const handleFileUpload = async (file: File) => {
     // Wait for API_URL to be initialized
-    if (!API_URL) {
+    if (API_URL === undefined) {
       alert(language === 'es' 
         ? 'Inicializando conexión con backend...' 
         : 'Initializing backend connection...');
+      return;
+    }
+    
+    // Check if backend is available (production without external backend)
+    if (API_URL === '' && typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
+      alert(language === 'es'
+        ? 'El backend de ML no está disponible actualmente. Por favor contacta al administrador.'
+        : 'ML backend is not currently available. Please contact administrator.');
       return;
     }
     
@@ -254,6 +280,12 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
       return;
     }
     
+    // Reset state prior to starting a new validation flow
+    setStatusMessage(null);
+    setFileReadyForAnalysis(false);
+    setUploadedFileId(null);
+    setFileUploaded(false);
+
     setIsLoading(true);
     setSelectedFile(file);
     
@@ -308,13 +340,71 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
       if (!response.ok) {
         const errorText = await response.text();
         let errorMessage = `Error ${response.status}`;
+        let detailedError = null;
         
         try {
           const errorJson = JSON.parse(errorText);
-          errorMessage = errorJson.detail || errorJson.error || errorJson.message || errorMessage;
+          
+          // Handle 400 error with missing columns detail
+          if (response.status === 400 && errorJson.detail) {
+            const detail = errorJson.detail;
+            
+            // If detail is an object with missing_columns
+            if (typeof detail === 'object' && detail.missing_columns) {
+              const missing = detail.missing_columns;
+              const required = detail.required || [];
+              
+              errorMessage = language === 'es'
+                ? `Archivo inválido - Faltan campos obligatorios: ${missing.join(', ')}`
+                : `Invalid file - Missing required fields: ${missing.join(', ')}`;
+              
+              detailedError = {
+                missing: missing,
+                required: required
+              };
+            } 
+            // If detail is a string
+            else if (typeof detail === 'string') {
+              errorMessage = detail;
+            }
+            // If detail has error property
+            else if (detail.error) {
+              errorMessage = detail.error;
+              if (detail.missing_columns) {
+                detailedError = {
+                  missing: detail.missing_columns,
+                  required: detail.required || []
+                };
+              }
+            }
+          } else {
+            errorMessage = errorJson.detail || errorJson.error || errorJson.message || errorMessage;
+          }
         } catch {
           errorMessage = errorText || errorMessage;
         }
+        
+        setStatusMessage({
+          type: 'error',
+          message: errorMessage
+        });
+        
+        // Ensure analyze is disabled after validation failure
+        setFileReadyForAnalysis(false);
+        setUploadedFileId(null);
+        setFileUploaded(false);
+        setIsLoading(false);
+        setProcessingStage('');
+        setProcessingProgress(0);
+        
+        // Clear file stats to show 0 transactions
+        setFileStats({
+          rows: 0,
+          fileName: file.name,
+          fileSize: file.size
+        });
+        setEstimatedTransactions(0);
+        setEstimatedCost(0);
         
         throw new Error(errorMessage);
       }
@@ -367,18 +457,34 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
         });
         setActiveTab('add-funds');
       } else {
+        // Any other error: ensure analyze disabled and state reset
+        setFileReadyForAnalysis(false);
+        setUploadedFileId(null);
+        setFileUploaded(false);
+        setIsLoading(false);
+        setProcessingStage('');
+        setProcessingProgress(0);
         throw new Error(result.error || 'Error processing file');
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       setProcessingStage('');
       setProcessingProgress(0);
-      setStatusMessage({
-        type: 'error',
-        message: language === 'es'
-          ? `Error al validar archivo: ${message}`
-          : `Error validating file: ${message}`
-      });
+      
+      // Only set status message if not already set (to avoid overwriting detailed error)
+      if (!statusMessage) {
+        setStatusMessage({
+          type: 'error',
+          message: language === 'es'
+            ? `Error al validar archivo: ${message}`
+            : `Error validating file: ${message}`
+        });
+      }
+      
+      // Defensive: make sure analyze is disabled after any error
+      setFileReadyForAnalysis(false);
+      setUploadedFileId(null);
+      setFileUploaded(false);
     } finally {
       setIsLoading(false);
     }
@@ -492,6 +598,19 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
           xml_path: result.xml_path,
           file_name: selectedFile.name
         });
+
+        // Agregar al historial local inmediatamente
+        setHistory(prev => [
+          {
+            analysis_id: result.analysis_id,
+            timestamp: new Date().toISOString(),
+            total_transacciones: result.resumen?.total_transacciones || estimatedTransactions,
+            costo: result.costo || 0,
+            pagado: true,
+            file_name: selectedFile.name
+          },
+          ...prev
+        ]);
         
         // Update user balance
         setUser(prev => ({
@@ -504,6 +623,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
         setProcessingStage('');
         setProcessingProgress(0);
         setActiveTab('dashboard');
+        setClassificationFilter(null);
       } else if (response.status === 402) {
         // Fondos insuficientes: cambiar a pestaña de fondos con mensaje claro
         setActiveTab('add-funds');
@@ -570,8 +690,12 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
 
   const loadHistory = async () => {
     try {
+      const token = await getAuthToken();
       const response = await fetch(`${API_URL}/api/history`, {
-        headers: { 'X-User-ID': user.id }
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'X-User-ID': user.id
+        }
       });
       if (!response.ok) {
         console.warn('History API not available yet');
@@ -1155,18 +1279,18 @@ return (
           <div className="space-y-6">
             {/* Summary Cards */}
             <div className="grid md:grid-cols-4 gap-6">
-              <div className="bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-xl p-6">
+              <div onClick={() => setClassificationFilter(null)} className="cursor-pointer bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-xl p-6 hover:border-teal-500/50 transition">
                 <div className="text-sm text-gray-400 mb-2">{language === 'es' ? 'Total de Transacciones' : 'Total Transactions'}</div>
                 <div className="text-3xl font-black text-white">{mockResults.resumen.total_transacciones.toLocaleString()}</div>
               </div>
               
-              <div className="bg-gradient-to-br from-red-900/30 to-black border border-red-800/50 rounded-xl p-6">
+              <div onClick={() => setClassificationFilter('preocupante')} className={`cursor-pointer bg-gradient-to-br from-red-900/30 to-black border rounded-xl p-6 hover:border-red-500/60 transition ${classificationFilter==='preocupante' ? 'border-red-500' : 'border-red-800/50'}`}>
                 <div className="text-sm text-gray-400 mb-2">{language === 'es' ? 'Preocupante' : 'High Risk (Preocupante)'}</div>
                 <div className="text-3xl font-black text-red-400">{mockResults.resumen.preocupante}</div>
                 <div className="text-xs text-red-400 mt-1">{language === 'es' ? 'Requiere acción inmediata' : 'Requires immediate action'}</div>
               </div>
 
-              <div className="bg-gradient-to-br from-yellow-900/30 to-black border border-yellow-800/50 rounded-xl p-6">
+              <div onClick={() => setClassificationFilter('inusual')} className={`cursor-pointer bg-gradient-to-br from-yellow-900/30 to-black border rounded-xl p-6 hover:border-yellow-500/60 transition ${classificationFilter==='inusual' ? 'border-yellow-500' : 'border-yellow-800/50'}`}>
                 <div className="flex items-center justify-between mb-2">
                   <div className="text-sm text-gray-400">{language === 'es' ? 'Inusual' : 'Unusual'}</div>
                   {typeof mockResults.resumen.ai_nuevos_casos === 'number' && (
@@ -1179,7 +1303,7 @@ return (
                 <div className="text-xs text-yellow-400 mt-1">{language === 'es' ? 'Revisión recomendada' : 'Review recommended'}</div>
               </div>
 
-              <div className="bg-gradient-to-br from-green-900/30 to-black border border-green-800/50 rounded-xl p-6">
+              <div onClick={() => setClassificationFilter('relevante')} className={`cursor-pointer bg-gradient-to-br from-green-900/30 to-black border rounded-xl p-6 hover:border-green-500/60 transition ${classificationFilter==='relevante' ? 'border-green-500' : 'border-green-800/50'}`}>
                 <div className="text-sm text-gray-400 mb-2">{language === 'es' ? 'Relevante' : 'Relevant'}</div>
                 <div className="text-3xl font-black text-green-400">{mockResults.resumen.relevante}</div>
                 <div className="text-xs text-green-400 mt-1">{language === 'es' ? 'Monitoreo normal' : 'Normal monitoring'}</div>
@@ -1240,6 +1364,51 @@ return (
                 {language === 'es' ? 'Generar XML para UIF' : 'Generate XML for UIF'}
               </button>
             </div>
+
+            {/* Drill-down Transactions */}
+            {classificationFilter !== null && (
+              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-lg font-bold">
+                    {language === 'es' ? 'Transacciones' : 'Transactions'} • {classificationFilter.toUpperCase()}
+                  </h4>
+                  <button onClick={() => setClassificationFilter(null)} className="text-xs px-3 py-1 border border-gray-700 rounded hover:border-teal-500 transition">
+                    {language === 'es' ? 'Cerrar' : 'Close'}
+                  </button>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    <thead className="text-gray-400 border-b border-gray-800">
+                      <tr>
+                        <th className="text-left py-2 pr-4">ID</th>
+                        <th className="text-left py-2 pr-4">{language === 'es' ? 'Fecha' : 'Date'}</th>
+                        <th className="text-left py-2 pr-4">{language === 'es' ? 'Monto' : 'Amount'}</th>
+                        <th className="text-left py-2 pr-4">{language === 'es' ? 'Tipo' : 'Type'}</th>
+                        <th className="text-left py-2 pr-4">{language === 'es' ? 'Sector' : 'Sector'}</th>
+                        <th className="text-left py-2 pr-4">Score</th>
+                        <th className="text-left py-2">{language === 'es' ? 'Razones' : 'Reasons'}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(mockResults.transacciones || [])
+                        .filter(t => t.clasificacion === classificationFilter)
+                        .slice(0, 100)
+                        .map(tx => (
+                          <tr key={tx.id} className="border-b border-gray-900 hover:bg-gray-800/40">
+                            <td className="py-2 pr-4 font-mono text-xs">{tx.id}</td>
+                            <td className="py-2 pr-4">{tx.fecha}</td>
+                            <td className="py-2 pr-4 font-mono">${tx.monto.toLocaleString()}</td>
+                            <td className="py-2 pr-4">{tx.tipo_operacion}</td>
+                            <td className="py-2 pr-4">{tx.sector_actividad}</td>
+                            <td className="py-2 pr-4 font-semibold">{tx.risk_score}</td>
+                            <td className="py-2 pr-4 text-xs text-gray-400">{(tx.razones || []).join(', ')}</td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -1258,7 +1427,7 @@ return (
                   <div key={i} className="bg-black border border-gray-800 rounded-lg p-4 hover:border-teal-500/50 transition">
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
-                        <div className="font-semibold mb-1">{language === 'es' ? 'Análisis' : 'Analysis'} {item.analysis_id.slice(0, 8)}</div>
+                        <div className="font-semibold mb-1">{item.file_name || (language === 'es' ? 'Análisis' : 'Analysis')} {item.analysis_id.slice(0, 8)}</div>
                         <div className="text-sm text-gray-500">
                           {new Date(item.timestamp).toLocaleDateString()} • {item.total_transacciones.toLocaleString()} {language === 'es' ? 'transacciones' : 'transactions'}
                         </div>
@@ -1353,21 +1522,7 @@ return (
                 </div>
               </div>
 
-              {/* Pricing Tiers Info (driven by config/pricing.json) */}
-              <div className="bg-black border border-gray-700 rounded-xl p-6 mb-8">
-                <h3 className="font-bold mb-4 flex items-center gap-2">
-                  <Zap className="w-5 h-5 text-yellow-400" />
-                  {language === 'es' ? 'Precios por Volumen' : 'Volume Pricing'}
-                </h3>
-                <div className="space-y-3">
-                  {formatPricingSummary(language).map((line, idx) => (
-                    <div className="flex items-center justify-between" key={idx}>
-                      <span className="text-gray-400">{line.split(':')[0]}</span>
-                      <span className="font-bold text-teal-400">{line.split(':')[1]?.trim()}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              {/* Pricing table intentionally removed per request */}
 
               {/* Payment Methods */}
               <div className="space-y-3">
@@ -1530,24 +1685,7 @@ return (
         </div>
       )}
 
-      {/* Loading Overlay */}
-      {isLoading && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="text-center">
-            <div className="w-20 h-20 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-6"></div>
-            <div className="text-2xl font-bold mb-2">
-              {processingStage === 'uploading' || processingStage === 'validating'
-                ? (language === 'es' ? 'Cargando archivo...' : 'Uploading file...')
-                : (language === 'es' ? 'Analizando con IA...' : 'Analyzing with AI...')}
-            </div>
-            <div className="text-gray-400">
-              {processingStage === 'uploading' || processingStage === 'validating'
-                ? (language === 'es' ? 'Validando formato y columnas requeridas' : 'Validating format and required columns')
-                : (language === 'es' ? 'Ejecutando modelos ML de 3 capas' : 'Running 3-layer ML models')}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Full-screen loading overlay removed to keep progress bar visible */}
 
       {/* Profile Modal */}
       {showProfileModal && (

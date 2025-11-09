@@ -21,11 +21,12 @@ import shutil
 import traceback
 from pathlib import Path
 from datetime import datetime
+from collections import Counter
 import pandas as pd
 
-# Importar predictor
-sys.path.insert(0, str(Path(__file__).parent / "utils"))
-from predictor import TarantulaHawkPredictor
+# Importar predictor adaptativo (permite reglas + ML + guardrails)
+sys.path.insert(0, str(Path(__file__).parent))
+from predictor_adaptive import TarantulaHawkAdaptivePredictor
 
 # Paths
 BASE_DIR = Path(__file__).parent.parent
@@ -41,7 +42,7 @@ def log(msg):
     ts = datetime.now().strftime("%H:%M:%S")
     print(f"[{ts}] {msg}", flush=True)
 
-def process_file(csv_path: Path, predictor: TarantulaHawkPredictor) -> bool:
+def process_file(csv_path: Path, predictor: TarantulaHawkAdaptivePredictor) -> bool:
     """
     Procesa un archivo CSV enriquecido y genera resultados JSON
     
@@ -58,14 +59,13 @@ def process_file(csv_path: Path, predictor: TarantulaHawkPredictor) -> bool:
         df = pd.read_csv(csv_path)
         log(f"   Cargado: {len(df)} filas, {len(df.columns)} columnas")
         
-        # Ejecutar predictor ML (incluye 3 capas + guardrails)
-        log(f"\n   🤖 Ejecutando TarantulaHawk Predictor...")
-        pred_out = predictor.predict(df, return_probas=True, return_scores=True)
-        if isinstance(pred_out, tuple) and len(pred_out) == 3:
-            predictions, probas, scores = pred_out
-        else:
-            predictions, probas = pred_out
-            scores = None
+        # Ejecutar predictor adaptativo (rule-based / híbrido / ML puro + guardrails)
+        log(f"\n   🤖 Ejecutando TarantulaHawk Adaptive Predictor...")
+        predictions, probas, meta_pred = predictor.predict_adaptive(
+            df, return_probas=True, return_metadata=True
+        )
+        # En modo rule-based, probas puede ser None
+        scores = None  # Puntaje de anomalía no disponible en adaptativo por ahora
         
         # Clasificación
         preocupante = (predictions == "preocupante").sum()
@@ -78,22 +78,84 @@ def process_file(csv_path: Path, predictor: TarantulaHawkPredictor) -> bool:
         log(f"      🟠 Inusual: {inusual} ({inusual/total*100:.1f}%)")
         log(f"      🟡 Relevante: {relevante} ({relevante/total*100:.1f}%)")
         
-        # Generar detalle de transacciones (primeras 100)
+        # Generar detalle de transacciones (primeras 100) + triggers/origen
         transacciones = []
         
         flags_unsup = None
         try:
-            flags_unsup = predictor.get_unsupervised_flags()
+            # Algunos predictores pueden exponer flags no supervisados
+            flags_unsup = getattr(predictor, "get_unsupervised_flags", lambda: None)()
         except Exception:
             flags_unsup = None
 
+        # Helper severidad
+        severidad = {"relevante": 0, "inusual": 1, "preocupante": 2}
+
+        # Clases del modelo (si proba disponible)
+        classes = None
+        if probas is not None and getattr(predictor, "model", None) is not None:
+            try:
+                classes = predictor.model.classes_
+            except Exception:
+                classes = None
+
+        # Determinar origen por transacción
+        def determinar_origen(row: pd.Series, i: int, pred_final: str, strategy: str, triggers: list[str]) -> str:
+            # 1) Normativo si hay guardrails
+            if any(t.startswith("guardrail_") for t in triggers):
+                return "normativo"
+            # 2) Rule-based multi disparadores (solo aplica con strategy rule_based o híbrido)
+            inusuales = [t for t in triggers if t.startswith("inusual_") or t == "sector_riesgo"]
+            if strategy == "rule_based" and len(inusuales) >= 2:
+                return "reglas_multi"
+            if strategy == "hybrid":
+                # Reconstruir clase rules estimada a partir de triggers
+                rule_cls = "preocupante" if any(t.startswith("guardrail_") for t in triggers) else ("inusual" if len(inusuales) >= 2 else "relevante")
+                # ML clase (si disponible)
+                ml_cls = None
+                ml_conf = 0.0
+                if probas is not None and classes is not None:
+                    j = int(probas[i].argmax())
+                    ml_cls = str(classes[j])
+                    ml_conf = float(probas[i, j])
+                # Si final coincide con rules y difiere de ML -> origen reglas
+                if pred_final == rule_cls and (ml_cls is None or pred_final != ml_cls):
+                    return "reglas"
+                # Alta confianza de ML
+                if ml_cls is not None and ml_conf >= 0.8 and pred_final == ml_cls:
+                    return "ml_alta_confianza"
+                # Por defecto, atribuir a ML si coincide, si no conservador
+                if ml_cls is not None and pred_final == ml_cls:
+                    return "ml"
+                return "conservador"
+            # 3) En ML puro, si no fue normativo, atribuir a ML
+            return "ml"
+
+        # Acumuladores globales (agregados para dashboard)
+        origen_counts = Counter()
+        triggers_globales = Counter()
+
+        # Control de costo: para agregación global, muestrear hasta N filas
+        MAX_AGG_ROWS = 2000
+        idx_iter = range(len(df)) if len(df) <= MAX_AGG_ROWS else range(MAX_AGG_ROWS)
+        strategy = str(meta_pred.get("strategy", "unknown")) if isinstance(meta_pred, dict) else "unknown"
+
+        for i in idx_iter:
+            row = df.iloc[i]
+            triggers = predictor._get_rule_triggers(row, df) if hasattr(predictor, "_get_rule_triggers") else []
+            origen = determinar_origen(row, i, str(predictions[i]), strategy, triggers)
+            origen_counts.update([origen])
+            triggers_globales.update(triggers)
+
+        # Detalle transaccional (máx 100 filas)
         for i in range(min(100, len(df))):
             row = df.iloc[i]
             pred = predictions[i]
             
-            # Obtener probabilidades por clase
-            classes = predictor.model.classes_
-            proba_dict = {cls: float(probas[i, j]) for j, cls in enumerate(classes)}
+            # Obtener probabilidades por clase (si disponibles)
+            proba_dict = {}
+            if probas is not None and classes is not None:
+                proba_dict = {cls: float(probas[i, j]) for j, cls in enumerate(classes)}
             anomaly_score = float(scores[i]) if scores is not None else None
             nota = None
             if flags_unsup is not None:
@@ -102,6 +164,8 @@ def process_file(csv_path: Path, predictor: TarantulaHawkPredictor) -> bool:
                         nota = "nuevos casos detectados por AI no_supervisado, validarlo manualmente"
                 except Exception:
                     pass
+            triggers = predictor._get_rule_triggers(row, df) if hasattr(predictor, "_get_rule_triggers") else []
+            origen = determinar_origen(row, i, str(pred), strategy, triggers)
             
             transacciones.append({
                 "id": f"TXN-{i+1:05d}",
@@ -112,12 +176,24 @@ def process_file(csv_path: Path, predictor: TarantulaHawkPredictor) -> bool:
                 "clasificacion": pred,
                 "probabilidades": proba_dict,
                 "anomaly_score": anomaly_score,
-                "nota": nota
+                "nota": nota,
+                "triggers": triggers,
+                "origen": origen
             })
         
         # Guardar resultados
         output_json = PROCESSED_DIR / f"{analysis_id}.json"
         ai_new = int(flags_unsup.sum()) if isinstance(flags_unsup, (list, tuple, set,)) or hasattr(flags_unsup, 'sum') else 0
+        # Top triggers (top-5)
+        top_triggers = [
+            {"trigger": k, "conteo": int(v)} for k, v in triggers_globales.most_common(5)
+        ]
+        # Indicadores
+        indicadores = {
+            "guardrails_aplicados": int(meta_pred.get("guardrails_applied", 0)) if isinstance(meta_pred, dict) else 0,
+        }
+        if isinstance(meta_pred, dict) and "small_volume_adjustments" in meta_pred:
+            indicadores["ajustes_bajo_volumen"] = meta_pred["small_volume_adjustments"]
         results = {
             "success": True,
             "analysis_id": analysis_id,
@@ -128,12 +204,20 @@ def process_file(csv_path: Path, predictor: TarantulaHawkPredictor) -> bool:
                 "inusual": int(inusual),
                 "relevante": int(relevante),
                 "limpio": 0,  # No usado en clasificación actual
-                "ai_nuevos_casos": int(ai_new)
+                "ai_nuevos_casos": int(ai_new),
+                "estrategia": strategy,
+                "origen_clasificacion": {k: int(v) for k, v in origen_counts.items()},
+                "top_triggers": top_triggers,
+                "indicadores": indicadores
             },
             "transacciones": transacciones,
             "metadata": {
                 "input_file": csv_path.name,
-                "model_info": predictor.get_model_info()
+                "model_info": {
+                    "strategy": strategy,
+                    "details": meta_pred if isinstance(meta_pred, dict) else None
+                },
+                "triggers_globales": {k: int(v) for k, v in triggers_globales.items()}
             }
         }
         
@@ -178,9 +262,9 @@ def main():
     log("="*70)
     
     # Cargar predictor (carga modelos automáticamente)
-    log("\n📦 Inicializando TarantulaHawk Predictor...")
+    log("\n📦 Inicializando TarantulaHawk Adaptive Predictor...")
     try:
-        predictor = TarantulaHawkPredictor(base_dir=str(BASE_DIR), verbose=True)
+        predictor = TarantulaHawkAdaptivePredictor(base_dir=str(BASE_DIR), verbose=True)
     except Exception as e:
         log(f"❌ Error inicializando predictor: {e}")
         return 1

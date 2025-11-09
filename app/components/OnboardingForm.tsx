@@ -92,29 +92,27 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
       // Send Magic Link via Supabase OTP
       // Build the public base URL for email redirects
       function computePublicBaseUrl(): string {
-        // Prefer explicit site URL only if it's not localhost
+        // In local development, always use localhost with port
+        if (typeof window !== 'undefined') {
+          const { origin, hostname } = window.location;
+          if (hostname === 'localhost' || hostname === '127.0.0.1') {
+            return origin; // e.g., http://localhost:3000
+          }
+          // In GitHub Codespaces, origin is already a public https domain
+          if (hostname.includes('github.dev')) return origin;
+          // Otherwise use current origin
+          return origin;
+        }
+
+        // Server-side: check env
         const fromEnv = process.env.NEXT_PUBLIC_SITE_URL;
         if (fromEnv) {
           try {
             const u = new URL(fromEnv);
-            const isLocal = u.hostname === 'localhost' || u.hostname === '127.0.0.1';
-            if (!isLocal) return u.origin;
-            // If it's localhost, ignore to avoid sending :3000 in emails
+            return u.origin;
           } catch {
-            // Malformed; continue to window-based logic
+            // Malformed; continue to fallback
           }
-        }
-
-        // Use current window origin when available
-        if (typeof window !== 'undefined') {
-          const { origin, hostname } = window.location;
-          // In GitHub Codespaces, origin is already a public https domain without a port
-          if (hostname.includes('github.dev')) return origin;
-          // If running locally, avoid embedding :3000 in emails; prefer https without port
-          if (hostname === 'localhost' || hostname === '127.0.0.1') {
-            return 'http://localhost'; // safe placeholder for local testing only
-          }
-          return origin;
         }
 
         // Fallback to production domain
