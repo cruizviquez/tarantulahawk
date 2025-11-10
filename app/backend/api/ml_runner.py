@@ -170,15 +170,28 @@ def process_file(csv_path: Path, predictor: TarantulaHawkAdaptivePredictor) -> b
             triggers = predictor._get_rule_triggers(row, df) if hasattr(predictor, "_get_rule_triggers") else []
             origen = determinar_origen(row, i, str(pred), strategy, triggers)
             
+            # Convertir triggers a lista de razones human-readable
+            razones_lista = []
+            for t in triggers[:3]:  # Top 3
+                if t.startswith("guardrail_"):
+                    razones_lista.append("Umbral normativo LFPIORPI")
+                elif t.startswith("inusual_"):
+                    razones_lista.append(t.replace("inusual_", "").replace("_", " ").title())
+                elif t == "sector_riesgo":
+                    razones_lista.append("Sector alto riesgo")
+                else:
+                    razones_lista.append(t.replace("_", " ").title())
+            
             transacciones.append({
-                "id": f"TXN-{i+1:05d}",
+                "id": str(row.get("cliente_id", f"TXN-{i+1:05d}")),
                 "monto": float(row.get("monto", 0)),
                 "fecha": str(row.get("fecha", "")),
                 "tipo_operacion": str(row.get("tipo_operacion", "")),
                 "sector_actividad": str(row.get("sector_actividad", "")),
                 "clasificacion": pred,
                 "probabilidades": proba_dict,
-                "anomaly_score": anomaly_score,
+                "risk_score": anomaly_score,  # Frontend expects risk_score
+                "razones": razones_lista,  # Frontend expects array
                 "nota": nota,
                 "triggers": triggers,
                 "origen": origen
@@ -229,8 +242,8 @@ def process_file(csv_path: Path, predictor: TarantulaHawkAdaptivePredictor) -> b
         
         log(f"\n✅ Resultados guardados: {output_json.name}")
         
-        # 🔒 RESTAURAR cliente_id original antes de agregar predicciones
-        if cliente_ids_originales is not None:
+        # 🔒 RESTAURAR cliente_id original si fue droppeado por predictor
+        if cliente_ids_originales is not None and "cliente_id" not in df.columns:
             # Insertar al inicio para mantener orden de columnas lógico
             df.insert(0, "cliente_id", cliente_ids_originales)
         

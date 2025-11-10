@@ -1324,11 +1324,6 @@ return (
               <div onClick={() => setClassificationFilter('inusual')} className={`cursor-pointer bg-gradient-to-br from-yellow-900/30 to-black border rounded-xl p-6 hover:border-yellow-500/60 transition ${classificationFilter==='inusual' ? 'border-yellow-500' : 'border-yellow-800/50'}`}>
                 <div className="flex items-center justify-between mb-2">
                   <div className="text-sm text-gray-400">{language === 'es' ? 'Inusual' : 'Unusual'}</div>
-                  {typeof mockResults.resumen.ai_nuevos_casos === 'number' && (
-                    <div className="text-[10px] px-2 py-1 rounded-full bg-yellow-500/20 text-yellow-300 border border-yellow-600/40">
-                      {language === 'es' ? 'AI nuevos casos' : 'AI new cases'}: {mockResults.resumen.ai_nuevos_casos}
-                    </div>
-                  )}
                 </div>
                 <div className="text-3xl font-black text-yellow-400">{mockResults.resumen.inusual}</div>
                 <div className="text-xs text-yellow-400 mt-1">{language === 'es' ? 'Revisión recomendada' : 'Review recommended'}</div>
@@ -1345,13 +1340,6 @@ return (
             <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8">
               <h3 className="text-xl font-bold mb-6">{language === 'es' ? 'Distribución de Riesgo' : 'Risk Distribution'}</h3>
               <div className="space-y-4">
-                {typeof mockResults.resumen.ai_nuevos_casos === 'number' && (
-                  <div className="mb-2 text-xs text-yellow-300">
-                    {language === 'es' ? 'AI detectó ' : 'AI detected '}
-                    <span className="font-semibold">{mockResults.resumen.ai_nuevos_casos}</span>
-                    {language === 'es' ? ' nuevos casos inusuales' : ' new unusual cases'}
-                  </div>
-                )}
                 <div>
                   <div className="flex justify-between mb-2">
                     <span className="text-sm font-semibold text-red-400">{language === 'es' ? 'Preocupante' : 'High Risk (Preocupante)'}</span>
