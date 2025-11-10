@@ -259,6 +259,17 @@ def process_file(csv_path: Path, predictor: TarantulaHawkAdaptivePredictor) -> b
         
         df["razones"] = [get_top_triggers(i) for i in range(len(df))]
         
+        # ✅ Agregar clasificación LFPIORPI como referencia (reglas puras, sin ML)
+        # Solo para volúmenes bajos/medios (evitar procesamiento costoso en datasets grandes)
+        strategy = str(meta_pred.get("strategy", "unknown")) if isinstance(meta_pred, dict) else "unknown"
+        if strategy != "ml_pure":
+            # Para rule_based o hybrid, calcular referencia LFPIORPI
+            clasificacion_lfpiorpi = predictor._predict_rule_based(df)
+            df["clasificacion_lfpiorpi"] = clasificacion_lfpiorpi
+        else:
+            # Para ML puro (>1000 txns), omitir por performance
+            df["clasificacion_lfpiorpi"] = None
+        
         # Guardar CSV enriquecido con predicciones
         processed_csv = PROCESSED_DIR / csv_path.name
         df.to_csv(processed_csv, index=False, encoding='utf-8')
