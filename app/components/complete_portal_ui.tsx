@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import { calculateTieredCost } from '../lib/pricing';
 import { Upload, FileSpreadsheet, FileText, Download, AlertCircle, AlertTriangle, CheckCircle, CheckCircle2, Database, User, Clock, BarChart3, CreditCard, Lock, TrendingUp, TrendingDown, ChevronDown, X, Menu, Zap, Key } from 'lucide-react';
+import AnalysisHistoryPanel from './AnalysisHistoryPanel';
 
 import MLProgressTracker from './MLProgressTracker';
 import ProfileModal from './ProfileModal';
@@ -1435,37 +1436,12 @@ return (
         {activeTab === 'history' && (
           <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8">
             <h2 className="text-2xl font-bold mb-6">{language === 'es' ? 'Historial de Análisis' : 'Analysis History'}</h2>
-            {history.length === 0 ? (
-              <div className="text-center py-12 text-gray-500">
-                <Clock className="w-16 h-16 mx-auto mb-4 opacity-50" />
-                <p>{language === 'es' ? 'Aún no hay historial de análisis' : 'No analysis history yet'}</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {history.map((item, i) => (
-                  <div key={i} className="bg-black border border-gray-800 rounded-lg p-4 hover:border-teal-500/50 transition">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="font-semibold mb-1">{item.file_name || (language === 'es' ? 'Análisis' : 'Analysis')} {item.analysis_id.slice(0, 8)}</div>
-                        <div className="text-sm text-gray-500">
-                          {new Date(item.timestamp).toLocaleDateString()} • {item.total_transacciones.toLocaleString()} {language === 'es' ? 'transacciones' : 'transactions'}
-                        </div>
-                      </div>
-                      <div className="text-right mr-6">
-                        <div className="text-lg font-bold">${item.costo.toFixed(2)}</div>
-                        <div className={`text-xs flex items-center gap-1 ${item.pagado ? 'text-teal-400' : 'text-yellow-400'}`}>
-                          {item.pagado ? <CheckCircle className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
-                          {item.pagado ? (language === 'es' ? 'Pagado' : 'Paid') : (language === 'es' ? 'Pendiente' : 'Pending')}
-                        </div>
-                      </div>
-                      <button className="px-4 py-2 border border-gray-700 rounded-lg hover:border-teal-500 transition text-sm">
-                        {language === 'es' ? 'Ver Reporte' : 'View Report'}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+              <AnalysisHistoryPanel
+                history={history}
+                language={language}
+                apiUrl={API_URL}
+                token={token}
+              />
           </div>
         )}
 

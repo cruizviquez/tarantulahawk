@@ -1746,7 +1746,37 @@ async def upload_archivo_portal(
         
         print(f"✅ Cobrado exitosamente: ${resultado_cobro['charged']:.2f} | Nuevo saldo: ${resultado_cobro['balance_after']:.2f}")
         
-        # Save to history (include costo/pagado for UI and guards)
+        # ✅ Archivar archivo original (no eliminar)
+        archived_dir = BASE_DIR / "uploads" / "archived" / user_id
+        archived_dir.mkdir(parents=True, exist_ok=True)
+        archived_path = archived_dir / f"{analysis_id}_original.csv"
+        shutil.copy2(file_path, archived_path)
+        os.remove(file_path)  # Eliminar temp, mantener archived
+        
+        # ✅ Guardar en Supabase analysis_history
+        try:
+            history_data = {
+                "analysis_id": analysis_id,
+                "user_id": user_id,
+                "file_name": file.filename,
+                "total_transacciones": num_transacciones,
+                "costo": float(resultado_cobro.get("charged", 0)),
+                "pagado": True,
+                "original_file_path": f"uploads/archived/{user_id}/{analysis_id}_original.csv",
+                "processed_file_path": f"outputs/enriched/processed/{analysis_id}.csv",
+                "json_results_path": f"outputs/enriched/processed/{analysis_id}.json",
+                "xml_path": resultados.get("xml_path"),
+                "resumen": resultados["resumen"],
+                "estrategia": resultados["resumen"].get("estrategia"),
+                "balance_after": float(resultado_cobro.get("balance_after", 0))
+            }
+            supabase_admin.table("analysis_history").insert(history_data).execute()
+            print(f"✅ Historial guardado en Supabase")
+        except Exception as db_error:
+            print(f"⚠️  Warning: No se pudo guardar en analysis_history: {db_error}")
+            # Non-critical, continue
+        
+        # Save to in-memory history (backward compatibility)
         ANALYSIS_HISTORY[analysis_id] = {
             "user_id": user["user_id"],
             "resultados": resultados,
@@ -1756,9 +1786,6 @@ async def upload_archivo_portal(
             "timestamp": datetime.now(),
             "file_name": file.filename
         }
-        
-        # Clean up original upload
-        os.remove(file_path)
         
         # ✅ Retornar resultados completos después de cobrar exitosamente
         return RespuestaAnalisis(
@@ -2065,26 +2092,150 @@ async def obtener_historial(
     user: Dict = Depends(validar_supabase_jwt),
     limit: int = 50
 ):
-    """Get user analysis history"""
+    """Get user analysis history from Supabase"""
+    try:
+        result = supabase_admin.table("analysis_history")\
+            .select("*")\
+            .eq("user_id", user["user_id"])\
+            .order("created_at", desc=True)\
+            .limit(limit)\
+            .execute()
+        
+        return {"historial": result.data or []}
     
-    historial = [
-        {
-            "analysis_id": aid,
-            "timestamp": data["timestamp"],
-            "total_transacciones": data["resultados"]["resumen"]["total_transacciones"],
-            "preocupante": data["resultados"]["resumen"]["preocupante"],
-            "costo": data.get("costo", data.get("charged", 0)),
-            "pagado": data.get("pagado", True),
-            "file_name": data.get("file_name")
-        }
-        for aid, data in ANALYSIS_HISTORY.items()
-        if data["user_id"] == user["user_id"]
-    ]
-    
-    return {"historial": sorted(historial, key=lambda x: x["timestamp"], reverse=True)[:limit]}
+    except Exception as e:
+        print(f"❌ Error obteniendo historial: {e}")
+        # Fallback a in-memory si DB falla
+        historial = [
+            {
+                "analysis_id": aid,
+                "timestamp": data["timestamp"],
+                "total_transacciones": data["resultados"]["resumen"]["total_transacciones"],
+                "costo": data.get("costo", data.get("charged", 0)),
+                "pagado": data.get("pagado", True),
+                "file_name": data.get("file_name"),
+                "resumen": data["resultados"]["resumen"],
+                "created_at": data["timestamp"].isoformat() if hasattr(data["timestamp"], "isoformat") else str(data["timestamp"])
+            }
+            for aid, data in ANALYSIS_HISTORY.items()
+            if data["user_id"] == user["user_id"]
+        ]
+        return {"historial": sorted(historial, key=lambda x: x["timestamp"], reverse=True)[:limit]}
 
 # ===================================================================
-# ENDPOINT 7: Download XML
+# ENDPOINT 7: Get Analysis Details from DB
+# ===================================================================
+
+@app.get("/api/history/{analysis_id}")
+async def obtener_detalle_analisis(
+    analysis_id: str,
+    user: Dict = Depends(validar_supabase_jwt)
+):
+    """Obtener detalles completos de un análisis desde Supabase"""
+    try:
+        result = supabase_admin.table("analysis_history")\
+            .select("*")\
+            .eq("analysis_id", analysis_id)\
+            .eq("user_id", user["user_id"])\
+            .single()\
+            .execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Análisis no encontrado")
+        
+        return result.data
+    
+    except Exception as e:
+        print(f"❌ Error obteniendo análisis: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ===================================================================
+# ENDPOINT 8: Download Original File
+# ===================================================================
+
+@app.get("/api/history/{analysis_id}/download/original")
+async def descargar_archivo_original(
+    analysis_id: str,
+    user: Dict = Depends(validar_supabase_jwt)
+):
+    """Descargar archivo CSV original (solo lectura, validado ownership)"""
+    try:
+        # Verificar ownership desde DB
+        result = supabase_admin.table("analysis_history")\
+            .select("original_file_path, file_name, user_id")\
+            .eq("analysis_id", analysis_id)\
+            .single()\
+            .execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Análisis no encontrado")
+        
+        if result.data["user_id"] != user["user_id"]:
+            raise HTTPException(status_code=403, detail="No autorizado")
+        
+        file_path = BASE_DIR / result.data["original_file_path"]
+        
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail="Archivo no encontrado")
+        
+        return FileResponse(
+            path=file_path,
+            media_type="text/csv",
+            filename=result.data["file_name"]
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error descargando original: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ===================================================================
+# ENDPOINT 9: Download Processed Results
+# ===================================================================
+
+@app.get("/api/history/{analysis_id}/download/results")
+async def descargar_resultados_procesados(
+    analysis_id: str,
+    user: Dict = Depends(validar_supabase_jwt)
+):
+    """Descargar CSV procesado con predicciones ML"""
+    try:
+        # Verificar ownership desde DB
+        result = supabase_admin.table("analysis_history")\
+            .select("processed_file_path, file_name, user_id")\
+            .eq("analysis_id", analysis_id)\
+            .single()\
+            .execute()
+        
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Análisis no encontrado")
+        
+        if result.data["user_id"] != user["user_id"]:
+            raise HTTPException(status_code=403, detail="No autorizado")
+        
+        file_path = BASE_DIR / result.data["processed_file_path"]
+        
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail="Archivo no encontrado")
+        
+        # Cambiar nombre para indicar que tiene predicciones
+        processed_name = result.data["file_name"].replace(".csv", "_analizado.csv")
+        
+        return FileResponse(
+            path=file_path,
+            media_type="text/csv",
+            filename=processed_name
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error descargando resultados: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ===================================================================
+# ENDPOINT 10: Download XML
 # ===================================================================
 
 @app.get("/api/xml/{analysis_id}")
