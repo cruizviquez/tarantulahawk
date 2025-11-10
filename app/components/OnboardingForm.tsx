@@ -226,25 +226,14 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
             <p className="text-gray-400 mb-4">Hemos enviado un enlace seguro a:</p>
             <p className="text-white font-semibold mb-4 bg-gray-800 rounded-lg p-3">{email}</p>
             {currentMode === 'signup' && (
-              <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 mb-4">
+              <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 mb-6">
                 <h3 className="text-green-400 font-semibold mb-2">🎁 $500 USD en Créditos Virtuales</h3>
                 <ul className="text-gray-400 text-sm text-left space-y-1">
                   <li>✅ Créditos inmediatos al activar tu cuenta</li>
-                  <li>✅ Prueba todas las funcionalidades de AML</li>
-                  <li>✅ Sin compromiso ni tarjeta de crédito</li>
-                  <li>✅ Análisis de transacciones ilimitados</li>
+                  <li>✅ Prueba todo el poder del análisis IA hasta por 30 días</li>
                 </ul>
               </div>
             )}
-            <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-6">
-              <h3 className="text-blue-400 font-semibold mb-2">🛡️ Seguridad Mejorada</h3>
-              <ul className="text-gray-400 text-sm text-left space-y-1">
-                <li>✅ Sin contraseñas - sin riesgo de phishing</li>
-                <li>✅ Magic Link de un solo uso</li>
-                <li>✅ Validación CAPTCHA contra bots</li>
-                <li>✅ Acceso seguro en segundos</li>
-              </ul>
-            </div>
             <p className="text-gray-500 text-sm mb-6">
               <strong>Paso siguiente:</strong> Revisa tu bandeja de entrada y haz clic en el Magic Link.<br />
               ⏱️ <strong>El enlace expira en 10 minutos</strong> y solo puede usarse una vez por seguridad.
