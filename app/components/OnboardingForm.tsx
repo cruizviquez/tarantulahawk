@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { logAuditEvent } from '../lib/audit-log';
 import { Turnstile } from '@marsidev/react-turnstile';
 
 // Inline logo for modal consistency
@@ -189,24 +188,8 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
         throw signInError;
       }
 
-      // Log audit event (only for signup)
-      if (currentMode === 'signup') {
-        try {
-          await logAuditEvent({
-            user_id: null, // User not created yet, will be created on Magic Link click
-            action: 'registration',
-            metadata: {
-              email,
-              company,
-              registration_method: 'magic_link',
-            },
-            status: 'pending',
-          });
-        } catch (auditError) {
-          // Non-critical error, continue with signup flow
-          console.warn('Audit log failed:', auditError);
-        }
-      }
+      // Audit logging happens server-side in auth callback (requires service role key)
+      // Client-side audit calls are skipped to avoid exposing service credentials
 
       setSuccess(true);
       setLoading(false);
