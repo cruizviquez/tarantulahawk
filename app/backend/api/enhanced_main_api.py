@@ -311,23 +311,26 @@ def obtener_billing_usuario(user_id: str) -> Optional[Dict[str, Any]]:
 
 def calcular_costo_actualizado(num_transacciones: int, billing: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Calcula el costo según el modelo de pricing simplificado
+    Calcula el costo según el modelo de pricing escalonado
     
     Modelo (from config/pricing.json):
-    - 0-100 txns: $1.00/txn
-    - 101-1,000 txns: $0.75/txn  
-    - 1,001+ txns: $0.50/txn
+    - 1-2,000 txns: $1.00/txn
+    - 2,001-5,000 txns: $0.75/txn  
+    - 5,001-10,000 txns: $0.50/txn
+    - 10,001+ txns: $0.35/txn
     
     Returns:
         Dict con: costo, requires_payment
     """
-    # Calculate cost using tiered pricing
-    if num_transacciones <= 100:
-        costo = num_transacciones * 1.00
-    elif num_transacciones <= 1000:
-        costo = (100 * 1.00) + ((num_transacciones - 100) * 0.75)
-    else:
-        costo = (100 * 1.00) + (900 * 0.75) + ((num_transacciones - 1000) * 0.50)
+    # Use shared pricing tiers utility for consistency
+    try:
+        if PricingTier is not None:
+            costo = float(PricingTier.calculate_cost(int(max(0, num_transacciones))))
+        else:
+            raise ImportError("PricingTier not available")
+    except Exception:
+        # Fallback if pricing_tiers unavailable
+        costo = calcular_costo(num_transacciones)
     
     requires_payment = costo > billing["balance"]
     

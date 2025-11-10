@@ -59,6 +59,9 @@ def process_file(csv_path: Path, predictor: TarantulaHawkAdaptivePredictor) -> b
         df = pd.read_csv(csv_path)
         log(f"   Cargado: {len(df)} filas, {len(df.columns)} columnas")
         
+        # 🔒 PRESERVAR cliente_id original antes de que predictor lo droppee
+        cliente_ids_originales = df["cliente_id"].copy() if "cliente_id" in df.columns else None
+        
         # Ejecutar predictor adaptativo (rule-based / híbrido / ML puro + guardrails)
         log(f"\n   🤖 Ejecutando TarantulaHawk Adaptive Predictor...")
         predictions, probas, meta_pred = predictor.predict_adaptive(
@@ -226,10 +229,30 @@ def process_file(csv_path: Path, predictor: TarantulaHawkAdaptivePredictor) -> b
         
         log(f"\n✅ Resultados guardados: {output_json.name}")
         
-        # Mover CSV a processed/
+        # 🔒 RESTAURAR cliente_id original antes de agregar predicciones
+        if cliente_ids_originales is not None:
+            # Insertar al inicio para mantener orden de columnas lógico
+            df.insert(0, "cliente_id", cliente_ids_originales)
+        
+        # ✅ Agregar predicciones al CSV antes de moverlo
+        df["clasificacion_ml"] = predictions
+        df["score_anomalia"] = scores if scores is not None else None
+        
+        # Agregar triggers como string (top 3)
+        def get_top_triggers(row_idx):
+            row = df.iloc[row_idx]
+            triggers = predictor._get_rule_triggers(row, df) if hasattr(predictor, "_get_rule_triggers") else []
+            return "; ".join(triggers[:3]) if triggers else ""
+        
+        df["razones"] = [get_top_triggers(i) for i in range(len(df))]
+        
+        # Guardar CSV enriquecido con predicciones
         processed_csv = PROCESSED_DIR / csv_path.name
-        shutil.move(str(csv_path), str(processed_csv))
-        log(f"✅ CSV movido a: processed/{csv_path.name}")
+        df.to_csv(processed_csv, index=False, encoding='utf-8')
+        log(f"✅ CSV con predicciones guardado: processed/{csv_path.name}")
+        
+        # Eliminar CSV temporal de pending/
+        csv_path.unlink()
         
         return True
         

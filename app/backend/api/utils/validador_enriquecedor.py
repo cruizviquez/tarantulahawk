@@ -132,6 +132,12 @@ def add_sector(df: pd.DataFrame, sector_arg: str, cfg: dict):
         sectores_cfg = list(cfg.get("lfpiorpi", {}).get("actividad_a_fraccion", {}).keys())
         sectores = sectores_cfg if sectores_cfg else SECTORES_DEFAULT
         df["sector_actividad"] = np.random.choice(sectores, size=len(df))
+    elif sector_arg == "use_file":
+        # Keep existing sector_actividad from file (already validated)
+        if "sector_actividad" not in df.columns:
+            log("⚠️ sector_actividad='use_file' but column not found; setting to 'desconocido'")
+            df["sector_actividad"] = "desconocido"
+        # else: column already exists, no change needed
     else:
         df["sector_actividad"] = str(sector_arg)
     return df
