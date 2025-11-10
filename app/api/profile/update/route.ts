@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { validateAuth } from '@/app/lib/api-auth-helpers';
 
 /**
  * POST /api/profile/update
@@ -40,9 +41,9 @@ export async function POST(request: NextRequest) {
     );
 
     // Verify authenticated user
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    const auth = await validateAuth(request);
     
-    if (authError || !user) {
+    if (auth.error || !auth.user.id) {
       return NextResponse.json(
         { error: 'Unauthorized' },
         { status: 401 }
@@ -50,7 +51,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify user can only update their own profile
-    if (user.id !== user_id) {
+    if (auth.user.id !== user_id) {
       return NextResponse.json(
         { error: 'Forbidden: Cannot update another user\'s profile' },
         { status: 403 }
@@ -85,8 +86,8 @@ export async function POST(request: NextRequest) {
     try {
       await supabase.auth.updateUser({
         data: {
-          name: name || user.user_metadata.name,
-          company: company || user.user_metadata.company,
+          name: name || auth.user.email,
+          company: company || '',
         }
       });
     } catch (metaError) {

@@ -1,18 +1,31 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
+import { validateAuth } from '@/app/lib/api-auth-helpers';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId');
-
-    if (!userId) {
+    // Validate authentication
+    const auth = await validateAuth(request);
+    if (auth.error || !auth.user.id) {
       return NextResponse.json(
-        { error: 'Missing required field: userId' },
-        { status: 400 }
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+    
+    // Allow user to query their own balance or use query param
+    const { searchParams } = new URL(request.url);
+    const queryUserId = searchParams.get('userId');
+    const userId = queryUserId || auth.user.id;
+    
+    // Only allow querying own balance unless admin
+    if (queryUserId && queryUserId !== auth.user.id && auth.profile?.role !== 'admin') {
+      return NextResponse.json(
+        { error: 'Forbidden' },
+        { status: 403 }
       );
     }
 

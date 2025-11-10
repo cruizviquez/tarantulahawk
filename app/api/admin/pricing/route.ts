@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthenticatedUserId } from '@/app/lib/api-auth';
+import { requireAdmin } from '@/app/lib/api-auth-helpers';
 import { PRICING_TIERS } from '@/app/lib/pricing';
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -7,15 +7,9 @@ import path from 'path';
 // @ts-ignore
 import pricingConfig from '@/config/pricing.json';
 
-function isAdmin(userId: string | null): boolean {
-  if (!userId) return false;
-  const list = (process.env.ADMIN_USER_IDS || '').split(',').map(s => s.trim()).filter(Boolean);
-  return list.includes(userId);
-}
-
 export async function GET(req: NextRequest) {
-  const userId = await getAuthenticatedUserId(req);
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const adminCheck = await requireAdmin(req);
+  if (adminCheck) return adminCheck;
 
   return NextResponse.json({
     ok: true,
@@ -25,9 +19,8 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const userId = await getAuthenticatedUserId(req);
-  if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  if (!isAdmin(userId)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const adminCheck = await requireAdmin(req);
+  if (adminCheck) return adminCheck;
 
   try {
     const body = await req.json();

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+import { validateAuth } from '@/app/lib/api-auth-helpers';
 
 interface ActivityLog {
   user_id: string;
@@ -17,15 +18,27 @@ interface ActivityLog {
  */
 export async function POST(request: NextRequest) {
   try {
+    // Validate authentication first
+    const auth = await validateAuth(request);
+    if (auth.error || !auth.user.id) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
+    }
+    
     const body: ActivityLog = await request.json();
     
     // Validate required fields
-    if (!body.user_id || !body.action || !body.timestamp) {
+    if (!body.action || !body.timestamp) {
       return NextResponse.json(
-        { error: 'Missing required fields: user_id, action, timestamp' },
+        { error: 'Missing required fields: action, timestamp' },
         { status: 400 }
       );
     }
+    
+    // Use authenticated user ID (not from body for security)
+    const userId = auth.user.id;
 
     // Create Supabase client
     const cookieStore = await cookies();
@@ -58,7 +71,7 @@ export async function POST(request: NextRequest) {
     const { error: insertError } = await supabase
       .from('audit_logs')
       .insert({
-        user_id: body.user_id,
+        user_id: userId,
         action: body.action,
         ip_address: ip,
         user_agent: body.user_agent,

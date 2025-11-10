@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getServiceSupabase } from '@/app/lib/supabaseServer';
+import { validateAuth } from '@/app/lib/api-auth-helpers';
 import { logAuditEvent } from '@/app/lib/audit-log';
 
 function getPaypalApiBase() {
@@ -63,19 +64,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: false, error: 'amount-mismatch', amount, currency: curr }, { status: 400 });
     }
 
-    // Resolve current user from Supabase auth cookie
-    const cookieStore = await cookies();
-    const accessToken = cookieStore.get('sb-access-token')?.value;
-    if (!accessToken) {
+    // Resolve current user from auth
+    const auth = await validateAuth(req);
+    if (auth.error || !auth.user.id) {
       return NextResponse.json({ ok: false, error: 'no-auth' }, { status: 401 });
     }
-    const supa = getServiceSupabase();
-    const { data: userData, error: userErr } = await supa.auth.getUser(accessToken);
-    if (userErr || !userData?.user) {
-      return NextResponse.json({ ok: false, error: 'invalid-auth' }, { status: 401 });
-    }
+    const userId = auth.user.id;
 
-    const userId = userData.user.id;
+    const supa = getServiceSupabase();
 
     // Convert payment amount to USD credits (1:1 ratio, e.g., $15 = $15 credits)
     const creditsToAdd = parseFloat(amount);

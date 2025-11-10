@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAuthenticatedUserId, checkUserBalance, deductBalance, logAuditEvent } from '@/app/lib/api-auth';
+import { validateAuth } from '@/app/lib/api-auth-helpers';
+import { checkUserBalance, deductBalance, logAuditEvent } from '@/app/lib/api-auth';
 
 /**
  * EJEMPLO: API Route protegida para análisis de ML
@@ -14,15 +15,17 @@ import { getAuthenticatedUserId, checkUserBalance, deductBalance, logAuditEvent 
 
 export async function POST(request: NextRequest) {
   // 1. AUTENTICACIÓN: Verificar que el usuario está autenticado
-  const userId = await getAuthenticatedUserId(request);
+  const auth = await validateAuth(request);
   
-  if (!userId) {
+  if (auth.error || !auth.user.id) {
     await logAuditEvent('anonymous', 'ml_analysis_attempt', { reason: 'unauthenticated' }, undefined, 'analysis', 'failure');
     return NextResponse.json(
       { error: 'Unauthorized', message: 'Debes iniciar sesión para usar este servicio' },
       { status: 401 }
     );
   }
+  
+  const userId = auth.user.id;
 
   try {
     // 2. PARSEAR DATOS: Obtener archivo/datos del request

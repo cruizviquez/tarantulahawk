@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { calculateTieredCost } from '@/app/lib/pricing';
-import { getAuthenticatedUserId, checkUserBalance, deductBalance, logAuditEvent } from '@/app/lib/api-auth';
+import { validateAuth } from '@/app/lib/api-auth-helpers';
+import { checkUserBalance, deductBalance, logAuditEvent } from '@/app/lib/api-auth';
 
 export async function POST(req: NextRequest) {
   try {
-    const userId = await getAuthenticatedUserId(req);
-    if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const auth = await validateAuth(req);
+    if (auth.error || !auth.user.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const userId = auth.user.id;
 
     const body = await req.json().catch(() => ({}));
     const transactions: any[] = Array.isArray(body?.transactions) ? body.transactions : [];

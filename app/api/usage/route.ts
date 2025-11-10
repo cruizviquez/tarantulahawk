@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getServiceSupabase } from '@/app/lib/supabaseServer';
+import { validateAuth } from '@/app/lib/api-auth-helpers';
 import { calculateTieredCost, PRICING_TIERS } from '@/app/lib/pricing';
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
@@ -8,19 +9,13 @@ import pricingConfig from '@/config/pricing.json';
 
 export async function GET(req: NextRequest) {
   try {
-    const cookieStore = await cookies();
-    const accessToken = cookieStore.get('sb-access-token')?.value;
-    if (!accessToken) {
+    const auth = await validateAuth(req);
+    if (auth.error || !auth.user.id) {
       return NextResponse.json({ ok: false, error: 'unauthenticated' }, { status: 401 });
     }
+    const userId = auth.user.id;
 
     const supa = getServiceSupabase();
-    const { data: userData, error: userErr } = await supa.auth.getUser(accessToken);
-    if (userErr || !userData?.user) {
-      return NextResponse.json({ ok: false, error: 'invalid-auth' }, { status: 401 });
-    }
-
-    const userId = userData.user.id;
     const { data, error } = await supa
       .from('profiles')
       .select('subscription_tier, account_balance_usd')
