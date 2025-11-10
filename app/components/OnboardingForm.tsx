@@ -142,10 +142,13 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
 
       if (signInError) {
         // Si el usuario ya existe y se intenta signup, mostrar como login exitoso
+        const lowerMsg = signInError.message.toLowerCase();
         if (currentMode === 'signup' && (
-          signInError.message.includes('already registered') ||
-          signInError.message.includes('already exists') ||
-          signInError.message.includes('Signups not allowed')
+          lowerMsg.includes('already registered') ||
+          lowerMsg.includes('already exists') ||
+          lowerMsg.includes('signups not allowed') ||
+          lowerMsg.includes('duplicate') ||
+          lowerMsg.includes('email rate limit')
         )) {
           // Enviar Magic Link de login
           const { error: loginError } = await supabase.auth.signInWithOtp({
@@ -170,9 +173,9 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
         }
         // Check if user doesn't exist (solo login)
         if (currentMode === 'login' && (
-          signInError.message.includes('User not found') || 
-          signInError.message.includes('Signups not allowed') ||
-          signInError.message.includes('signups not allowed')
+          lowerMsg.includes('user not found') || 
+          lowerMsg.includes('signups not allowed') ||
+          lowerMsg.includes('signup disabled')
         )) {
           setError('Usuario no registrado');
           setLoading(false);

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { getUserFromCookies } from './app/lib/middleware-auth';
+import { getUserFromCookies, hasSupabaseAuthCookie } from './app/lib/middleware-auth';
 
 // Rutas públicas que NO requieren autenticación
 const PUBLIC_ROUTES = ['/', '/auth/callback', '/auth/redirect', '/auth', '/login', '/signup'];
@@ -91,6 +91,7 @@ export async function middleware(request: NextRequest) {
   
   // Get user info from cookies (includes role and expiry check)
   const userInfo = getUserFromCookies(request);
+  const authCookiePresent = !!userInfo || hasSupabaseAuthCookie(request);
   
   // Check if path is API route
   const isApiRoute = pathname.startsWith('/api');
@@ -105,7 +106,7 @@ export async function middleware(request: NextRequest) {
     }
     
     // Block if no valid session
-    if (!userInfo || userInfo.isExpired) {
+    if (!authCookiePresent || (userInfo && userInfo.isExpired)) {
       return NextResponse.json(
         { error: 'Unauthorized - Invalid or expired session' },
         { status: 401 }
@@ -136,7 +137,7 @@ export async function middleware(request: NextRequest) {
   // Admin routes require valid auth (role check done in page component via DB)
   const isAdminRoute = ADMIN_ROUTES.some(route => pathname.startsWith(route));
   if (isAdminRoute) {
-    if (!userInfo || userInfo.isExpired) {
+    if (!authCookiePresent || (userInfo && userInfo.isExpired)) {
       const url = request.nextUrl.clone();
       url.pathname = '/';
       url.searchParams.set('auth', 'required');
@@ -152,7 +153,7 @@ export async function middleware(request: NextRequest) {
   // Protected routes require valid auth
   const isProtectedRoute = PROTECTED_ROUTES.some(route => pathname.startsWith(route));
   if (isProtectedRoute) {
-    if (!userInfo || userInfo.isExpired) {
+    if (!authCookiePresent || (userInfo && userInfo.isExpired)) {
       const url = request.nextUrl.clone();
       url.pathname = '/';
       url.searchParams.set('auth', 'required');
