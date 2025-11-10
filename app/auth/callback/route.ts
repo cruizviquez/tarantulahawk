@@ -4,8 +4,24 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
 
+/**
+ * Helper: Get correct origin (always use x-forwarded-host to avoid internal port issues)
+ */
+function getOrigin(request: NextRequest): string {
+  const forwardedHost = request.headers.get('x-forwarded-host')
+  const forwardedProto = request.headers.get('x-forwarded-proto') || 'https'
+  
+  if (forwardedHost) {
+    // Always use forwarded host (strips internal port added by Next.js server)
+    return `${forwardedProto}://${forwardedHost}`
+  }
+  
+  return new URL(request.url).origin
+}
+
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url)
+  const origin = getOrigin(request)
   const token_hash = requestUrl.searchParams.get('token_hash')
   const type = requestUrl.searchParams.get('type')
   const code = requestUrl.searchParams.get('code')
@@ -13,7 +29,7 @@ export async function GET(request: NextRequest) {
 
   if (error) {
     console.error('[AUTH] Error from Supabase:', error)
-    return NextResponse.redirect(new URL('/?error=' + error, requestUrl.origin))
+    return NextResponse.redirect(new URL('/?error=' + error, origin))
   }
 
   const cookieStore = await cookies()
@@ -59,7 +75,7 @@ export async function GET(request: NextRequest) {
         errorParam = 'token_invalid'
       }
       
-      return NextResponse.redirect(new URL(`/?error=${errorParam}`, requestUrl.origin))
+      return NextResponse.redirect(new URL(`/?error=${errorParam}`, origin))
     }
 
     if (data.session && data.user) {
@@ -73,8 +89,8 @@ export async function GET(request: NextRequest) {
         .single()
 
       const redirectUrl = (!profile || !profile.name || !profile.company)
-        ? new URL('/onboarding', requestUrl.origin)
-        : new URL('/dashboard', requestUrl.origin)
+        ? new URL('/onboarding', origin)
+        : new URL('/dashboard', origin)
 
       return NextResponse.redirect(redirectUrl)
     }
@@ -88,7 +104,7 @@ export async function GET(request: NextRequest) {
 
     if (exchangeError) {
       console.error('[AUTH] Code exchange failed:', exchangeError.message)
-      return NextResponse.redirect(new URL('/?error=code_exchange_failed', requestUrl.origin))
+      return NextResponse.redirect(new URL('/?error=code_exchange_failed', origin))
     }
 
     if (data.session && data.user) {
@@ -101,13 +117,13 @@ export async function GET(request: NextRequest) {
         .single()
 
       const redirectUrl = (!profile || !profile.name || !profile.company)
-        ? new URL('/onboarding', requestUrl.origin)
-        : new URL('/dashboard', requestUrl.origin)
+        ? new URL('/onboarding', origin)
+        : new URL('/dashboard', origin)
 
       return NextResponse.redirect(redirectUrl)
     }
   }
 
   console.log('[AUTH] No auth params')
-  return NextResponse.redirect(new URL('/?error=no_auth_params', requestUrl.origin))
+  return NextResponse.redirect(new URL('/?error=no_auth_params', origin))
 }
