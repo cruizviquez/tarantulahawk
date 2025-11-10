@@ -73,6 +73,16 @@ function addSecurityHeaders(response: NextResponse): NextResponse {
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // Helper: normalize Codespaces host (strip :port only for .github.dev; preserve elsewhere)
+  function normalizeRedirectUrl(u: URL) {
+    // Only strip :port on Codespaces (.github.dev hosts); preserve ports on other hosts (e.g., tarantulahawk:3000)
+    if (u.hostname.endsWith('.github.dev') && u.host.includes(':')) {
+      const withoutPort = u.host.split(':')[0];
+      u.host = withoutPort;
+    }
+    return u;
+  }
   
   // Archivos estáticos y Next.js internals
   if (pathname.startsWith('/_next') || pathname.startsWith('/favicon') || pathname.startsWith('/public')) {
@@ -130,6 +140,7 @@ export async function middleware(request: NextRequest) {
       const url = request.nextUrl.clone();
       url.pathname = '/';
       url.searchParams.set('auth', 'required');
+      normalizeRedirectUrl(url);
       return NextResponse.redirect(url);
     }
     
@@ -145,6 +156,7 @@ export async function middleware(request: NextRequest) {
       const url = request.nextUrl.clone();
       url.pathname = '/';
       url.searchParams.set('auth', 'required');
+      normalizeRedirectUrl(url);
       return NextResponse.redirect(url);
     }
   }

@@ -92,16 +92,20 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
       // Send Magic Link via Supabase OTP
       // Build the public base URL for email redirects
       function computePublicBaseUrl(): string {
-        // In local development, always use localhost with port
+        // Client-side preferred (captures actual host as seen by user)
         if (typeof window !== 'undefined') {
-          const { origin, hostname } = window.location;
-          if (hostname === 'localhost' || hostname === '127.0.0.1') {
-            return origin; // e.g., http://localhost:3000
+          const { origin } = window.location; // e.g. https://<id>-3000.app.github.dev or http://tarantulahawk:3000
+          try {
+            const u = new URL(origin);
+            // Only strip :port on Codespaces hosts; preserve ports elsewhere (e.g., tarantulahawk:3000)
+            if (u.hostname.endsWith('.github.dev')) {
+              const hostNoPort = u.host.split(':')[0];
+              return `${u.protocol}//${hostNoPort}`;
+            }
+            return origin;
+          } catch {
+            return origin;
           }
-          // In GitHub Codespaces, origin is already a public https domain
-          if (hostname.includes('github.dev')) return origin;
-          // Otherwise use current origin
-          return origin;
         }
 
         // Server-side: check env
@@ -115,7 +119,7 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
           }
         }
 
-        // Fallback to production domain
+        // Fallback production domain
         return 'https://tarantulahawk.cloud';
       }
 
@@ -138,23 +142,31 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
       });
 
       if (signInError) {
-        // Si el usuario ya existe y se intenta signup, mostrar pantalla amigable y enviar Magic Link de login
+        // Si el usuario ya existe y se intenta signup, mostrar como login exitoso
         if (currentMode === 'signup' && (
           signInError.message.includes('already registered') ||
           signInError.message.includes('already exists') ||
           signInError.message.includes('Signups not allowed')
         )) {
-          setUserExists(true);
-          setSuccess(false);
-          setLoading(false);
           // Enviar Magic Link de login
-          await supabase.auth.signInWithOtp({
+          const { error: loginError } = await supabase.auth.signInWithOtp({
             email,
             options: {
               emailRedirectTo: redirectUrl,
               shouldCreateUser: false,
             },
           });
+          
+          if (loginError) {
+            throw loginError;
+          }
+          
+          // Mostrar éxito pero sin mencionar créditos (es login, no signup)
+          setSuccess(true);
+          setUserExists(false); // No mostrar warning de "ya existe"
+          setLoading(false);
+          // Forzar modo login para el mensaje correcto
+          setCurrentMode('login');
           return;
         }
         // Check if user doesn't exist (solo login)
