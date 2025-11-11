@@ -53,11 +53,20 @@ interface PendingPayment {
 
 interface HistoryItem {
   analysis_id: string;
-  timestamp: string;
+  file_name: string;
   total_transacciones: number;
   costo: number;
   pagado: boolean;
-  file_name?: string;
+  created_at: string;
+  resumen: {
+    preocupante: number;
+    inusual: number;
+    relevante: number;
+    estrategia: string;
+  };
+  original_file_path?: string;
+  processed_file_path?: string;
+  xml_path?: string;
 }
 
 interface ApiKey {
@@ -134,6 +143,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
   const [isLoading, setIsLoading] = useState(false);
   const [currentAnalysis, setCurrentAnalysis] = useState<MockResults | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [authToken, setAuthToken] = useState<string>('');
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [showPayment, setShowPayment] = useState(false);
   const [pendingPayment, setPendingPayment] = useState<PendingPayment | null>(null);
@@ -186,6 +196,18 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
   useEffect(() => {
     setUser(initialUser);
   }, [initialUser]);
+
+  // Cache auth token for child components (e.g., History panel downloads)
+  useEffect(() => {
+    (async () => {
+      try {
+        const t = await getAuthToken();
+        setAuthToken(t);
+      } catch {
+        // ignore; user may be logged out or session not ready yet
+      }
+    })();
+  }, []);
 
   // Function to refresh user balance from server
   const refreshUserBalance = async () => {
@@ -631,15 +653,22 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
           file_name: selectedFile.name
         });
 
-        // Agregar al historial local inmediatamente
+        // Agregar al historial local inmediatamente (shape unify with backend)
         setHistory(prev => [
           {
             analysis_id: result.analysis_id,
-            timestamp: new Date().toISOString(),
+            file_name: selectedFile.name,
             total_transacciones: result.resumen?.total_transacciones || estimatedTransactions,
             costo: result.costo || 0,
             pagado: true,
-            file_name: selectedFile.name
+            created_at: new Date().toISOString(),
+            resumen: {
+              preocupante: result.resumen?.preocupante || 0,
+              inusual: result.resumen?.inusual || 0,
+              relevante: result.resumen?.relevante || 0,
+              estrategia: (result.resumen as any)?.estrategia || 'hibrida'
+            },
+            xml_path: result.xml_path
           },
           ...prev
         ]);
@@ -734,7 +763,25 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
         return;
       }
       const data = await response.json();
-      setHistory(data.historial || []);
+      // Normalize backend items to HistoryItem shape
+      const items: HistoryItem[] = (data.historial || []).map((h: any) => ({
+        analysis_id: h.analysis_id,
+        file_name: h.file_name || h.nombre_archivo || 'archivo.csv',
+        total_transacciones: h.total_transacciones || h.total || 0,
+        costo: typeof h.costo === 'number' ? h.costo : (h.cost || 0),
+        pagado: h.pagado !== undefined ? h.pagado : true,
+        created_at: h.created_at || h.timestamp || new Date().toISOString(),
+        resumen: {
+          preocupante: h.resumen?.preocupante ?? h.preocupante ?? 0,
+          inusual: h.resumen?.inusual ?? h.inusual ?? 0,
+          relevante: h.resumen?.relevante ?? h.relevante ?? 0,
+          estrategia: h.resumen?.estrategia || h.estrategia || 'hibrida'
+        },
+        original_file_path: h.original_file_path,
+        processed_file_path: h.processed_file_path,
+        xml_path: h.xml_path
+      }));
+      setHistory(items);
     } catch (error) {
       console.warn('History API not available:', error);
       // Gracefully continue - history will remain empty
@@ -1440,7 +1487,7 @@ return (
                 history={history}
                 language={language}
                 apiUrl={API_URL}
-                token={token}
+                token={authToken}
               />
           </div>
         )}
