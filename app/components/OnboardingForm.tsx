@@ -51,6 +51,61 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
   const [existingUserPrompt, setExistingUserPrompt] = useState(false); // Mostrar caja "usuario ya existente"
   const [userNotFound, setUserNotFound] = useState(false); // Modo login, usuario no existe
   const [loginLinkSent, setLoginLinkSent] = useState(false); // Magic link de login enviado
+  const [checkingEmail, setCheckingEmail] = useState(false); // Verificando email en background
+
+  // Helper to compute Python backend URL (for Codespaces and local dev)
+  const computeBackendUrl = (): string => {
+    if (typeof window !== 'undefined') {
+      const host = window.location.hostname;
+      if (host.includes('github.dev')) {
+        return `https://${host.replace('-3000.app', '-8000.app')}`;
+      }
+      if (host === 'localhost' || host === '127.0.0.1') {
+        return 'http://localhost:8000';
+      }
+    }
+    return process.env.NEXT_PUBLIC_BACKEND_API_URL || '';
+  };
+
+  // Función para verificar email cuando pierde el foco (onBlur)
+  const handleEmailBlur = async () => {
+    const normalizedEmail = email.trim().toLowerCase();
+    
+    // Solo verificar si hay email y estamos en signup mode
+    if (!normalizedEmail || currentMode !== 'signup') {
+      return;
+    }
+
+    // Validar formato básico de email
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(normalizedEmail)) {
+      return;
+    }
+
+    setCheckingEmail(true);
+    const backendUrl = computeBackendUrl();
+
+    try {
+      const resp = await fetch(`${backendUrl}/api/auth/check-email`, { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ email: normalizedEmail }),
+        credentials: 'include',
+      });
+      
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.exists) {
+          // Email ya existe - mostrar aviso anticipado
+          setExistingUserPrompt(true);
+        }
+      }
+    } catch (checkErr: any) {
+      console.warn('[ONBOARDING] Error verificando email en onBlur:', checkErr?.message);
+    } finally {
+      setCheckingEmail(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -136,20 +191,7 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
       const normalizedEmail = email.trim().toLowerCase();
 
       // Pre-chequeo explícito de existencia en Supabase (no confiar en mensaje de error)
-      // Helper to compute Python backend URL (for Codespaces and local dev)
-      function computeBackendUrl(): string {
-        if (typeof window !== 'undefined') {
-          const host = window.location.hostname;
-          if (host.includes('github.dev')) {
-            return `https://${host.replace('-3000.app', '-8000.app')}`;
-          }
-          if (host === 'localhost' || host === '127.0.0.1') {
-            return 'http://localhost:8000';
-          }
-        }
-        return process.env.NEXT_PUBLIC_BACKEND_API_URL || '';
-      }
-
+      // (Ya puede estar hecho por onBlur, pero lo hacemos de nuevo por seguridad)
       const backendUrl = computeBackendUrl();
 
       let emailExiste = false;
@@ -337,11 +379,23 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
                 type="email" 
                 placeholder="Correo Electrónico" 
                 value={email} 
-                onChange={e => setEmail(e.target.value)} 
+                onChange={e => {
+                  setEmail(e.target.value);
+                  // Limpiar prompt de usuario existente al editar
+                  if (existingUserPrompt) {
+                    setExistingUserPrompt(false);
+                  }
+                }}
+                onBlur={handleEmailBlur}
                 required 
-                    className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-emerald-500 outline-none"
+                className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-emerald-500 outline-none"
               />
-              <p className="text-gray-500 text-xs mt-1">� Cualquier dominio de email es aceptado</p>
+              <p className="text-gray-500 text-xs mt-1">📧 Cualquier dominio de email es aceptado</p>
+              {checkingEmail && (
+                <p className="text-yellow-400 text-xs mt-1 flex items-center gap-1">
+                  <span className="animate-pulse">⏳</span> Verificando disponibilidad...
+                </p>
+              )}
             </div>
             
             {/* CAPTCHA */}
