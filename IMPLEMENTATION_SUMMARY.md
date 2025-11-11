@@ -1,4 +1,4 @@
-# 🚀 Resumen de Implementación - Autenticación Segura + Excel Robusto
+# 🚀 Resumen de Implementación - Autenticación Segura + CSV-Only
 
 ## ✅ Cambios Completados
 
@@ -65,7 +65,7 @@ Email → /auth/redirect → POST /api/auth/hash (body) → Dashboard
 
 ---
 
-### 2. Sistema de Procesamiento de Excel Robusto
+### 2. Sistema de Procesamiento CSV-Only
 
 #### Problema Original
 - ❌ `ERR_BLOCKED_BY_CLIENT` al subir archivos
@@ -77,19 +77,19 @@ Email → /auth/redirect → POST /api/auth/hash (body) → Dashboard
 
 **Nuevo Flujo**:
 ```
-Frontend → /api/excel/parse (Next.js) → JSON → Backend Python
+Frontend → /api/excel/parse (Next.js, CSV-only) → JSON → Backend Python
 ```
 
 **Archivos Creados**:
-1. `/app/api/excel/parse/route.ts` - **ENDPOINT NUEVO**
+1. `/app/api/excel/parse/route.ts` - **ENDPOINT (CSV-only)**
    ```typescript
    export const runtime = 'nodejs';
    export const maxDuration = 60;
    
    POST:
    - Acepta FormData con file
-   - Valida tipo (.xlsx, .xls, .csv)
-   - Parse con XLSX.read(buffer)
+   - Valida tipo (.csv)
+   - Parse con lector CSV seguro
    - Retorna: {success, fileName, rowCount, columns, data, preview}
    - Errores descriptivos con detalles
    
@@ -191,7 +191,7 @@ Frontend → /api/excel/parse (Next.js) → JSON → Backend Python
 ## 📦 Dependencias Instaladas
 
 ```bash
-npm install xlsx@0.18.5
+CSV-only: se eliminó dependencia `xlsx`
 ```
 - 9 packages agregados
 - 1 high severity warning (non-critical, relacionado con dependencies internas)
@@ -208,7 +208,7 @@ app/
 │   │       └── route.ts ✅ REESCRITO (POST + GET)
 │   ├── excel/
 │   │   └── parse/
-│   │       └── route.ts ✅ NUEVO (xlsx parsing)
+│   │       └── route.ts ✅ CSV-only parsing
 │   └── profile/
 │       └── update/
 │           └── route.ts ✅ NUEVO (user profile)
@@ -247,8 +247,8 @@ SUPABASE_REDIRECT_CONFIG.md ✅ DOCUMENTACIÓN COMPLETA
 - [ ] Intentar reusar mismo magic link → "Link expirado"
 - [ ] Logout → Back button → debe ir a home (no dashboard)
 
-### Excel Upload
-- [ ] Subir archivo .xlsx válido
+### CSV Upload
+- [ ] Subir archivo .csv válido
 - [ ] Verificar estimación exacta de transacciones (no heurística)
 - [ ] Verificar que NO muestra "ERR_BLOCKED_BY_CLIENT"
 - [ ] Verificar que muestra errores descriptivos si falla
@@ -286,7 +286,7 @@ El endpoint `/api/portal/upload` ahora recibirá JSON en lugar de FormData:
 ```python
 # Antes:
 file = request.files['file']
-df = pd.read_excel(file)
+df = pd.read_csv(file)
 
 # Después:
 data = request.json
@@ -340,7 +340,7 @@ console.log('API_URL:', API_URL);
 | Tokens en POST body | ✅ | No | Seguros en cookies HttpOnly |
 | Magic link replay prevention | ✅ | No | Tabla used_tokens activa |
 | Logout robusto | ✅ | No | window.location.replace + clear storage |
-| Excel parsing endpoint | ✅ | No | /api/excel/parse funcionando |
+| CSV parsing endpoint | ✅ | No | /api/excel/parse funcionando |
 | API_URL detection | ✅ | No | useEffect con fallbacks |
 | Upload error handling | ✅ | No | Mensajes descriptivos |
 | Profile modal UI | ✅ | No | Componente completo |
@@ -360,12 +360,12 @@ console.log('API_URL:', API_URL);
 
 ### Testing
 1. Probar flujo completo de magic link
-2. Subir archivo Excel de prueba
+2. Subir archivo CSV de prueba
 3. Editar perfil y verificar persistencia
 
 ### Opcional (Mejoras Futuras)
 - [ ] Rate limiting en /api/excel/parse
-- [ ] Cache de resultados de Excel parsing
+- [ ] Cache de resultados de parsing
 - [ ] Progress bar real durante upload a Python backend
 - [ ] Retry logic con exponential backoff
 - [ ] Telemetría de errores (Sentry/LogRocket)

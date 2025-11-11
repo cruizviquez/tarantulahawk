@@ -342,6 +342,8 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
 
     setIsLoading(true);
     setSelectedFile(file);
+    // Disable upload button immediately; will re-enable if validation fails
+    setFileUploaded(true);
     
     // Stage 1: Uploading
     setProcessingStage('uploading');

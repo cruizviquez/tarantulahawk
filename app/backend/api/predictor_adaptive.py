@@ -16,6 +16,8 @@ Uso:
     predictions, probas, metadata = predictor.predict_adaptive(df_enriched)
 """
 
+print("🔧 PREDICTOR_ADAPTIVE.PY LOADED - VERSION: 2025-11-11-v2 (UPDATED)")
+
 import os
 import json
 import joblib

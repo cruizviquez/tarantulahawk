@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # lavida.py
 """
-Validador estructural de archivos (CSV/XLSX)
+Validador estructural de archivos CSV
 para TarantulaHawk PLD.
 Valida columnas, tipos de datos, formatos y limpia inconsistencias.
 """
@@ -26,10 +26,8 @@ def validar_estructura(ruta_archivo, salida_json="reporte_estructura.json"):
         # Leer archivo
         if ruta_archivo.endswith(".csv"):
             df = pd.read_csv(ruta_archivo)
-        elif ruta_archivo.endswith(".xlsx"):
-            df = pd.read_excel(ruta_archivo)
         else:
-            raise ValueError("Formato no soportado: solo CSV o XLSX")
+            raise ValueError("Formato no soportado: solo CSV")
 
         resultado["total_registros"] = len(df)
 

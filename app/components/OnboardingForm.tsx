@@ -46,14 +46,20 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
-  const [userExists, setUserExists] = useState(false);
+  const [success, setSuccess] = useState(false);           // Magic link enviado
+  const [isNewSignup, setIsNewSignup] = useState(false);   // Nuevo registro creado
+  const [existingUserPrompt, setExistingUserPrompt] = useState(false); // Mostrar caja "usuario ya existente"
+  const [userNotFound, setUserNotFound] = useState(false); // Modo login, usuario no existe
+  const [loginLinkSent, setLoginLinkSent] = useState(false); // Magic link de login enviado
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     setSuccess(false);
+    setIsNewSignup(false);
+    setExistingUserPrompt(false);
+    setUserNotFound(false);
 
     // Validate CAPTCHA
     if (!captchaToken) {
@@ -127,8 +133,62 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
       
       console.log('[ONBOARDING] emailRedirectTo:', redirectUrl);
       
+      const normalizedEmail = email.trim().toLowerCase();
+
+      // Pre-chequeo explícito de existencia en Supabase (no confiar en mensaje de error)
+      // Helper to compute Python backend URL (for Codespaces and local dev)
+      function computeBackendUrl(): string {
+        if (typeof window !== 'undefined') {
+          const host = window.location.hostname;
+          if (host.includes('github.dev')) {
+            return `https://${host.replace('-3000.app', '-8000.app')}`;
+          }
+          if (host === 'localhost' || host === '127.0.0.1') {
+            return 'http://localhost:8000';
+          }
+        }
+        return process.env.NEXT_PUBLIC_BACKEND_API_URL || '';
+      }
+
+      const backendUrl = computeBackendUrl();
+
+      let emailExiste = false;
+      try {
+        // Usar endpoint backend que consulta con service role
+        const resp = await fetch(`${backendUrl}/api/auth/check-email`, { 
+          method: 'POST', 
+          headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify({ email: normalizedEmail }),
+          credentials: 'include',
+        });
+        if (resp.ok) {
+          const data = await resp.json();
+          emailExiste = !!data.exists;
+        } else {
+          // fallback: no bloquear si falla
+          console.warn('[ONBOARDING] check-email backend respondió', resp.status);
+        }
+      } catch (checkErr: any) {
+        console.warn('[ONBOARDING] Excepción verificando email existente (backend):', checkErr?.message);
+      }
+
+      // Flujo si modo signup y ya existe → mostrar prompt y abortar antes de enviar créditos
+      if (currentMode === 'signup' && emailExiste) {
+        setExistingUserPrompt(true);
+        setLoading(false);
+        return;
+      }
+
+      // Flujo login y no existe → ofrecer registro
+      if (currentMode === 'login' && !emailExiste) {
+        setUserNotFound(true);
+        setLoading(false);
+        return;
+      }
+
+      // Ejecutar envío de Magic Link acorde al modo
       const { error: signInError } = await supabase.auth.signInWithOtp({
-        email,
+        email: normalizedEmail,
         options: {
           emailRedirectTo: redirectUrl,
           shouldCreateUser: currentMode === 'signup',
@@ -141,59 +201,16 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
       });
 
       if (signInError) {
-        // Si el usuario ya existe y se intenta signup, mostrar como login exitoso
-        const lowerMsg = signInError.message.toLowerCase();
-        if (currentMode === 'signup' && (
-          lowerMsg.includes('already registered') ||
-          lowerMsg.includes('already exists') ||
-          lowerMsg.includes('signups not allowed') ||
-          lowerMsg.includes('duplicate') ||
-          lowerMsg.includes('email rate limit')
-        )) {
-          // Enviar Magic Link de login
-          const { error: loginError } = await supabase.auth.signInWithOtp({
-            email,
-            options: {
-              emailRedirectTo: redirectUrl,
-              shouldCreateUser: false,
-            },
-          });
-          
-          if (loginError) {
-            throw loginError;
-          }
-          
-          // Mostrar éxito pero sin mencionar créditos (es login, no signup)
-          setSuccess(true);
-          setUserExists(false); // No mostrar warning de "ya existe"
-          setLoading(false);
-          // Forzar modo login para el mensaje correcto
-          setCurrentMode('login');
-          return;
-        }
-        // Check if user doesn't exist (solo login)
-        if (currentMode === 'login' && (
-          lowerMsg.includes('user not found') || 
-          lowerMsg.includes('signups not allowed') ||
-          lowerMsg.includes('signup disabled')
-        )) {
-          setError('Usuario no registrado');
-          setLoading(false);
-          // Show signup option
-          setTimeout(() => {
-            if (window.confirm('Usuario no registrado. ¿Deseas crear una cuenta nueva con este email?')) {
-              setCurrentMode('signup');
-              setError('');
-            }
-          }, 100);
-          return;
-        }
+        // Si ocurre algún error inesperado del proveedor, mostrarlo
         throw signInError;
       }
 
       // Audit logging happens server-side in auth callback (requires service role key)
       // Client-side audit calls are skipped to avoid exposing service credentials
 
+      // Éxito creación / envío de magic link
+      // Marcar nuevo signup sólo si modo signup y no existía previamente
+      setIsNewSignup(currentMode === 'signup' && !emailExiste);
       setSuccess(true);
       setLoading(false);
     } catch (error: any) {
@@ -207,23 +224,60 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
       <div className="bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-2xl max-w-md w-full shadow-2xl relative flex flex-col" style={{ minHeight: '400px', maxHeight: '95vh', overflowY: 'auto', padding: '2rem 1rem' }} onClick={e => e.stopPropagation()}>
         <button onClick={onClose} className="absolute top-4 right-6 text-gray-500 hover:text-white text-2xl z-10">×</button>
         <TarantulaHawkLogo />
-        {userExists ? (
+        {existingUserPrompt ? (
           <div className="text-center py-8 flex flex-col justify-center items-center h-full">
             <div className="text-yellow-400 text-5xl mb-4">⚠️</div>
-            <h2 className="text-2xl font-bold mb-2 text-yellow-400">Usuario ya registrado</h2>
-            <p className="text-gray-400 mb-4">Este correo ya tiene una cuenta. Hemos enviado un Magic Link para iniciar sesión sin contraseña.</p>
+            <h2 className="text-2xl font-bold mb-2 text-yellow-400">Usuario ya existente</h2>
+            <p className="text-gray-400 mb-4">El correo ya está registrado. ¿Deseas recibir un Magic Link para ingresar?</p>
             <p className="text-white font-semibold mb-4 bg-gray-800 rounded-lg p-3">{email}</p>
-            <button onClick={onClose} className="px-6 py-3 bg-gradient-to-r from-teal-500 to-emerald-500 rounded-lg font-semibold hover:from-teal-600 hover:to-emerald-600 transition w-full mt-4">
-              Entendido
-            </button>
+            <div className="flex gap-3 w-full">
+              <button onClick={() => { setExistingUserPrompt(false); onClose(); }} className="flex-1 px-6 py-3 bg-gray-700 rounded-lg font-semibold hover:bg-gray-600 transition">Cancelar</button>
+              <button
+                onClick={async () => {
+                  setLoading(true);
+                  try {
+                    const { error: loginError } = await supabase.auth.signInWithOtp({
+                      email,
+                      options: { emailRedirectTo: `${window.location.origin}/auth/redirect`, shouldCreateUser: false }
+                    });
+                    if (loginError) throw loginError;
+                    setExistingUserPrompt(false);
+                    setLoginLinkSent(true);
+                    setSuccess(true);
+                    setCurrentMode('login');
+                  } catch (err: any) {
+                    setError(err.message || 'Error enviando Magic Link.');
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-lg font-semibold hover:from-blue-700 hover:to-emerald-600 transition"
+              >Ingresar</button>
+            </div>
+          </div>
+        ) : userNotFound ? (
+          <div className="text-center py-8 flex flex-col justify-center items-center h-full">
+            <div className="text-blue-400 text-5xl mb-4">❌</div>
+            <h2 className="text-2xl font-bold mb-2 text-blue-400">Usuario no registrado</h2>
+            <p className="text-gray-400 mb-4">No encontramos una cuenta con este correo.</p>
+            <p className="text-white font-semibold mb-4 bg-gray-800 rounded-lg p-3">{email}</p>
+            <p className="text-gray-400 text-sm mb-6">¿Deseas crear una cuenta nueva?</p>
+            <div className="flex gap-3 w-full">
+              <button onClick={() => { setUserNotFound(false); setError(''); }} className="flex-1 px-6 py-3 bg-gray-700 rounded-lg font-semibold hover:bg-gray-600 transition">
+                Cancelar
+              </button>
+              <button onClick={() => { setCurrentMode('signup'); setUserNotFound(false); setError(''); }} className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-lg font-semibold hover:from-blue-700 hover:to-emerald-600 transition">
+                Registrarme
+              </button>
+            </div>
           </div>
         ) : success ? (
           <div className="text-center py-8 flex flex-col justify-center items-center h-full">
             <div className="text-green-500 text-5xl mb-4">✔️</div>
-            <h2 className="text-2xl font-bold mb-2 text-green-400">¡Magic Link Enviado!</h2>
+            <h2 className="text-2xl font-bold mb-2 text-green-400">{loginLinkSent ? '¡Magic Link de Ingreso Enviado!' : '¡Magic Link Enviado!'}</h2>
             <p className="text-gray-400 mb-4">Hemos enviado un enlace seguro a:</p>
             <p className="text-white font-semibold mb-4 bg-gray-800 rounded-lg p-3">{email}</p>
-            {currentMode === 'signup' && (
+            {isNewSignup && !loginLinkSent && (
               <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 mb-6">
                 <h3 className="text-green-400 font-semibold mb-2">🎁 $500 USD en Créditos Virtuales</h3>
                 <ul className="text-gray-400 text-sm text-left space-y-1">
@@ -248,6 +302,8 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
                 {error}
               </div>
             )}
+            
+            {/* Caja informativa de login removida a petición del usuario */}
             
             {currentMode === 'signup' && (
               <>

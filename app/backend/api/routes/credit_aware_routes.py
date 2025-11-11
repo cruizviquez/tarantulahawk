@@ -42,10 +42,10 @@ async def upload_with_credit_check(
     """
     
     # Validate file type
-    if not file.filename.endswith(('.csv', '.xlsx', '.xls')):
+    if not file.filename.endswith('.csv'):
         raise HTTPException(
             status_code=400,
-            detail="Invalid file format. Only CSV and Excel files are supported."
+            detail="Invalid file format. Only CSV files are supported."
         )
     
     # Save uploaded file temporarily
@@ -58,10 +58,7 @@ async def upload_with_credit_check(
             buffer.write(content)
         
         # Read file to get transaction count
-        if file.filename.endswith('.csv'):
-            df = pd.read_csv(temp_path)
-        else:
-            df = pd.read_excel(temp_path)
+        df = pd.read_csv(temp_path)
         
         num_transactions = len(df)
         

@@ -259,16 +259,102 @@ def process_file(csv_path: Path, predictor: TarantulaHawkAdaptivePredictor) -> b
         # predictions ya incluye guardrails LFPIORPI aplicados automáticamente
         df["clasificacion"] = predictions
         
+        # ✅ Detectar qué transacciones fueron corregidas por guardrails
+        def fue_corregido_por_guardrail(row):
+            """Determina si esta fila debió ser forzada a preocupante por guardrails"""
+            fraccion = str(row.get('fraccion', '_'))
+            monto = float(row.get('monto', 0))
+            es_efectivo = int(row.get('EsEfectivo', 0))
+            monto_6m = float(row.get('monto_6m', 0))
+            clasificacion = str(row.get('clasificacion', ''))
+            
+            # Solo aplica si fue clasificado como preocupante
+            if clasificacion != 'preocupante':
+                return False
+            
+            UMA = predictor.UMA
+            umbral_aviso = predictor._get_umbral_mxn(fraccion, "aviso_UMA")
+            umbral_efectivo = predictor._get_umbral_mxn(fraccion, "efectivo_max_UMA")
+            
+            # Verificar si dispara guardrail
+            if monto >= umbral_aviso:
+                return True
+            if es_efectivo == 1 and monto >= umbral_efectivo:
+                return True
+            if monto < umbral_aviso and monto_6m >= umbral_aviso:
+                return True
+            
+            return False
+        
+        df["fue_corregido_por_guardrail"] = df.apply(fue_corregido_por_guardrail, axis=1)
+        
         # Agregar origen de la clasificación (normativo/ml/reglas/conservador)
-        df["origen"] = [
-            determinar_origen(df.iloc[i], i, str(predictions[i]), strategy, 
-                            predictor._get_rule_triggers(df.iloc[i], df) if hasattr(predictor, "_get_rule_triggers") else [])
-            for i in range(len(df))
-        ]
+        def determinar_origen_mejorado(row, idx):
+            # PRIORIDAD 0: Si fue corregido por guardrail → normativo
+            if row['fue_corregido_por_guardrail']:
+                return "normativo"
+            
+            # Obtener triggers para análisis adicional
+            triggers = predictor._get_rule_triggers(row, df) if hasattr(predictor, "_get_rule_triggers") else []
+            
+            # PRIORIDAD 1: Triggers de guardrail (fallback)
+            if any(t.startswith("guardrail_") for t in triggers):
+                return "normativo"
+            
+            pred_final = str(row['clasificacion'])
+            
+            # PRIORIDAD 2: Rule-based multi disparadores
+            inusuales = [t for t in triggers if t.startswith("inusual_") or t == "sector_riesgo"]
+            if strategy == "rule_based" and len(inusuales) >= 2:
+                return "reglas_multi"
+            
+            # PRIORIDAD 3: Hybrid - analizar ML vs reglas
+            if strategy == "hybrid":
+                rule_cls = "preocupante" if any(t.startswith("guardrail_") for t in triggers) else \
+                           ("inusual" if len(inusuales) >= 2 else "relevante")
+                
+                ml_cls = None
+                ml_conf = 0.0
+                if probas is not None and classes is not None:
+                    ml_conf_arr = probas[idx]
+                    j = int(ml_conf_arr.argmax())
+                    ml_cls = str(classes[j])
+                    ml_conf = float(ml_conf_arr[j])
+                
+                # Si final coincide con rules y difiere de ML
+                if pred_final == rule_cls and (ml_cls is None or pred_final != ml_cls):
+                    return "reglas"
+                
+                # Alta confianza de ML
+                if ml_cls is not None and ml_conf >= 0.8 and pred_final == ml_cls:
+                    return "ml_alta_confianza"
+                
+                # Default a ML si coincide
+                if ml_cls is not None and pred_final == ml_cls:
+                    return "ml"
+                
+                return "conservador"
+            
+            # PRIORIDAD 4: ML puro
+            if probas is not None and classes is not None:
+                ml_conf_arr = probas[idx]
+                ml_conf = float(ml_conf_arr.max())
+                if ml_conf >= 0.8:
+                    return "ml_alta_confianza"
+                return "ml"
+            
+            return "ml"
+        
+        df["origen"] = [determinar_origen_mejorado(df.iloc[i], i) for i in range(len(df))]
         
         # Agregar razones (top 3 triggers human-readable)
         def get_top_triggers_readable(row_idx):
             row = df.iloc[row_idx]
+            
+            # Si fue corregido por guardrail, razón principal es esa
+            if row['fue_corregido_por_guardrail']:
+                return "Umbral normativo LFPIORPI"
+            
             triggers = predictor._get_rule_triggers(row, df) if hasattr(predictor, "_get_rule_triggers") else []
             razones = []
             for t in triggers[:3]:
@@ -288,7 +374,11 @@ def process_file(csv_path: Path, predictor: TarantulaHawkAdaptivePredictor) -> b
         if scores is not None:
             df["score_anomalia"] = scores
         
+        # Contar guardrails aplicados
+        n_guardrails = int(df["fue_corregido_por_guardrail"].sum())
+        
         log(f"   ✅ Clasificación final (con guardrails LFPIORPI) aplicada")
+        log(f"   🛡️  Guardrails aplicaron: {n_guardrails} transacciones")
         log(f"   📊 Distribución por origen: {Counter(df['origen'])}")
         
         # Guardar CSV enriquecido con predicciones

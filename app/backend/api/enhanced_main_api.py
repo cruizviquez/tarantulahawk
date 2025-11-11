@@ -111,19 +111,42 @@ security = HTTPBearer()
 # origins and permit credentials.
 app.add_middleware(
     CORSMiddleware,
+    # Keep explicit localhost origins; allow any Codespaces dynamic subdomain
     allow_origins=[
-        "https://silver-funicular-wp59w7jgxvvf9j47-3000.app.github.dev",
-        "https://silver-funicular-wp59w7jgxvvf9j47-3001.app.github.dev",
         "http://localhost:3000",
         "https://localhost:3000",
         "http://localhost:3001",
         "https://localhost:3001",
     ],
+    allow_origin_regex=r"https://.*\.github\.dev",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["*"],
 )
+
+# Lightweight helper to check if a profile exists by email (service role)
+@app.post("/api/auth/check-email")
+async def check_email_exists(request: Request):
+    try:
+        body = await request.json()
+        email = (body.get("email") or "").strip().lower()
+        if not email:
+            raise HTTPException(status_code=400, detail="email requerido")
+        if not supabase_admin:
+            return {"exists": False}
+        try:
+            res = supabase_admin.table("profiles").select("id").eq("email", email).limit(1).execute()
+            exists = bool(res.data and len(res.data) > 0)
+            user_id = res.data[0]["id"] if exists and isinstance(res.data[0], dict) and "id" in res.data[0] else None
+            return {"exists": exists, "user_id": user_id}
+        except Exception as e:
+            print(f"[AUTH] check-email error: {e}")
+            return {"exists": False}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Add logging middleware to debug CORS
 @app.middleware("http")
@@ -1462,10 +1485,25 @@ async def listar_api_keys(user: Dict = Depends(validar_supabase_jwt)):
 # ENDPOINT 3: Portal Upload Flow (Small Users)
 # ===================================================================
 
+@app.options("/api/portal/validate")
+async def validate_preflight(request: Request):
+    """Handle CORS preflight for validate endpoint"""
+    origin = request.headers.get("origin", "*")
+    return Response(
+        status_code=200,
+        headers={
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+            "Access-Control-Allow-Credentials": "true",
+        }
+    )
+
 @app.post("/api/portal/validate")
 async def validar_archivo_portal(
     file: UploadFile = File(...),
-    x_user_id: str = Header(None, alias="X-User-ID")
+    x_user_id: str = Header(None, alias="X-User-ID"),
+    request: Request = None
 ):
     """
     PUBLIC ENDPOINT - Validate file structure before upload
@@ -1484,21 +1522,15 @@ async def validar_archivo_portal(
             content = await file.read()
             buffer.write(content)
         
-        # Quick validation
+        # Quick validation (CSV-only)
         if file.filename.endswith('.csv'):
             df = pd.read_csv(file_path, encoding='utf-8-sig', skip_blank_lines=True, nrows=10)
-        elif file.filename.endswith(('.xlsx', '.xls')):
-            df = pd.read_excel(file_path, engine='openpyxl' if file.filename.endswith('.xlsx') else None, sheet_name=0, nrows=10)
         else:
             os.remove(file_path)
-            raise HTTPException(status_code=400, detail="Unsupported format. Use .xlsx, .xls or .csv")
+            raise HTTPException(status_code=400, detail="Unsupported format. Use .csv")
         
-        # Get total row count
-        if file.filename.endswith('.csv'):
-            total_rows = sum(1 for _ in open(file_path)) - 1  # -1 for header
-        else:
-            df_full = pd.read_excel(file_path, engine='openpyxl' if file.filename.endswith('.xlsx') else None, sheet_name=0)
-            total_rows = len(df_full)
+        # Get total row count (CSV-only)
+        total_rows = sum(1 for _ in open(file_path)) - 1  # -1 for header
         
         # Get column names from the dataframe
         columns = df.columns.tolist()
@@ -1523,12 +1555,13 @@ async def validar_archivo_portal(
         print(f"✅ File validated: {file.filename} - {total_rows} rows, {len(columns)} columns")
         print(f"📋 Columns detected: {columns}")
         
+        # Let CORSMiddleware handle headers; just return JSON
         return {
             "success": True,
             "file_id": file_id,
             "file_name": file.filename,
             "row_count": total_rows,
-            "columns": columns,  # ← Columnas del Excel
+            "columns": columns,
             "message": "File validated successfully. Ready for analysis."
         }
     except HTTPException:
@@ -1606,20 +1639,12 @@ async def upload_archivo_portal(
         print(f"📤 UPLOAD - Analysis ID: {analysis_id}")
         print(f"{'='*70}")
         
-        # Load file
+        # Load file (CSV-only)
         if file.filename.endswith('.csv'):
             df = pd.read_csv(file_path, encoding='utf-8-sig', skip_blank_lines=True)
-        elif file.filename.endswith(('.xlsx', '.xls')):
-            df = pd.read_excel(
-                file_path, 
-                engine='openpyxl' if file.filename.endswith('.xlsx') else None,
-                sheet_name=0,
-                na_filter=True,
-            )
-            df = df.dropna(how='all')
         else:
             os.remove(file_path)
-            raise HTTPException(status_code=400, detail="Formato no soportado. Use .xlsx, .xls o .csv")
+            raise HTTPException(status_code=400, detail="Formato no soportado. Use .csv")
 
         # REQUIRED COLUMNS ENFORCEMENT (hard stop before enrichment)
         required_cols = ["cliente_id", "monto", "fecha", "tipo_operacion", "sector_actividad"]

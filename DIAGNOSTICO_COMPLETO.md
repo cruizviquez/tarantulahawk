@@ -248,7 +248,7 @@ Cuando todo funcione correctamente:
 3. **Console logs:**
    ```
    [ONBOARDING] emailRedirectTo: https://.../auth/callback
-   📤 Validando archivo: {fileName: "archivo.xlsx", ...}
+   📤 Validando archivo: {fileName: "archivo.csv", ...}
    ✅ Archivo validado: {success: true, ...}
    🎯 Estado actualizado: {fileReadyForAnalysis: true, ...}
    ```
@@ -256,6 +256,6 @@ Cuando todo funcione correctamente:
 4. **Backend logs:**
    ```
    INFO:     127.0.0.1:XXXX - "POST /api/portal/validate HTTP/1.1" 200 OK
-   ✅ File validated: archivo.xlsx - 150 rows, 5 columns
+   ✅ File validated: archivo.csv - 150 rows, 5 columns
    📋 Columns detected: ['cliente_id', 'monto', ...]
    ```
