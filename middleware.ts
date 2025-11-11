@@ -74,9 +74,20 @@ function addSecurityHeaders(response: NextResponse): NextResponse {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
+  // Helper local para trazas (solo dev) sin exponer info sensible
+  const trace = (stage: string, extra: Record<string, any> = {}) => {
+    if (process.env.NODE_ENV !== 'production') {
+      try {
+        console.debug('[MW]', stage, JSON.stringify({
+          path: pathname,
+          ...extra
+        }));
+      } catch {}
+    }
+  };
+
   // Helper: normalize Codespaces host (strip :port only for .github.dev; preserve elsewhere)
   function normalizeRedirectUrl(u: URL) {
-    // Only strip :port on Codespaces (.github.dev hosts); preserve ports on other hosts (e.g., tarantulahawk:3000)
     if (u.hostname.endsWith('.github.dev') && u.host.includes(':')) {
       const withoutPort = u.host.split(':')[0];
       u.host = withoutPort;
@@ -86,84 +97,99 @@ export async function middleware(request: NextRequest) {
   
   // Archivos estáticos y Next.js internals
   if (pathname.startsWith('/_next') || pathname.startsWith('/favicon') || pathname.startsWith('/public')) {
-    return NextResponse.next();
+    trace('static-pass');
+    const resp = NextResponse.next();
+    resp.headers.set('X-Middleware-Trace', 'static');
+    return resp;
   }
   
   // Get user info from cookies (includes role and expiry check)
   const userInfo = getUserFromCookies(request);
   const authCookiePresent = !!userInfo || hasSupabaseAuthCookie(request);
+  const expired = !!userInfo && userInfo.isExpired;
   
   // Check if path is API route
   const isApiRoute = pathname.startsWith('/api');
+  trace('init', { isApiRoute, authCookiePresent, expired });
   
   // === API ROUTE PROTECTION ===
   if (isApiRoute) {
-    // Allow public APIs
     const isPublicApi = PUBLIC_API_PREFIXES.some(prefix => pathname.startsWith(prefix));
     if (isPublicApi) {
+      trace('api-public-allow');
       const response = NextResponse.next();
+      response.headers.set('X-Middleware-Trace', 'api-public');
       return addSecurityHeaders(response);
     }
     
-    // Block if no valid session
-    if (!authCookiePresent || (userInfo && userInfo.isExpired)) {
-      return NextResponse.json(
+    if (!authCookiePresent || expired) {
+      trace('api-unauthorized');
+      const response = NextResponse.json(
         { error: 'Unauthorized - Invalid or expired session' },
         { status: 401 }
       );
+      response.headers.set('X-Middleware-Trace', 'api-401');
+      return response;
     }
     
-    // Protected APIs require valid auth (role check done in API route via DB)
     const isProtectedApi = PROTECTED_API_PREFIXES.some(prefix => pathname.startsWith(prefix));
     if (isProtectedApi) {
-      // Auth validated, role checks happen in API route
+      trace('api-protected-allow');
       const response = NextResponse.next();
+      response.headers.set('X-Middleware-Trace', 'api-protected');
       return addSecurityHeaders(response);
     }
     
-    // Default: allow other APIs if authenticated
+    trace('api-default-allow');
     const response = NextResponse.next();
+    response.headers.set('X-Middleware-Trace', 'api-default');
     return addSecurityHeaders(response);
   }
   
   // === PAGE ROUTE PROTECTION ===
-  
-  // Allow public routes
   if (PUBLIC_ROUTES.includes(pathname)) {
+    trace('page-public-allow');
     const response = NextResponse.next();
+    response.headers.set('X-Middleware-Trace', 'page-public');
     return addSecurityHeaders(response);
   }
   
-  // Admin routes require valid auth (role check done in page component via DB)
   const isAdminRoute = ADMIN_ROUTES.some(route => pathname.startsWith(route));
   if (isAdminRoute) {
-    if (!authCookiePresent || (userInfo && userInfo.isExpired)) {
+    if (!authCookiePresent || expired) {
+      trace('admin-redirect');
       const url = request.nextUrl.clone();
       url.pathname = '/';
       url.searchParams.set('auth', 'required');
       normalizeRedirectUrl(url);
-      return NextResponse.redirect(url);
+      const resp = NextResponse.redirect(url);
+      resp.headers.set('X-Middleware-Trace', 'admin-redirect');
+      return resp;
     }
-    
-    // Allow through - role check happens in page component
+    trace('admin-allow');
     const response = NextResponse.next();
+    response.headers.set('X-Middleware-Trace', 'admin-allow');
     return addSecurityHeaders(response);
   }
   
-  // Protected routes require valid auth
   const isProtectedRoute = PROTECTED_ROUTES.some(route => pathname.startsWith(route));
   if (isProtectedRoute) {
-    if (!authCookiePresent || (userInfo && userInfo.isExpired)) {
+    if (!authCookiePresent || expired) {
+      trace('protected-redirect');
       const url = request.nextUrl.clone();
       url.pathname = '/';
       url.searchParams.set('auth', 'required');
       normalizeRedirectUrl(url);
-      return NextResponse.redirect(url);
+      const resp = NextResponse.redirect(url);
+      resp.headers.set('X-Middleware-Trace', 'protected-redirect');
+      return resp;
     }
+    trace('protected-allow');
   }
   
-  // Default: allow through with security headers
+  trace('page-default-allow');
   const response = NextResponse.next();
+  response.headers.set('X-Middleware-Trace', 'page-default');
   return addSecurityHeaders(response);
 }
 

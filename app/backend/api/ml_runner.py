@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-ml_runner.py - Runner de inferencia para archivos enriquecidos
+ml_runner.py - Runner de inferencia para archivos enriquecidos (CORREGIDO)
+
+✅ CORRECCIÓN APLICADA:
+- Usa predictions de predict_adaptive() que YA incluyen guardrails
+- NO recalcula con _predict_rule_based() que ignora guardrails
 
 Procesa archivos de outputs/enriched/pending/*.csv usando TarantulaHawkPredictor:
 1. Lee CSV enriquecido
@@ -80,6 +84,10 @@ def process_file(csv_path: Path, predictor: TarantulaHawkAdaptivePredictor) -> b
         log(f"      🔴 Preocupante: {preocupante} ({preocupante/total*100:.1f}%)")
         log(f"      🟠 Inusual: {inusual} ({inusual/total*100:.1f}%)")
         log(f"      🟡 Relevante: {relevante} ({relevante/total*100:.1f}%)")
+        
+        # ✅ VERIFICAR GUARDRAILS
+        guardrails_count = meta_pred.get("guardrails_applied", 0) if isinstance(meta_pred, dict) else 0
+        log(f"      🛡️  Guardrails aplicados: {guardrails_count}")
         
         # Generar detalle de transacciones (primeras 100) + triggers/origen
         transacciones = []
@@ -247,28 +255,41 @@ def process_file(csv_path: Path, predictor: TarantulaHawkAdaptivePredictor) -> b
             # Insertar al inicio para mantener orden de columnas lógico
             df.insert(0, "cliente_id", cliente_ids_originales)
         
-        # ✅ Agregar predicciones al CSV antes de moverlo
-        df["clasificacion_ml"] = predictions
-        df["score_anomalia"] = scores if scores is not None else None
+        # ✅ OPCIÓN A: UNA SOLA COLUMNA DE CLASIFICACIÓN
+        # predictions ya incluye guardrails LFPIORPI aplicados automáticamente
+        df["clasificacion"] = predictions
         
-        # Agregar triggers como string (top 3)
-        def get_top_triggers(row_idx):
+        # Agregar origen de la clasificación (normativo/ml/reglas/conservador)
+        df["origen"] = [
+            determinar_origen(df.iloc[i], i, str(predictions[i]), strategy, 
+                            predictor._get_rule_triggers(df.iloc[i], df) if hasattr(predictor, "_get_rule_triggers") else [])
+            for i in range(len(df))
+        ]
+        
+        # Agregar razones (top 3 triggers human-readable)
+        def get_top_triggers_readable(row_idx):
             row = df.iloc[row_idx]
             triggers = predictor._get_rule_triggers(row, df) if hasattr(predictor, "_get_rule_triggers") else []
-            return "; ".join(triggers[:3]) if triggers else ""
+            razones = []
+            for t in triggers[:3]:
+                if t.startswith("guardrail_"):
+                    razones.append("Umbral normativo LFPIORPI")
+                elif t.startswith("inusual_"):
+                    razones.append(t.replace("inusual_", "").replace("_", " ").title())
+                elif t == "sector_riesgo":
+                    razones.append("Sector alto riesgo")
+                else:
+                    razones.append(t.replace("_", " ").title())
+            return "; ".join(razones) if razones else ""
         
-        df["razones"] = [get_top_triggers(i) for i in range(len(df))]
+        df["razones"] = [get_top_triggers_readable(i) for i in range(len(df))]
         
-        # ✅ Agregar clasificación LFPIORPI como referencia (reglas puras, sin ML)
-        # Solo para volúmenes bajos/medios (evitar procesamiento costoso en datasets grandes)
-        strategy = str(meta_pred.get("strategy", "unknown")) if isinstance(meta_pred, dict) else "unknown"
-        if strategy != "ml_pure":
-            # Para rule_based o hybrid, calcular referencia LFPIORPI
-            clasificacion_lfpiorpi = predictor._predict_rule_based(df)
-            df["clasificacion_lfpiorpi"] = clasificacion_lfpiorpi
-        else:
-            # Para ML puro (>1000 txns), omitir por performance
-            df["clasificacion_lfpiorpi"] = None
+        # Opcional: Score de anomalía (si disponible)
+        if scores is not None:
+            df["score_anomalia"] = scores
+        
+        log(f"   ✅ Clasificación final (con guardrails LFPIORPI) aplicada")
+        log(f"   📊 Distribución por origen: {Counter(df['origen'])}")
         
         # Guardar CSV enriquecido con predicciones
         processed_csv = PROCESSED_DIR / csv_path.name

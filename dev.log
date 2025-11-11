@@ -1,0 +1,11 @@
+
+> tarantulahawk@0.1.0 dev
+> next dev
+
+   ▲ Next.js 15.5.5
+   - Local:        http://localhost:3000
+   - Network:      http://10.0.2.43:3000
+   - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 8.7s

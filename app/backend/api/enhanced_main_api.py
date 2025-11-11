@@ -48,6 +48,9 @@ except Exception:
     except Exception:
         PricingTier = None  # final fallback; will use local calcular_costo
 
+# Define base directory for file operations
+BASE_DIR = Path(__file__).resolve().parent.parent
+
 # Internal modules (from your existing code)
 # from validador_enriquecedor import procesar_archivo, validar_estructura, enriquecer_features
 # from sistema_deteccion_multinivel import ejecutar_sistema_multinivel
