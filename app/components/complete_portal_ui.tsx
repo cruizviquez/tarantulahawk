@@ -1063,13 +1063,8 @@ return (
             <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8">
               <h2 className="text-2xl font-bold mb-6">{language === 'es' ? 'Subir Datos de Transacciones' : 'Upload Transaction Data'}</h2>
               
-              {/* File Format Info - Informative Only */}
+              {/* File Format Info - CSV Only */}
               <div className="flex items-center justify-center gap-6 mb-6 text-sm">
-                <div className="flex items-center gap-2 px-4 py-2 bg-black/50 border border-gray-800 rounded-lg">
-                  <FileSpreadsheet className="w-5 h-5 text-green-400" />
-                  <span className="text-gray-300">Excel (.xlsx, .xls)</span>
-                </div>
-                <div className="text-gray-700">|</div>
                 <div className="flex items-center gap-2 px-4 py-2 bg-black/50 border border-gray-800 rounded-lg">
                   <FileText className="w-5 h-5 text-blue-400" />
                   <span className="text-gray-300">CSV</span>
@@ -1086,7 +1081,7 @@ return (
                 <Upload className="w-16 h-16 text-gray-600 mx-auto mb-4" />
                 <div className="text-lg font-semibold mb-2">{language === 'es' ? 'Arrastra tu archivo aquí o haz clic para seleccionar' : 'Drop your file here or click to browse'}</div>
                 <div className="text-sm text-gray-500 mb-4">
-                  {language === 'es' ? 'Soporta .xlsx, .csv hasta 500MB' : 'Supports .xlsx, .csv up to 500MB'}
+                  {language === 'es' ? 'Solo CSV hasta 500MB. Exporta Excel como CSV.' : 'CSV only up to 500MB. Export Excel as CSV.'}
                 </div>
                 
                 {/* Estimated Cost Display */}
@@ -1110,7 +1105,7 @@ return (
                 
                 <input
                   type="file"
-                  accept=".xlsx,.xls,.csv"
+                  accept=".csv"
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                     const file = e.target.files?.[0];
                     if (file) handleFileUpload(file);

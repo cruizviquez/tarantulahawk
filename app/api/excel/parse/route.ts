@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import * as XLSX from 'xlsx';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -17,16 +16,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. Validar tipo de archivo
+    // 2. Validar tipo de archivo (solo CSV permitido)
     const fileName = file.name.toLowerCase();
-    const validExtensions = ['.xlsx', '.xls', '.csv'];
-    const hasValidExtension = validExtensions.some(ext => fileName.endsWith(ext));
-
-    if (!hasValidExtension) {
+    const validExtensions = ['.csv'];
+    const isCsv = fileName.endsWith('.csv');
+    if (!isCsv) {
       return NextResponse.json(
-        { 
-          error: `Tipo de archivo no válido. Extensión actual: ${fileName.split('.').pop()}. ` +
-                 `Se requiere: ${validExtensions.join(', ')}`
+        {
+          success: false,
+          error: 'Solo se aceptan archivos CSV. Exporta tu Excel como CSV antes de subirlo.',
+          accepted: validExtensions
         },
         { status: 400 }
       );
@@ -44,95 +43,55 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 5. Parse con xlsx
-    let workbook: XLSX.WorkBook;
-    try {
-      workbook = XLSX.read(buffer, { type: 'buffer' });
-    } catch (xlsxError: unknown) {
-      const errorMsg = xlsxError instanceof Error ? xlsxError.message : 'Error desconocido';
+    // 5. Procesar CSV de forma segura (sin librería vulnerable)
+    const text = buffer.toString('utf8');
+    const lines = text.split(/\r?\n/).filter(l => l.trim().length > 0);
+    if (lines.length === 0) {
       return NextResponse.json(
-        { 
-          error: `No se pudo leer el archivo Excel. Puede estar corrupto o en formato no soportado.`,
-          details: errorMsg
-        },
+        { success: false, error: 'El CSV está vacío (sin líneas útiles)' },
         { status: 400 }
       );
     }
-
-    // 6. Validar que tenga hojas
-    if (!workbook.SheetNames || workbook.SheetNames.length === 0) {
-      return NextResponse.json(
-        { error: 'El archivo Excel no contiene hojas de cálculo' },
-        { status: 400 }
-      );
-    }
-
-    // 7. Obtener primera hoja
-    const firstSheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[firstSheetName];
-
-    // 8. Convertir a JSON
-    let jsonData: unknown[];
-    try {
-      jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: null });
-    } catch (jsonError: unknown) {
-      const errorMsg = jsonError instanceof Error ? jsonError.message : 'Error desconocido';
-      return NextResponse.json(
-        { 
-          error: 'Error al convertir la hoja de Excel a JSON',
-          details: errorMsg
-        },
-        { status: 500 }
-      );
-    }
-
-    // 9. Validar que tenga datos
-    if (jsonData.length === 0) {
-      return NextResponse.json(
-        { 
-          warning: 'El archivo se procesó correctamente pero no contiene datos (solo encabezados o está vacío)',
-          sheetName: firstSheetName,
-          rowCount: 0,
-          data: []
-        },
-        { status: 200 }
-      );
-    }
-
-    // 10. Validar columnas obligatorias (5 campos: incluye cliente_id, excluye frecuencia_mensual)
+    // Encabezados
+    const headerLine = lines[0];
+    const rawHeaders = headerLine.split(',').map(h => h.trim());
+    const headersLower = rawHeaders.map(h => h.toLowerCase());
     const requiredColumns = ['cliente_id', 'monto', 'fecha', 'tipo_operacion', 'sector_actividad'];
-    const fileColumns = Object.keys(jsonData[0] as object).map(col => col.toLowerCase().trim());
-    const missingColumns = requiredColumns.filter(req => !fileColumns.includes(req));
-    
+    const missingColumns = requiredColumns.filter(c => !headersLower.includes(c));
     if (missingColumns.length > 0) {
       return NextResponse.json(
-        { 
+        {
           success: false,
           error: `Faltan columnas obligatorias: ${missingColumns.join(', ')}`,
           requiredColumns,
-          foundColumns: fileColumns,
+          foundColumns: rawHeaders,
           missingColumns
         },
         { status: 400 }
       );
     }
-
-    // 11. Preparar respuesta exitosa
-    const response = {
-      success: true,
-      fileName: file.name,
-      fileSize: file.size,
-      sheetName: firstSheetName,
-      totalSheets: workbook.SheetNames.length,
-      rowCount: jsonData.length,
-      columns: Object.keys(jsonData[0] as object),
-      requiredColumns,
-      missingColumns: [],
-      data: jsonData,
-      preview: jsonData.slice(0, 5), // Primeras 5 filas para preview
-    };
-
-    return NextResponse.json(response, { status: 200 });
+    // Contar filas de datos (excluyendo encabezado)
+    const rowCount = lines.length - 1;
+    // Previsualizar primeras 5 filas convertidas a objetos simples
+    const previewRows = lines.slice(1, 6).map(line => {
+      const values = line.split(',').map(v => v.trim());
+      const obj: Record<string, string> = {};
+      rawHeaders.forEach((h, i) => { obj[h] = values[i] || ''; });
+      return obj;
+    });
+    return NextResponse.json(
+      {
+        success: true,
+        fileName: file.name,
+        fileSize: file.size,
+        rowCount,
+        columns: rawHeaders,
+        requiredColumns,
+        missingColumns: [],
+        preview: previewRows
+      },
+      { status: 200 }
+    );
 
   } catch (error: unknown) {
     // Error genérico no capturado
@@ -157,11 +116,9 @@ export async function GET() {
   return NextResponse.json({
     endpoint: '/api/excel/parse',
     method: 'POST',
-    description: 'Procesa archivos Excel (.xlsx, .xls, .csv) y retorna JSON',
-    requiredFields: {
-      file: 'File object en FormData'
-    },
-    supportedFormats: ['.xlsx', '.xls', '.csv'],
+    description: 'Procesa archivos CSV y retorna metadatos y preview',
+    requiredFields: { file: 'File object en FormData' },
+    supportedFormats: ['.csv'],
     maxDuration: 60,
     runtime: 'nodejs'
   });
