@@ -160,15 +160,13 @@ class TarantulaHawkAdaptivePredictor:
             strategy = "rule_based"
             predictions = self._predict_rule_based(df)
             probas = None
-            
         elif n < 1000:
             strategy = "hybrid"
             predictions, probas = self._predict_hybrid(df, n)
-            
         else:
             strategy = "ml_pure"
             predictions, probas = self._predict_ml_pure(df)
-        
+
         # Metadata
         metadata = None
         if return_metadata:
@@ -184,54 +182,48 @@ class TarantulaHawkAdaptivePredictor:
                 metadata["reglas_disparadas"] = trigger_counts
                 metadata["small_volume_adjustments"] = {
                     "preocupante_guardrail": int(trigger_counts.get("guardrail", 0)),
-                    "inusual_multi_trigger": int(trigger_counts.get("inusual_multi", 0))
+                    "inusual_multi_trigger": int(trigger_counts.get("inusual_multi", 0)),
+                    "inusual_3plus": int(trigger_counts.get("inusual_3plus", 0))
                 }
-            
             if self.verbose:
                 print(f"\n📊 Estrategia: {strategy.upper()} (n={n})")
                 print(f"   Distribución: {metadata['distribución']}")
-        
-        if return_probas:
-            return predictions, probas, metadata
-        else:
-            return predictions, metadata
+        # Siempre retornar 3 valores para consistencia
+        return predictions, probas, metadata
     
     def _predict_rule_based(self, df: pd.DataFrame) -> np.ndarray:
         """
-        ✅ CORREGIDO: Lógica granular - requiere 2+ triggers para inusual
-        
-        Clasificación:
-        - PREOCUPANTE: guardrail_* (normativa LFPIORPI)
-        - INUSUAL: 2+ triggers inusuales (evita falsos positivos)
-        - RELEVANTE: 0-1 triggers o bajo riesgo
+        Lógica granular:
+        - PREOCUPANTE: guardrail_* (normativa LFPIORPI, suficiente por sí solo)
+        - INUSUAL: score_ebr >= 0.4 (umbral sugerido, ajustable)
+        - RELEVANTE: score_ebr < 0.4
         """
         predictions = []
         trigger_totals: Counter = Counter()
-        inusual_count = 0
         guardrail_total = 0
+        inusual_count = 0
+        relevante_count = 0
 
         for _, row in df.iterrows():
             triggers = self._get_rule_triggers(row, df)
-            
             # Guardrails = PREOCUPANTE
             if any(t.startswith("guardrail_") for t in triggers):
                 predictions.append("preocupante")
                 guardrail_total += 1
             else:
-                # 2+ triggers inusuales = INUSUAL (evita falsos positivos)
-                triggers_inusual = [t for t in triggers if t.startswith("inusual_")]
-                
-                if len(triggers_inusual) >= 2:
+                score_ebr = self.calcular_score_ebr(row, triggers, df)
+                if score_ebr >= 0.4:
                     predictions.append("inusual")
                     inusual_count += 1
                 else:
                     predictions.append("relevante")
-
+                    relevante_count += 1
             trigger_totals.update(triggers)
 
         # Guardar conteos para metadatos
         trigger_totals["guardrail"] += guardrail_total
-        trigger_totals["inusual_2plus"] += inusual_count
+        trigger_totals["inusual_ebr"] = inusual_count
+        trigger_totals["relevante_ebr"] = relevante_count
         self._last_trigger_counts = dict(trigger_totals)
 
         return np.array(predictions)
@@ -467,11 +459,9 @@ class TarantulaHawkAdaptivePredictor:
             # Prioridad 1: Si rules dice preocupante → SIEMPRE preocupante
             if pred_rules[i] == "preocupante":
                 predictions.append("preocupante")
-            
             # Prioridad 2: Si ML muy confiado (>0.8) → confiar en ML
-            elif proba_ml[i].max() > 0.8:
+            elif proba_ml is not None and proba_ml[i].max() > 0.8:
                 predictions.append(pred_ml[i])
-            
             # Prioridad 3: Desacuerdo → elegir el más conservador
             else:
                 severidad = {"relevante": 0, "inusual": 1, "preocupante": 2}
@@ -479,7 +469,6 @@ class TarantulaHawkAdaptivePredictor:
                     predictions.append(pred_ml[i])
                 else:
                     predictions.append(pred_rules[i])
-        
         return np.array(predictions), proba_ml
     
     def _predict_ml_pure(self, df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
@@ -494,32 +483,25 @@ class TarantulaHawkAdaptivePredictor:
         X = self._prepare_features(df)
         
         """
-        ✅ CORREGIDO: Lógica granular - requiere 2+ triggers para inusual
-        
-        Clasificación:
-        - PREOCUPANTE: guardrail_* (normativa LFPIORPI)
-        - INUSUAL: 2+ triggers inusuales (evita falsos positivos)
-        - RELEVANTE: 0-1 triggers o bajo riesgo
+        Lógica granular:
+        - PREOCUPANTE: guardrail_* (normativa LFPIORPI, suficiente por sí solo)
+        - INUSUAL: 3+ triggers inusuales (evita falsos positivos)
+        - RELEVANTE: 0-2 triggers o bajo riesgo
         """
         preds = []
         for _, row in df.iterrows():
             triggers = self._get_rule_triggers(row, df)
-            
             # Guardrails = PREOCUPANTE
             if any(t.startswith("guardrail_") for t in triggers):
                 preds.append("preocupante")
                 continue
-            
-            # 2+ triggers inusuales = INUSUAL (evita falsos positivos)
+            # 3+ triggers inusuales = INUSUAL
             triggers_inusual = [t for t in triggers if t.startswith("inusual_")]
-            
-            if len(triggers_inusual) >= 2:
+            if len(triggers_inusual) >= 3:
                 preds.append("inusual")
             else:
                 preds.append("relevante")
-        
-        return np.array(preds)
-        return predictions, probas
+        return np.array(preds), None
     
     def _prepare_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """Preparar features para ML (one-hot, alinear, sanitizar)"""

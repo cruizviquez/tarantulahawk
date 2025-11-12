@@ -198,11 +198,7 @@ def process_file(csv_path: Path, predictor: TarantulaHawkAdaptivePredictor) -> b
             score_ebr = float(scores_ebr[i]) if i < len(scores_ebr) else 0.5
             
             # 🆕 GENERAR EXPLICABILIDAD COMPLETA usando TransactionExplainer
-            metadata_explicabilidad = explainer.explicar_transaccion(
-                row=row,
-                score_confianza=score_ebr,  # ✅ Usar Score EBR
-                triggers=triggers
-            )
+            metadata_explicabilidad = explainer.explicar_transaccion(row, score_ebr, triggers)
             
             # Convertir triggers a lista de razones human-readable (fallback si no hay explicabilidad)
             razones_lista = metadata_explicabilidad.get('razones', [])

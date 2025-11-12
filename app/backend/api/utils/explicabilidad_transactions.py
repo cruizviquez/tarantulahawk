@@ -75,7 +75,7 @@ class TransactionExplainer:
     def explicar_transaccion(
         self,
         row: pd.Series,
-        score_confianza: Optional[float],
+        score_ebr: Optional[float],
         triggers: List[str]
     ) -> Dict:
         """
@@ -83,7 +83,7 @@ class TransactionExplainer:
         
         Args:
             row: Serie de pandas con datos de la transacción
-            score_confianza: Score EBR calculado (0.0-1.0)
+            score_ebr: Score EBR calculado (0.0-1.0)
             triggers: Lista de triggers activados
         
         Returns:
@@ -107,22 +107,25 @@ class TransactionExplainer:
             razon_principal = f"Clasificada como {clasificacion.upper()} por análisis de riesgo"
             origen = "ml"
         
-        # Factores de riesgo
+        # Factores de riesgo (solo los principales, máx 3)
         factores_riesgo = []
         for t in triggers:
+            probabilidades=None,
+            triggers: List[str] = None
             if t in self.explicaciones_triggers:
                 factores_riesgo.append({
                     "codigo": t,
                     "descripcion": self.explicaciones_triggers[t],
                     "tipo": "normativo" if t.startswith("guardrail_") else "behavioral"
                 })
+        triggers_principales = factores_riesgo[:3]
         
         # Nivel de confianza
-        if score_confianza is not None:
-            if score_confianza >= 0.7:
+        if score_ebr is not None:
+            if score_ebr >= 0.7:
                 nivel_confianza = "alta"
                 comentario_confianza = "Clasificación respaldada por múltiples factores"
-            elif score_confianza >= self.umbral_confianza_bajo:
+            elif score_ebr >= self.umbral_confianza_bajo:
                 nivel_confianza = "media"
                 comentario_confianza = "Clasificación basada en factores moderados"
             else:
@@ -137,19 +140,33 @@ class TransactionExplainer:
             clasificacion,
             ["Revisar clasificación manualmente"]
         )
-        
-        # Contexto adicional
-        contexto = self._generar_contexto(row, triggers)
+            # Robustez: si probabilidades es float, ignora y usa None
+            if isinstance(probabilidades, float):
+                probabilidades = None
+            score_confianza, nivel_confianza = self._calcular_confianza(
+                clasificacion, probabilidades, origen, fue_corregido
+            )
+
+        # Acción sugerida
+        if clasificacion == "preocupante":
+            accion_sugerida = "enviar reporte de inmediato a la UIF"
+        elif clasificacion == "inusual":
+            accion_sugerida = "revisar manualmente la transacción"
+        elif clasificacion == "relevante":
+            accion_sugerida = "analizar KYC"
+        else:
+            accion_sugerida = "revisar manualmente la transacción"
         
         return {
             "clasificacion": clasificacion,
             "razon_principal": razon_principal,
             "origen": origen,
-            "score_confianza": score_confianza if score_confianza is not None else 0.0,
+            "score_ebr": score_ebr if score_ebr is not None else 0.0,
             "nivel_confianza": nivel_confianza,
             "comentario_confianza": comentario_confianza,
-            "factores_riesgo": factores_riesgo,
-            "n_factores": len(factores_riesgo),
+            "triggers_principales": triggers_principales,
+            "n_triggers_principales": len(triggers_principales),
+            "accion_sugerida": accion_sugerida,
             "recomendaciones": recomendaciones,
             "contexto": contexto,
             "requiere_revision_urgente": clasificacion == "preocupante",

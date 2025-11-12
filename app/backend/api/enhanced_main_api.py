@@ -165,7 +165,10 @@ async def startup_event():
     print("\n" + "="*70)
     print("🚀 TarantulaHawk API Starting...")
     print("="*70)
-    cargar_modelos_ml()
+    try:
+        cargar_modelos_ml()
+    except Exception as e:
+        print(f"⚠️  Modelos ML no disponibles: {e}")
     print("="*70 + "\n")
 
 # Directory Structure
@@ -204,34 +207,66 @@ def cargar_modelos_ml():
     
     models_dir = Path(__file__).parent.parent / "outputs"
     
+    print(f"📂 Buscando modelos en: {models_dir.absolute()}")
+    
+    if not models_dir.exists():
+        print(f"⚠️  Directorio de modelos no existe: {models_dir}")
+        return False
+    
     try:
         # Load Supervised Model (Ensemble Stacking V2)
         supervised_path = models_dir / "modelo_ensemble_stack_v2.pkl"
         if supervised_path.exists():
+            print(f"⏳ Cargando {supervised_path.name}...")
             ML_MODELS["supervisado"] = joblib.load(supervised_path)
-            print(f"✅ Modelo Supervisado V2 cargado: {supervised_path.name}")
+            print(f"✅ Modelo Supervisado V2 cargado")
         else:
-            print(f"⚠️ {supervised_path.name} no encontrado")
+            # Fallback to v1
+            supervised_v1 = models_dir / "modelo_ensemble_stack.pkl"
+            if supervised_v1.exists():
+                print(f"⏳ Cargando {supervised_v1.name} (v1)...")
+                ML_MODELS["supervisado"] = joblib.load(supervised_v1)
+                print(f"✅ Modelo Supervisado V1 cargado")
+            else:
+                print(f"⚠️  Modelo supervisado no encontrado")
         
         # Load Unsupervised Model Bundle V2 (Isolation Forest + KMeans)
         unsupervised_path = models_dir / "no_supervisado_bundle_v2.pkl"
         if unsupervised_path.exists():
+            print(f"⏳ Cargando {unsupervised_path.name}...")
             ML_MODELS["no_supervisado"] = joblib.load(unsupervised_path)
-            print(f"✅ Modelo No Supervisado Bundle V2 cargado: {unsupervised_path.name}")
+            print(f"✅ Modelo No Supervisado Bundle V2 cargado")
         else:
-            print(f"⚠️ {unsupervised_path.name} no encontrado")
+            # Fallback to v1
+            unsupervised_v1 = models_dir / "no_supervisado_bundle.pkl"
+            if unsupervised_v1.exists():
+                print(f"⏳ Cargando {unsupervised_v1.name} (v1)...")
+                ML_MODELS["no_supervisado"] = joblib.load(unsupervised_v1)
+                print(f"✅ Modelo No Supervisado V1 cargado")
+            else:
+                print(f"⚠️  Modelo no supervisado no encontrado")
         
         # Load Reinforcement Learning Bundle V2 (Q-Learning)
         rl_path = models_dir / "refuerzo_bundle_v2.pkl"
         if rl_path.exists():
+            print(f"⏳ Cargando {rl_path.name}...")
             ML_MODELS["refuerzo"] = joblib.load(rl_path)
-            print(f"✅ Modelo Refuerzo Bundle V2 cargado: {rl_path.name}")
+            print(f"✅ Modelo Refuerzo Bundle V2 cargado")
         else:
-            print(f"⚠️ {rl_path.name} no encontrado")
+            # Fallback to v1
+            rl_v1 = models_dir / "refuerzo_bundle.pkl"
+            if rl_v1.exists():
+                print(f"⏳ Cargando {rl_v1.name} (v1)...")
+                ML_MODELS["refuerzo"] = joblib.load(rl_v1)
+                print(f"✅ Modelo Refuerzo V1 cargado")
+            else:
+                print(f"⚠️  Modelo refuerzo no encontrado")
             
         return True
     except Exception as e:
         print(f"❌ Error cargando modelos ML: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 # Initialize mock test user for development
