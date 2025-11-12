@@ -1,3 +1,5 @@
+"use client";
+
 import AdminDashboard from '@/app/components/AdminDashboard';
 import { Suspense } from 'react';
 import AccessDenied from './restricted';
