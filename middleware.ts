@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { getUserFromCookies, hasSupabaseAuthCookie } from './app/lib/middleware-auth';
+import { getUserFromCookies } from './app/lib/middleware-auth';
 
 // Rutas públicas que NO requieren autenticación
-const PUBLIC_ROUTES = ['/', '/auth/callback', '/auth/redirect', '/auth', '/login', '/signup'];
+const PUBLIC_ROUTES = ['/', '/auth/callback', '/auth/redirect', '/auth', '/auth/login', '/login', '/signup'];
 
 // APIs públicas que NO requieren autenticación (reducido a mínimo)
 const PUBLIC_API_PREFIXES = [
@@ -105,12 +105,11 @@ export async function middleware(request: NextRequest) {
   
   // Get user info from cookies (includes role and expiry check)
   const userInfo = getUserFromCookies(request);
-  const authCookiePresent = !!userInfo || hasSupabaseAuthCookie(request);
-  const expired = !!userInfo && userInfo.isExpired;
+  const authValid = !!userInfo && !userInfo.isExpired;
   
   // Check if path is API route
   const isApiRoute = pathname.startsWith('/api');
-  trace('init', { isApiRoute, authCookiePresent, expired });
+  trace('init', { isApiRoute, authValid });
   
   // === API ROUTE PROTECTION ===
   if (isApiRoute) {
@@ -122,7 +121,7 @@ export async function middleware(request: NextRequest) {
       return addSecurityHeaders(response);
     }
     
-    if (!authCookiePresent || expired) {
+    if (!authValid) {
       trace('api-unauthorized');
       const response = NextResponse.json(
         { error: 'Unauthorized - Invalid or expired session' },
@@ -156,11 +155,12 @@ export async function middleware(request: NextRequest) {
   
   const isAdminRoute = ADMIN_ROUTES.some(route => pathname.startsWith(route));
   if (isAdminRoute) {
-    if (!authCookiePresent || expired) {
+    if (!authValid) {
       trace('admin-redirect');
       const url = request.nextUrl.clone();
-      url.pathname = '/';
+      url.pathname = '/auth/login';
       url.searchParams.set('auth', 'required');
+      url.searchParams.set('returnTo', pathname);
       normalizeRedirectUrl(url);
       const resp = NextResponse.redirect(url);
       resp.headers.set('X-Middleware-Trace', 'admin-redirect');
@@ -174,11 +174,12 @@ export async function middleware(request: NextRequest) {
   
   const isProtectedRoute = PROTECTED_ROUTES.some(route => pathname.startsWith(route));
   if (isProtectedRoute) {
-    if (!authCookiePresent || expired) {
+    if (!authValid) {
       trace('protected-redirect');
       const url = request.nextUrl.clone();
-      url.pathname = '/';
+      url.pathname = '/auth/login';
       url.searchParams.set('auth', 'required');
+      url.searchParams.set('returnTo', pathname);
       normalizeRedirectUrl(url);
       const resp = NextResponse.redirect(url);
       resp.headers.set('X-Middleware-Trace', 'protected-redirect');

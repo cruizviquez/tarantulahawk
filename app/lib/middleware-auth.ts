@@ -75,9 +75,8 @@ export function getUserFromCookies(request: NextRequest): { userId: string; isEx
 
     const payload = parseJWT(accessToken);
     if (!payload || !payload.sub) {
-      // If we cannot parse but cookie exists, allow non-expired assumption
-      // Actual auth will be enforced in API routes
-      return { userId: 'unknown', isExpired: false };
+      // Be strict: if we cannot parse or sub is missing, treat as unauthenticated
+      return null;
     }
 
     return {
@@ -85,8 +84,8 @@ export function getUserFromCookies(request: NextRequest): { userId: string; isEx
       isExpired: isTokenExpired(payload),
     };
   } catch {
-    // Fallback: cookie present but unreadable; allow and defer to API checks
-    return { userId: 'unknown', isExpired: false };
+    // Strict fallback: unreadable cookie = unauthenticated
+    return null;
   }
 }
 

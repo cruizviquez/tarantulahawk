@@ -8,6 +8,7 @@ import AnalysisHistoryPanel from './AnalysisHistoryPanel';
 
 import MLProgressTracker from './MLProgressTracker';
 import ProfileModal from './ProfileModal';
+import AdminDashboard from './AdminDashboard';
 
 const TarantulaHawkLogo = ({ className = "w-10 h-10" }) => (
   <svg viewBox="0 0 400 400" className={className} xmlns="http://www.w3.org/2000/svg">
@@ -163,6 +164,9 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
   const [fileUploaded, setFileUploaded] = useState<boolean>(false); // Track if file has been uploaded
   const [statusMessage, setStatusMessage] = useState<{type: 'success' | 'error' | 'info' | 'warning', message: string} | null>(null);
   const [classificationFilter, setClassificationFilter] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [userTier, setUserTier] = useState<string | null>(null);
 
   // Initialize API URL (client-side only, in useEffect to avoid SSR)
   useEffect(() => {
@@ -205,6 +209,27 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
         setAuthToken(t);
       } catch {
         // ignore; user may be logged out or session not ready yet
+      }
+    })();
+  }, []);
+
+  // Fetch role/tier to decide Admin tab visibility
+  useEffect(() => {
+    (async () => {
+      try {
+        const resp = await fetch('/api/admin/check-role', { credentials: 'same-origin' });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data && data.authenticated) {
+            setUserRole(data.role || null);
+            setUserTier(data.tier || null);
+            setIsAdmin((data.role === 'admin') || (data.tier === 'enterprise'));
+          } else {
+            setIsAdmin(false);
+          }
+        }
+      } catch (e) {
+        setIsAdmin(false);
       }
     })();
   }, []);
@@ -1057,6 +1082,19 @@ return (
             <CreditCard className="w-4 h-4 inline mr-2" />
             {language === 'es' ? 'Agregar Fondos' : 'Add Funds'}
           </button>
+          {isAdmin && (
+            <button
+              onClick={() => setActiveTab('admin')}
+              className={`px-6 py-3 font-semibold border-b-2 transition ${
+                activeTab === 'admin' 
+                  ? 'border-blue-500 text-white' 
+                  : 'border-transparent text-gray-500 hover:text-gray-300'
+              }`}
+            >
+              <User className="w-4 h-4 inline mr-2" />
+              Admin
+            </button>
+          )}
         </div>
 
         {/* Upload Tab */}
@@ -1670,6 +1708,27 @@ return (
               <a href="/api/docs" target="_blank" className="inline-block mt-4 text-teal-400 hover:text-teal-300 underline">
                 View Full API Documentation →
               </a>
+            </div>
+          </div>
+        )}
+
+        {/* Admin Tab (only if role/tier allows) */}
+        {activeTab === 'admin' && isAdmin && (
+          <div className="space-y-6">
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold">Admin</h2>
+                <div className="text-sm text-gray-500">
+                  Rol: <span className="text-teal-400 font-semibold">{userRole || 'user'}</span>
+                  {userTier && (
+                    <>
+                      <span className="mx-2">•</span>
+                      Plan: <span className="text-teal-400 font-semibold">{userTier}</span>
+                    </>
+                  )}
+                </div>
+              </div>
+              <AdminDashboard />
             </div>
           </div>
         )}
