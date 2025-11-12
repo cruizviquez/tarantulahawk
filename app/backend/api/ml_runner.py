@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-ml_runner.py - Runner de inferencia para archivos enriquecidos (CORREGIDO)
+ml_runner.py - Runner de inferencia para archivos enriquecidos (CORREGIDO) fecha 11/11
 
 ✅ CORRECCIÓN APLICADA:
 - Usa predictions de predict_adaptive() que YA incluyen guardrails
@@ -31,6 +31,7 @@ import pandas as pd
 # Importar predictor adaptativo (permite reglas + ML + guardrails)
 sys.path.insert(0, str(Path(__file__).parent))
 from predictor_adaptive import TarantulaHawkAdaptivePredictor
+from explicabilidad_transactions import TransactionExplainer
 
 # Paths
 BASE_DIR = Path(__file__).parent.parent
@@ -158,6 +159,9 @@ def process_file(csv_path: Path, predictor: TarantulaHawkAdaptivePredictor) -> b
             origen_counts.update([origen])
             triggers_globales.update(triggers)
 
+        # Inicializar explainer de transacciones
+        explainer = TransactionExplainer(umbral_confianza_bajo=0.65)
+        
         # Detalle transaccional (máx 100 filas)
         for i in range(min(100, len(df))):
             row = df.iloc[i]
@@ -178,17 +182,25 @@ def process_file(csv_path: Path, predictor: TarantulaHawkAdaptivePredictor) -> b
             triggers = predictor._get_rule_triggers(row, df) if hasattr(predictor, "_get_rule_triggers") else []
             origen = determinar_origen(row, i, str(pred), strategy, triggers)
             
-            # Convertir triggers a lista de razones human-readable
-            razones_lista = []
-            for t in triggers[:3]:  # Top 3
-                if t.startswith("guardrail_"):
-                    razones_lista.append("Umbral normativo LFPIORPI")
-                elif t.startswith("inusual_"):
-                    razones_lista.append(t.replace("inusual_", "").replace("_", " ").title())
-                elif t == "sector_riesgo":
-                    razones_lista.append("Sector alto riesgo")
-                else:
-                    razones_lista.append(t.replace("_", " ").title())
+            # 🆕 GENERAR EXPLICABILIDAD COMPLETA usando TransactionExplainer
+            metadata_explicabilidad = explainer.explicar_transaccion(
+                row=row,
+                probabilidades=proba_dict if proba_dict else None,
+                triggers=triggers
+            )
+            
+            # Convertir triggers a lista de razones human-readable (fallback si no hay explicabilidad)
+            razones_lista = metadata_explicabilidad.get('razones', [])
+            if not razones_lista:
+                for t in triggers[:3]:  # Top 3
+                    if t.startswith("guardrail_"):
+                        razones_lista.append("Umbral normativo LFPIORPI")
+                    elif t.startswith("inusual_"):
+                        razones_lista.append(t.replace("inusual_", "").replace("_", " ").title())
+                    elif t == "sector_riesgo":
+                        razones_lista.append("Sector alto riesgo")
+                    else:
+                        razones_lista.append(t.replace("_", " ").title())
             
             transacciones.append({
                 "id": str(row.get("cliente_id", f"TXN-{i+1:05d}")),
@@ -198,11 +210,19 @@ def process_file(csv_path: Path, predictor: TarantulaHawkAdaptivePredictor) -> b
                 "sector_actividad": str(row.get("sector_actividad", "")),
                 "clasificacion": pred,
                 "probabilidades": proba_dict,
-                "risk_score": anomaly_score,  # Frontend expects risk_score
+                "risk_score": anomaly_score,  # Legacy: puntaje de anomalía
                 "razones": razones_lista,  # Frontend expects array
                 "nota": nota,
                 "triggers": triggers,
-                "origen": origen
+                "origen": origen,
+                # 🆕 CAMPOS DE EXPLICABILIDAD
+                "score_confianza": metadata_explicabilidad.get('score_confianza'),
+                "nivel_confianza": metadata_explicabilidad.get('nivel_confianza'),
+                "explicacion_principal": metadata_explicabilidad.get('explicacion_principal'),
+                "explicacion_detallada": metadata_explicabilidad.get('explicacion_detallada'),
+                "flags": metadata_explicabilidad.get('flags'),
+                "contexto_regulatorio": metadata_explicabilidad.get('contexto_regulatorio'),
+                "acciones_sugeridas": metadata_explicabilidad.get('acciones_sugeridas')
             })
         
         # Guardar resultados

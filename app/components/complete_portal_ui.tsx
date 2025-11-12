@@ -91,6 +91,26 @@ interface AnalysisTransaction {
   clasificacion: string;
   risk_score: number;
   razones?: string[];
+  // 🆕 Campos de Explicabilidad
+  score_confianza?: number;
+  nivel_confianza?: 'alta' | 'media' | 'baja';
+  explicacion_principal?: string;
+  explicacion_detallada?: string;
+  flags?: {
+    requiere_revision_manual: boolean;
+    sugerir_reclasificacion: boolean;
+    alertas: Array<{
+      tipo: string;
+      severidad: 'info' | 'warning' | 'error';
+      mensaje: string;
+      de?: string;
+      a?: string;
+    }>;
+  };
+  contexto_regulatorio?: string;
+  acciones_sugeridas?: string[];
+  probabilidades?: Record<string, number>;
+  origen?: string;
 }
 
 interface MockResults {
@@ -167,6 +187,10 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [userTier, setUserTier] = useState<string | null>(null);
+  
+  // Estado para modal de detalles de transacción
+  const [selectedTransaction, setSelectedTransaction] = useState<AnalysisTransaction | null>(null);
+  const [showTransactionModal, setShowTransactionModal] = useState(false);
 
   // Initialize API URL (client-side only, in useEffect to avoid SSR)
   useEffect(() => {
@@ -1487,25 +1511,57 @@ return (
                         <th className="text-left py-2 pr-4">{language === 'es' ? 'Monto' : 'Amount'}</th>
                         <th className="text-left py-2 pr-4">{language === 'es' ? 'Tipo' : 'Type'}</th>
                         <th className="text-left py-2 pr-4">{language === 'es' ? 'Sector' : 'Sector'}</th>
-                        <th className="text-left py-2 pr-4">Score</th>
-                        <th className="text-left py-2">{language === 'es' ? 'Razones' : 'Reasons'}</th>
+                        <th className="text-left py-2 pr-4">{language === 'es' ? 'Confianza' : 'Confidence'}</th>
+                        <th className="text-left py-2 pr-4">{language === 'es' ? 'Explicación' : 'Explanation'}</th>
+                        <th className="text-center py-2">{language === 'es' ? 'Detalles' : 'Details'}</th>
                       </tr>
                     </thead>
                     <tbody>
                       {(mockResults.transacciones || [])
                         .filter((t: AnalysisTransaction) => t.clasificacion === classificationFilter)
                         .slice(0, 100)
-                        .map((tx: AnalysisTransaction) => (
-                          <tr key={tx.id} className="border-b border-gray-900 hover:bg-gray-800/40">
-                            <td className="py-2 pr-4 font-mono text-xs">{tx.id}</td>
-                            <td className="py-2 pr-4">{tx.fecha}</td>
-                            <td className="py-2 pr-4 font-mono">${tx.monto.toLocaleString()}</td>
-                            <td className="py-2 pr-4">{tx.tipo_operacion}</td>
-                            <td className="py-2 pr-4">{tx.sector_actividad}</td>
-                            <td className="py-2 pr-4 font-semibold">{tx.risk_score}</td>
-                            <td className="py-2 pr-4 text-xs text-gray-400">{(tx.razones || []).join(', ')}</td>
-                          </tr>
-                        ))}
+                        .map((tx: AnalysisTransaction) => {
+                          const confianza = tx.score_confianza || (tx.risk_score ? tx.risk_score / 10 : 0.7);
+                          const nivel = tx.nivel_confianza || (confianza >= 0.85 ? 'alta' : confianza >= 0.65 ? 'media' : 'baja');
+                          const confianzaColor = nivel === 'alta' ? 'text-emerald-400 bg-emerald-500/10' : nivel === 'media' ? 'text-yellow-400 bg-yellow-500/10' : 'text-red-400 bg-red-500/10';
+                          const requiereRevision = tx.flags?.requiere_revision_manual;
+                          
+                          return (
+                            <tr key={tx.id} className="border-b border-gray-900 hover:bg-gray-800/40 cursor-pointer">
+                              <td className="py-2 pr-4 font-mono text-xs">{tx.id}</td>
+                              <td className="py-2 pr-4">{tx.fecha}</td>
+                              <td className="py-2 pr-4 font-mono">${tx.monto.toLocaleString()}</td>
+                              <td className="py-2 pr-4">{tx.tipo_operacion}</td>
+                              <td className="py-2 pr-4">{tx.sector_actividad}</td>
+                              <td className="py-2 pr-4">
+                                <div className="flex items-center gap-2">
+                                  <span className={`px-2 py-0.5 rounded text-xs font-semibold ${confianzaColor}`}>
+                                    {(confianza * 100).toFixed(0)}%
+                                  </span>
+                                  {requiereRevision && (
+                                    <span className="text-yellow-400" title={language === 'es' ? 'Requiere revisión manual' : 'Requires manual review'}>
+                                      ⚠️
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+                              <td className="py-2 pr-4 text-xs text-gray-400 max-w-xs truncate">
+                                {tx.explicacion_principal || (tx.razones || []).join(', ')}
+                              </td>
+                              <td className="py-2 text-center">
+                                <button
+                                  onClick={() => {
+                                    setSelectedTransaction(tx);
+                                    setShowTransactionModal(true);
+                                  }}
+                                  className="px-3 py-1 bg-teal-600/20 hover:bg-teal-600/30 text-teal-400 rounded text-xs font-semibold transition"
+                                >
+                                  {language === 'es' ? 'Ver' : 'View'}
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
                     </tbody>
                   </table>
                 </div>
@@ -1794,6 +1850,256 @@ return (
             setUser({ ...user, ...updatedData });
           }}
         />
+      )}
+
+      {/* Transaction Details Modal */}
+      {showTransactionModal && selectedTransaction && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setShowTransactionModal(false)}>
+          <div className="bg-gradient-to-br from-gray-900 to-black border-2 border-teal-500/30 rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 bg-gradient-to-r from-gray-900 to-black border-b border-gray-800 p-6 flex justify-between items-center">
+              <div>
+                <h3 className="text-2xl font-bold flex items-center gap-3">
+                  <span className="text-teal-400">{language === 'es' ? 'Detalle de Transacción' : 'Transaction Details'}</span>
+                  <span className="font-mono text-lg text-gray-400">{selectedTransaction.id}</span>
+                </h3>
+                <p className="text-sm text-gray-400 mt-1">
+                  {language === 'es' ? 'Análisis completo con sistema de explicabilidad' : 'Complete analysis with explainability system'}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowTransactionModal(false)}
+                className="p-2 hover:bg-gray-800 rounded-lg transition"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Score de Confianza */}
+              <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-lg font-semibold text-teal-400">{language === 'es' ? 'Score de Confianza' : 'Confidence Score'}</h4>
+                  <div className="flex items-center gap-3">
+                    <span className={`px-4 py-2 rounded-lg text-xl font-bold ${
+                      (selectedTransaction.nivel_confianza === 'alta') ? 'bg-emerald-500/20 text-emerald-400' :
+                      (selectedTransaction.nivel_confianza === 'media') ? 'bg-yellow-500/20 text-yellow-400' :
+                      'bg-red-500/20 text-red-400'
+                    }`}>
+                      {selectedTransaction.score_confianza ? `${(selectedTransaction.score_confianza * 100).toFixed(1)}%` : 'N/A'}
+                    </span>
+                    <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                      (selectedTransaction.nivel_confianza === 'alta') ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' :
+                      (selectedTransaction.nivel_confianza === 'media') ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/30' :
+                      'bg-red-500/10 text-red-400 border border-red-500/30'
+                    }`}>
+                      {selectedTransaction.nivel_confianza === 'alta' ? (language === 'es' ? 'Alta' : 'High') :
+                       selectedTransaction.nivel_confianza === 'media' ? (language === 'es' ? 'Media' : 'Medium') :
+                       (language === 'es' ? 'Baja' : 'Low')}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Explicación Principal */}
+              {selectedTransaction.explicacion_principal && (
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-5">
+                  <h4 className="text-lg font-semibold text-blue-400 mb-2 flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5" />
+                    {language === 'es' ? 'Explicación Principal' : 'Main Explanation'}
+                  </h4>
+                  <p className="text-gray-300 leading-relaxed">{selectedTransaction.explicacion_principal}</p>
+                </div>
+              )}
+
+              {/* Explicación Detallada */}
+              {selectedTransaction.explicacion_detallada && (
+                <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5">
+                  <h4 className="text-lg font-semibold text-gray-300 mb-3">{language === 'es' ? 'Explicación Detallada' : 'Detailed Explanation'}</h4>
+                  <p className="text-gray-400 leading-relaxed whitespace-pre-line">{selectedTransaction.explicacion_detallada}</p>
+                </div>
+              )}
+
+              {/* Flags de Revisión */}
+              {selectedTransaction.flags && (selectedTransaction.flags.requiere_revision_manual || selectedTransaction.flags.sugerir_reclasificacion || selectedTransaction.flags.alertas.length > 0) && (
+                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-5">
+                  <h4 className="text-lg font-semibold text-yellow-400 mb-3 flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5" />
+                    {language === 'es' ? 'Flags de Revisión' : 'Review Flags'}
+                  </h4>
+                  <div className="space-y-2">
+                    {selectedTransaction.flags.requiere_revision_manual && (
+                      <div className="flex items-center gap-2 text-yellow-400">
+                        <span className="font-semibold">⚠️</span>
+                        <span>{language === 'es' ? 'Requiere revisión manual' : 'Requires manual review'}</span>
+                      </div>
+                    )}
+                    {selectedTransaction.flags.sugerir_reclasificacion && (
+                      <div className="flex items-center gap-2 text-yellow-400">
+                        <span className="font-semibold">🔄</span>
+                        <span>{language === 'es' ? 'Se sugiere reclasificación' : 'Reclassification suggested'}</span>
+                      </div>
+                    )}
+                    {selectedTransaction.flags.alertas.map((alerta, idx) => (
+                      <div key={idx} className={`p-3 rounded-lg ${
+                        alerta.severidad === 'error' ? 'bg-red-500/10 border border-red-500/30' :
+                        alerta.severidad === 'warning' ? 'bg-yellow-500/10 border border-yellow-500/30' :
+                        'bg-blue-500/10 border border-blue-500/30'
+                      }`}>
+                        <div className="flex items-start gap-2">
+                          <span className={`text-sm font-semibold ${
+                            alerta.severidad === 'error' ? 'text-red-400' :
+                            alerta.severidad === 'warning' ? 'text-yellow-400' :
+                            'text-blue-400'
+                          }`}>
+                            {alerta.severidad === 'error' ? '🔴' : alerta.severidad === 'warning' ? '⚠️' : 'ℹ️'}
+                          </span>
+                          <div className="flex-1">
+                            <p className={`text-sm ${
+                              alerta.severidad === 'error' ? 'text-red-300' :
+                              alerta.severidad === 'warning' ? 'text-yellow-300' :
+                              'text-blue-300'
+                            }`}>
+                              {alerta.mensaje}
+                            </p>
+                            {alerta.de && alerta.a && (
+                              <p className="text-xs text-gray-400 mt-1">
+                                {language === 'es' ? 'Sugerencia: ' : 'Suggestion: '}
+                                <span className="text-red-400">{alerta.de}</span> → <span className="text-emerald-400">{alerta.a}</span>
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Razones */}
+              {selectedTransaction.razones && selectedTransaction.razones.length > 0 && (
+                <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5">
+                  <h4 className="text-lg font-semibold text-gray-300 mb-3">{language === 'es' ? 'Razones de Clasificación' : 'Classification Reasons'}</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedTransaction.razones.map((razon, idx) => (
+                      <span key={idx} className="px-3 py-1 bg-teal-500/10 text-teal-400 rounded-full text-sm border border-teal-500/30">
+                        {razon}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Contexto Regulatorio */}
+              {selectedTransaction.contexto_regulatorio && (
+                <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-5">
+                  <h4 className="text-lg font-semibold text-purple-400 mb-3 flex items-center gap-2">
+                    <FileText className="w-5 h-5" />
+                    {language === 'es' ? 'Contexto Regulatorio' : 'Regulatory Context'}
+                  </h4>
+                  <div className="text-gray-300 text-sm leading-relaxed whitespace-pre-line">
+                    {selectedTransaction.contexto_regulatorio}
+                  </div>
+                </div>
+              )}
+
+              {/* Acciones Sugeridas */}
+              {selectedTransaction.acciones_sugeridas && selectedTransaction.acciones_sugeridas.length > 0 && (
+                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-5">
+                  <h4 className="text-lg font-semibold text-emerald-400 mb-3 flex items-center gap-2">
+                    <CheckCircle2 className="w-5 h-5" />
+                    {language === 'es' ? 'Acciones Sugeridas' : 'Suggested Actions'}
+                  </h4>
+                  <ul className="space-y-2">
+                    {selectedTransaction.acciones_sugeridas.map((accion, idx) => (
+                      <li key={idx} className="flex items-start gap-2 text-gray-300">
+                        <span className="text-emerald-400 mt-0.5">•</span>
+                        <span>{accion}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Datos de la Transacción */}
+              <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5">
+                <h4 className="text-lg font-semibold text-gray-300 mb-3">{language === 'es' ? 'Datos de la Transacción' : 'Transaction Data'}</h4>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-gray-500">{language === 'es' ? 'ID:' : 'ID:'}</span>
+                    <span className="ml-2 font-mono text-gray-300">{selectedTransaction.id}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">{language === 'es' ? 'Fecha:' : 'Date:'}</span>
+                    <span className="ml-2 text-gray-300">{selectedTransaction.fecha}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">{language === 'es' ? 'Monto:' : 'Amount:'}</span>
+                    <span className="ml-2 font-mono text-teal-400 font-semibold">${selectedTransaction.monto.toLocaleString()}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">{language === 'es' ? 'Tipo:' : 'Type:'}</span>
+                    <span className="ml-2 text-gray-300">{selectedTransaction.tipo_operacion}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">{language === 'es' ? 'Sector:' : 'Sector:'}</span>
+                    <span className="ml-2 text-gray-300">{selectedTransaction.sector_actividad}</span>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">{language === 'es' ? 'Clasificación:' : 'Classification:'}</span>
+                    <span className={`ml-2 font-semibold ${
+                      selectedTransaction.clasificacion === 'preocupante' ? 'text-red-400' :
+                      selectedTransaction.clasificacion === 'inusual' ? 'text-yellow-400' :
+                      'text-emerald-400'
+                    }`}>
+                      {selectedTransaction.clasificacion}
+                    </span>
+                  </div>
+                  {selectedTransaction.origen && (
+                    <div>
+                      <span className="text-gray-500">{language === 'es' ? 'Origen:' : 'Origin:'}</span>
+                      <span className="ml-2 text-gray-300">{selectedTransaction.origen}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Probabilidades (si disponibles) */}
+              {selectedTransaction.probabilidades && Object.keys(selectedTransaction.probabilidades).length > 0 && (
+                <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5">
+                  <h4 className="text-lg font-semibold text-gray-300 mb-3">{language === 'es' ? 'Probabilidades del Modelo' : 'Model Probabilities'}</h4>
+                  <div className="space-y-2">
+                    {Object.entries(selectedTransaction.probabilidades).map(([clase, prob]) => (
+                      <div key={clase} className="flex items-center gap-3">
+                        <span className="text-gray-400 w-24 capitalize">{clase}:</span>
+                        <div className="flex-1 bg-gray-900 rounded-full h-6 overflow-hidden">
+                          <div
+                            className={`h-full flex items-center justify-end pr-2 text-xs font-semibold ${
+                              clase === 'preocupante' ? 'bg-red-500' :
+                              clase === 'inusual' ? 'bg-yellow-500' :
+                              'bg-emerald-500'
+                            }`}
+                            style={{ width: `${(prob * 100)}%` }}
+                          >
+                            {(prob * 100).toFixed(1)}%
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="sticky bottom-0 bg-gray-900 border-t border-gray-800 p-4 flex justify-end">
+              <button
+                onClick={() => setShowTransactionModal(false)}
+                className="px-6 py-2 bg-teal-600 hover:bg-teal-700 text-white rounded-lg font-semibold transition"
+              >
+                {language === 'es' ? 'Cerrar' : 'Close'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

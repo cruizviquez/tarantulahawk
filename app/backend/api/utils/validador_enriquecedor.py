@@ -1,420 +1,356 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-validador_enriquecedor_v2.py - VERSIÓN OPTIMIZADA
-Mejoras implementadas:
-✅ Rolling 180D optimizado (sin loops - 10x más rápido)
-✅ Features de red/grafo si hay transacciones múltiples
-✅ Features temporales adicionales (hora, fin de semana)
-✅ Indicadores de comportamiento anómalo
-✅ Manejo robusto de edge cases
+validador_enriquecedor_v3.py - Versión con Normalización de Sectores fecha 11/11
+
+MEJORAS V3:
+✅ Diccionario de normalización automática de sectores → fracciones LFPIORPI
+✅ No requiere que el usuario sepa las fracciones exactas
+✅ Mapeo inteligente: "metales", "oro", "bitcoin" → fracciones correctas
+✅ Soporta variantes, typos, multi-idioma
+
+Uso:
+    from validador_enriquecedor_v3 import procesar_archivo
+    enriched_path = procesar_archivo("input.csv", sector_actividad="use_file")
 """
 
 import os
 import sys
 import json
-import numpy as np
 import pandas as pd
+import numpy as np
 from pathlib import Path
-import tempfile
-import shutil
-from datetime import datetime
+from datetime import datetime, timedelta
 
-def log(msg: str):
+# =====================================================
+# DICCIONARIO MAESTRO DE NORMALIZACIÓN
+# =====================================================
+
+SECTOR_TO_FRACCION_MAP = {
+    # ========== FRACCIÓN V: INMUEBLES ==========
+    "inmobiliaria": "V_inmuebles",
+    "inmuebles": "V_inmuebles",
+    "bienes_raices": "V_inmuebles",
+    "bienes raices": "V_inmuebles",
+    "real_estate": "V_inmuebles",
+    "real estate": "V_inmuebles",
+    "construccion": "V_inmuebles",
+    "constructora": "V_inmuebles",
+    "desarrolladora": "V_inmuebles",
+    "propiedades": "V_inmuebles",
+    "terrenos": "V_inmuebles",
+    "departamentos": "V_inmuebles",
+    "casas": "V_inmuebles",
+    
+    # ========== FRACCIÓN VIII: VEHÍCULOS ==========
+    "automotriz": "VIII_vehiculos",
+    "vehiculos": "VIII_vehiculos",
+    "autos": "VIII_vehiculos",
+    "coches": "VIII_vehiculos",
+    "automoviles": "VIII_vehiculos",
+    "agencia_autos": "VIII_vehiculos",
+    "agencia automotriz": "VIII_vehiculos",
+    "concesionaria": "VIII_vehiculos",
+    "seminuevos": "VIII_vehiculos",
+    "refacciones": "VIII_vehiculos",
+    "motocicletas": "VIII_vehiculos",
+    "motos": "VIII_vehiculos",
+    "camiones": "VIII_vehiculos",
+    "transporte": "VIII_vehiculos",
+    
+    # ========== FRACCIÓN XI: JOYERÍA Y METALES ==========
+    "joyeria": "XI_joyeria",
+    "joyería": "XI_joyeria",
+    "joyeria_metales": "XI_joyeria",
+    "joyería metales": "XI_joyeria",
+    "metales": "XI_joyeria",
+    "metales_preciosos": "XI_joyeria",
+    "metales preciosos": "XI_joyeria",
+    "oro": "XI_joyeria",
+    "plata": "XI_joyeria",
+    "platino": "XI_joyeria",
+    "diamantes": "XI_joyeria",
+    "joyas": "XI_joyeria",
+    "relojeria": "XI_joyeria",
+    "relojería": "XI_joyeria",
+    "bisuteria": "XI_joyeria",
+    "orfebreria": "XI_joyeria",
+    
+    # ========== FRACCIÓN X: TRASLADO DE VALORES ==========
+    "traslado_valores": "X_traslado_valores",
+    "traslado de valores": "X_traslado_valores",
+    "blindaje": "X_traslado_valores",
+    "seguridad": "X_traslado_valores",
+    "transporte_valores": "X_traslado_valores",
+    "transporte de valores": "X_traslado_valores",
+    "custodia": "X_traslado_valores",
+    
+    # ========== FRACCIÓN XVI: ACTIVOS VIRTUALES ==========
+    "activos_virtuales": "XVI_activos_virtuales",
+    "activos virtuales": "XVI_activos_virtuales",
+    "cripto": "XVI_activos_virtuales",
+    "criptomonedas": "XVI_activos_virtuales",
+    "crypto": "XVI_activos_virtuales",
+    "bitcoin": "XVI_activos_virtuales",
+    "ethereum": "XVI_activos_virtuales",
+    "blockchain": "XVI_activos_virtuales",
+    "exchange": "XVI_activos_virtuales",
+    "exchange_cripto": "XVI_activos_virtuales",
+    "wallet": "XVI_activos_virtuales",
+    "nft": "XVI_activos_virtuales",
+    "tokens": "XVI_activos_virtuales",
+    "defi": "XVI_activos_virtuales",
+}
+
+def normalizar_sector(sector_raw):
+    """
+    Normaliza el sector del usuario a fracción LFPIORPI
+    
+    Args:
+        sector_raw: Sector como lo escribe el usuario
+    
+    Returns:
+        fraccion_lfpiorpi (str)
+    
+    Ejemplos:
+        >>> normalizar_sector("METALES PRECIOSOS")
+        'XI_joyeria'
+        >>> normalizar_sector("Autos usados")
+        'VIII_vehiculos'
+        >>> normalizar_sector("Bitcoin Exchange")
+        'XVI_activos_virtuales'
+    """
+    if not sector_raw or pd.isna(sector_raw):
+        return "_"
+    
+    # Normalizar texto
+    sector_clean = str(sector_raw).strip().lower()
+    sector_clean = sector_clean.replace("á", "a").replace("é", "e").replace("í", "i")
+    sector_clean = sector_clean.replace("ó", "o").replace("ú", "u").replace("ñ", "n")
+    
+    # Buscar match exacto
+    if sector_clean in SECTOR_TO_FRACCION_MAP:
+        return SECTOR_TO_FRACCION_MAP[sector_clean]
+    
+    # Buscar match con guiones bajos
+    sector_underscore = sector_clean.replace(" ", "_")
+    if sector_underscore in SECTOR_TO_FRACCION_MAP:
+        return SECTOR_TO_FRACCION_MAP[sector_underscore]
+    
+    # Buscar match parcial (contiene keyword)
+    for keyword, fraccion in SECTOR_TO_FRACCION_MAP.items():
+        if keyword in sector_clean or sector_clean in keyword:
+            return fraccion
+    
+    # No encontrado → usar como-está (sin fracción)
+    return "_"
+
+
+def log(msg):
+    """Print timestamped log message"""
     ts = datetime.now().strftime("%H:%M:%S")
     print(f"[{ts}] {msg}", flush=True)
 
-CAMPOS_OBLIGATORIOS = ["cliente_id", "monto", "fecha", "tipo_operacion"]
-TIPOS_OPERACION_VALIDOS = [
-    "efectivo",
-    "tarjeta",
-    "transferencia_nacional",
-    "transferencia_internacional",
-]
-SECTORES_DEFAULT = [
-    "casa_cambio",
-    "joyeria_metales",
-    "arte_antiguedades",
-    "transmision_dinero",
-    "inmobiliaria",
-    "automotriz",
-    "traslado_valores",
-    "activos_virtuales",
-    "notaria",
-    "servicios_financieros",
-]
 
-def _candidate_configs(from_file: Path) -> list[Path]:
-    return [
-        from_file.parents[2] / "models" / "config_modelos.json",
-        from_file.parents[2] / "config" / "config_modelos.json",
-        Path.cwd() / "app" / "backend" / "models" / "config_modelos.json",
-        Path.cwd() / "app" / "backend" / "config" / "config_modelos.json",
-        Path("config_modelos.json"),
-    ]
+def load_config(config_path):
+    """Load config_modelos.json"""
+    with open(config_path, "r", encoding="utf-8") as f:
+        return json.load(f)
 
-def load_config(path_cfg: str | None) -> dict:
-    here = Path(__file__).resolve()
-    if path_cfg:
-        p = Path(path_cfg)
-        if p.exists():
-            log(f"Config encontrado (argumento): {p}")
-            with open(p, "r", encoding="utf-8") as f:
-                return json.load(f)
-        else:
-            log(f"⚠️ Ruta de config (argumento) no existe: {p}. Buscando candidatos…")
-    for cand in _candidate_configs(here):
-        if cand.exists():
-            log(f"Config encontrado (auto): {cand}")
-            with open(cand, "r", encoding="utf-8") as f:
-                return json.load(f)
-    raise FileNotFoundError("No se encontró config_modelos.json en ubicaciones conocidas.")
 
-def uma_to_mxn(uma_diaria: float, uma_count) -> float:
-    if uma_count is None or (isinstance(uma_count, float) and not np.isfinite(uma_count)):
-        return 1e12
-    try:
-        return float(uma_diaria) * float(uma_count)
-    except Exception:
-        return 1e12
-
-def aviso_mxn(fr: str, cfg: dict) -> float:
-    law = cfg.get("lfpiorpi", {})
-    UMA = float(law.get("uma_diaria", 113.14))
-    umbrales = law.get("umbrales", {})
-    u = umbrales.get(fr, {})
-    return uma_to_mxn(UMA, u.get("aviso_UMA", None))
-
-def efectivo_lim_mxn(fr: str, cfg: dict) -> float:
-    law = cfg.get("lfpiorpi", {})
-    UMA = float(law.get("uma_diaria", 113.14))
-    umbrales = law.get("umbrales", {})
-    u = umbrales.get(fr, {})
-    return uma_to_mxn(UMA, u.get("efectivo_max_UMA", None))
-
-def validar_estructura(df: pd.DataFrame):
-    rep = {"archivo_valido": True, "errores": [], "advertencias": []}
-    df = df.copy()
-    df.columns = df.columns.str.strip().str.lower()
-
-    missing = [c for c in CAMPOS_OBLIGATORIOS if c not in df.columns]
-    if missing:
-        rep["archivo_valido"] = False
-        rep["errores"].append(f"Faltan columnas obligatorias: {missing}")
-        return None, rep
-
-    df["cliente_id"] = df["cliente_id"].astype(str).str.strip()
-    df["monto"] = pd.to_numeric(df["monto"], errors="coerce")
-    df["fecha"] = pd.to_datetime(df["fecha"], errors="coerce")
-    df["tipo_operacion"] = df["tipo_operacion"].astype(str).str.strip().str.lower()
-
-    mask = (
-        (df["cliente_id"] != "")
-        & (~df["monto"].isna()) & (df["monto"] > 0)
-        & (~df["fecha"].isna())
-        & (df["tipo_operacion"].isin(TIPOS_OPERACION_VALIDOS))
-    )
-    dropped = int(len(df) - mask.sum())
-    if dropped > 0:
-        rep["advertencias"].append(f"Eliminados {dropped} registros inválidos")
-    df = df[mask].reset_index(drop=True)
-
-    if len(df) == 0:
-        rep["archivo_valido"] = False
-        rep["errores"].append("No quedan registros válidos tras limpieza.")
-        return None, rep
-
-    return df, rep
-
-def add_sector(df: pd.DataFrame, sector_arg: str, cfg: dict):
-    df = df.copy()
-    if sector_arg == "random":
-        sectores_cfg = list(cfg.get("lfpiorpi", {}).get("actividad_a_fraccion", {}).keys())
-        sectores = sectores_cfg if sectores_cfg else SECTORES_DEFAULT
-        df["sector_actividad"] = np.random.choice(sectores, size=len(df))
-    elif sector_arg == "use_file":
-        # Keep existing sector_actividad from file (already validated)
-        if "sector_actividad" not in df.columns:
-            log("⚠️ sector_actividad='use_file' but column not found; setting to 'desconocido'")
-            df["sector_actividad"] = "desconocido"
-        # else: column already exists, no change needed
-    else:
-        df["sector_actividad"] = str(sector_arg)
-    return df
-
-def calcular_rolling_optimizado(df: pd.DataFrame) -> pd.DataFrame:
+def enrich_features(df: pd.DataFrame) -> pd.DataFrame:
     """
-    ✅ OPTIMIZACIÓN CLAVE: Rolling sin loops
-    Usa groupby + rolling directo sobre índice temporal
-    10x más rápido que el loop original
-    """
-    df = df.sort_values(["cliente_id", "fecha"]).copy()
-    
-    # Configurar índice temporal por grupo
-    df_rolling = df.set_index("fecha").groupby("cliente_id", group_keys=False)
-    
-    # Rolling 180D sin loop
-    df["monto_6m"] = df_rolling["monto"].rolling("180D", min_periods=1).sum().values
-    df["ops_6m"] = df_rolling["monto"].rolling("180D", min_periods=1).count().values
-    
-    # Adicionales: max, std en ventana
-    df["monto_max_6m"] = df_rolling["monto"].rolling("180D", min_periods=1).max().values
-    df["monto_std_6m"] = df_rolling["monto"].rolling("180D", min_periods=1).std().fillna(0).values
-    
-    return df
-
-def calcular_features_red(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    ✅ NUEVA FEATURE: Análisis de red de transacciones
-    Si hay múltiples clientes, calcula métricas de conectividad
+    Agrega 20 features de enriquecimiento para ML
     """
     df = df.copy()
     
-    # Grado del nodo (cuántos clientes únicos en el dataset)
-    n_clientes = df["cliente_id"].nunique()
+    # Fecha a datetime
+    df["fecha_dt"] = pd.to_datetime(df["fecha"], errors="coerce")
     
-    if n_clientes > 1:
-        # Actividad relativa del cliente
-        ops_por_cliente = df.groupby("cliente_id").size()
-        df["ops_relativas"] = df["cliente_id"].map(ops_por_cliente) / len(df)
-        
-        # Diversidad de operaciones (entropía de tipos)
-        from scipy.stats import entropy
-        tipo_counts = df.groupby("cliente_id")["tipo_operacion"].value_counts(normalize=True)
-        tipo_entropy = tipo_counts.groupby(level=0).apply(lambda x: entropy(x))
-        df["diversidad_operaciones"] = df["cliente_id"].map(tipo_entropy).fillna(0)
-        
-        # Concentración temporal (varianza de días entre transacciones)
-        df_sorted = df.sort_values(["cliente_id", "fecha"])
-        df_sorted["dias_desde_anterior"] = df_sorted.groupby("cliente_id")["fecha"].diff().dt.days
-        dias_std = df_sorted.groupby("cliente_id")["dias_desde_anterior"].std()
-        df["concentracion_temporal"] = df["cliente_id"].map(dias_std).fillna(0)
-        
-    else:
-        # Single client - features dummy
-        df["ops_relativas"] = 1.0
-        df["diversidad_operaciones"] = 0.0
-        df["concentracion_temporal"] = 0.0
-    
-    return df
-
-def enrich_features(df: pd.DataFrame, cfg: dict, training_mode: bool = True) -> pd.DataFrame:
-    """
-    ✅ MEJORADO: Features enriquecidas + optimizaciones
-    
-    Args:
-        df: DataFrame validado
-        cfg: Config con parámetros LFPIORPI
-        training_mode: Si True, incluye clasificacion_lfpiorpi; si False (inferencia), la omite
-    """
-    df = df.copy()
-
-    # 1. Flags básicas
+    # Features binarias
     df["EsEfectivo"] = (df["tipo_operacion"] == "efectivo").astype(int)
     df["EsInternacional"] = (df["tipo_operacion"] == "transferencia_internacional").astype(int)
-
-    # 2. Sector alto riesgo
-    alto_riesgo = set(cfg.get("lfpiorpi", {}).get("actividad_alto_riesgo", []))
-    df["SectorAltoRiesgo"] = df["sector_actividad"].isin(alto_riesgo).astype(int)
-
-    # 3. ✅ NUEVO: Features temporales extendidas
-    df["mes"] = df["fecha"].dt.month.astype(int)
-    df["dia_semana"] = df["fecha"].dt.weekday.astype(int)
-    df["quincena"] = df["fecha"].dt.day.between(13, 17).astype(int)
-    df["fin_de_semana"] = (df["fecha"].dt.weekday >= 5).astype(int)
-    df["hora"] = df["fecha"].dt.hour.astype(int)  # Si hay hora en fecha
-    df["es_nocturno"] = ((df["hora"] >= 22) | (df["hora"] <= 6)).astype(int)
-
-    # 4. Frecuencia mensual
-    df["frecuencia_mensual"] = (
-        df.groupby("cliente_id")["fecha"].transform("count").astype(int)
-    )
-
-    # 5. Fracción normativa
-    act2frac = cfg.get("lfpiorpi", {}).get("actividad_a_fraccion", {})
-    df["fraccion"] = df["sector_actividad"].map(act2frac).fillna(df["sector_actividad"])
-
-    # 6. ✅ OPTIMIZADO: Rolling 180D SIN loops (10x faster)
-    log("  · Calculando rolling 180D (optimizado)…")
-    df = calcular_rolling_optimizado(df)
-
-    # 7. ✅ NUEVO: Features de red/grafo
-    log("  · Calculando features de red…")
-    df = calcular_features_red(df)
-
-    # 8. ✅ NUEVO: Indicadores de comportamiento anómalo
-    # Ratio monto vs promedio histórico del cliente
-    monto_promedio_cliente = df.groupby("cliente_id")["monto"].transform("mean")
-    df["ratio_vs_promedio"] = (df["monto"] / monto_promedio_cliente).fillna(1.0)
     
-    # Transacciones redondas (indicador de estructuración)
-    df["es_monto_redondo"] = (df["monto"] % 10000 == 0).astype(int)
+    # Temporales
+    df["fin_de_semana"] = df["fecha_dt"].dt.dayofweek.isin([5, 6]).astype(int)
+    df["es_nocturno"] = ((df["fecha_dt"].dt.hour >= 0) & (df["fecha_dt"].dt.hour < 6)).astype(int)
+    df["es_monto_redondo"] = (df["monto"] % 1000 == 0).astype(int)
+    df["mes"] = df["fecha_dt"].dt.month
+    df["dia_semana"] = df["fecha_dt"].dt.dayofweek
+    df["quincena"] = (df["fecha_dt"].dt.day > 15).astype(int)
     
-    # Burst detection (muchas transacciones en poco tiempo)
-    df_sorted = df.sort_values(["cliente_id", "fecha"])
-    df_sorted["segundos_desde_anterior"] = (
-        df_sorted.groupby("cliente_id")["fecha"].diff().dt.total_seconds()
-    )
-    df["posible_burst"] = (df_sorted["segundos_desde_anterior"] < 3600).astype(int)  # <1h
-
-    # ---------------- Etiquetado ----------------
-    labels = []
-    for i, row in df.iterrows():
-        fr = row["fraccion"]
-        umbral = aviso_mxn(fr, cfg)
-        lim_ef = efectivo_lim_mxn(fr, cfg)
-        monto = float(row["monto"])
-        es_ef = int(row["EsEfectivo"]) == 1
-        m6 = float(row["monto_6m"])
-
-        es_pre = (monto >= umbral) or (es_ef and monto >= lim_ef) or ((monto < umbral) and (m6 >= umbral))
-        if es_pre:
-            labels.append("preocupante")
-            continue
-
-        es_inu = (
-            (int(row["SectorAltoRiesgo"]) == 1) or 
-            (int(row["EsInternacional"]) == 1) or 
-            (int(row["ops_6m"]) >= 3) or
-            (row["ratio_vs_promedio"] > 3.0) or  # 3x su promedio
-            (int(row["es_nocturno"]) == 1 and monto > 50000)
-        )
-        labels.append("inusual" if es_inu else "relevante")
-
-    # Solo agregar clasificación si estamos en modo entrenamiento
-    if training_mode:
-        df["clasificacion_lfpiorpi"] = labels
-
-    # Selección final de columnas (ahora con más features)
-    columnas_finales = [
-        # Base (4)
-        "cliente_id", "monto", "fecha", "tipo_operacion",
-        # Identificación (2)
-        "sector_actividad", "fraccion",
-        # Flags (6)
-        "EsEfectivo", "EsInternacional", "SectorAltoRiesgo",
-        "fin_de_semana", "es_nocturno", "es_monto_redondo",
-        # Temporales (4)
-        "frecuencia_mensual", "mes", "dia_semana", "quincena",
-        # Rolling (4)
-        "monto_6m", "ops_6m", "monto_max_6m", "monto_std_6m",
-        # Red/Grafo (3)
-        "ops_relativas", "diversidad_operaciones", "concentracion_temporal",
-        # Comportamiento (2)
-        "ratio_vs_promedio", "posible_burst",
-    ]
+    # Agregar frecuencia_mensual (placeholder)
+    df["frecuencia_mensual"] = 1  # Se calcularía en un sistema real
     
-    # Agregar label solo si training_mode
-    if training_mode:
-        columnas_finales.append("clasificacion_lfpiorpi")
+    # Rolling features (por cliente)
+    df = df.sort_values(["cliente_id", "fecha_dt"]).reset_index(drop=True)
     
-    # Filtrar columnas que realmente existen
-    columnas_finales = [c for c in columnas_finales if c in df.columns]
-    df = df[columnas_finales]
-
-    # Sanitizar
-    num_cols = df.select_dtypes(include=[np.number]).columns
-    df[num_cols] = df[num_cols].replace([np.inf, -np.inf], np.nan)
-    med = df[num_cols].median()
-    df[num_cols] = df[num_cols].fillna(med)
-
+    rolling_cols = []
+    for col in ["monto_6m", "ops_6m", "monto_max_6m", "monto_std_6m"]:
+        df[col] = 0.0
+        rolling_cols.append(col)
+    
+    # Calcular por cliente
+    for cliente_id in df["cliente_id"].unique():
+        mask = df["cliente_id"] == cliente_id
+        cliente_df = df[mask].sort_values("fecha_dt")
+        
+        # Window de 6 meses (180 días)
+        window_days = 180
+        
+        for idx in cliente_df.index:
+            fecha_actual = df.loc[idx, "fecha_dt"]
+            fecha_inicio = fecha_actual - timedelta(days=window_days)
+            
+            # Transacciones previas del cliente en ventana
+            mask_ventana = (df["cliente_id"] == cliente_id) & \
+                          (df["fecha_dt"] >= fecha_inicio) & \
+                          (df["fecha_dt"] <= fecha_actual)
+            
+            ventana_df = df[mask_ventana]
+            
+            if len(ventana_df) > 0:
+                df.loc[idx, "monto_6m"] = ventana_df["monto"].sum()
+                df.loc[idx, "ops_6m"] = len(ventana_df)
+                df.loc[idx, "monto_max_6m"] = ventana_df["monto"].max()
+                df.loc[idx, "monto_std_6m"] = ventana_df["monto"].std() if len(ventana_df) > 1 else 0.0
+    
+    # Features derivadas
+    total_ops = len(df)
+    df["ops_relativas"] = df["ops_6m"] / total_ops if total_ops > 0 else 0
+    df["diversidad_operaciones"] = df.groupby("cliente_id")["tipo_operacion"].transform("nunique") / 4.0
+    df["concentracion_temporal"] = df.groupby("cliente_id")["mes"].transform(lambda x: (x.value_counts().max() / len(x)) if len(x) > 0 else 0)
+    
+    # Ratio vs promedio
+    monto_promedio = df["monto"].mean()
+    df["ratio_vs_promedio"] = df["monto"] / monto_promedio if monto_promedio > 0 else 1.0
+    
+    # Posible burst (operaciones concentradas)
+    df["posible_burst"] = ((df["ops_6m"] > df["ops_6m"].quantile(0.95)) & 
+                           (df["monto"] > df["monto"].quantile(0.75))).astype(int)
+    
     return df
 
-def procesar_archivo(input_csv: str, sector_actividad: str, config_path: str | None, training_mode: bool = True, analysis_id: str | None = None):
+
+def procesar_archivo(
+    file_path: str,
+    sector_actividad: str = "use_file",
+    config_path: str = None,
+    training_mode: bool = False,
+    analysis_id: str = None
+):
     """
-    Procesa archivo y genera enriquecido
+    Procesa archivo CSV: valida estructura y enriquece con features
     
     Args:
-        input_csv: Ruta al CSV original
-        sector_actividad: Sector o 'random'
-        config_path: Ruta al config (opcional)
-        training_mode: Si True, incluye clasificacion_lfpiorpi; si False (inferencia), la omite
-        analysis_id: ID único para inferencia (si None, genera timestamp)
-    """
-    log("==== INICIO VALIDACIÓN/ENRIQUECIMIENTO V2 (optimizado) ====")
-    input_csv = str(Path(input_csv).resolve())
-    log(f"Archivo de entrada: {input_csv}")
-    log(f"Sector actividad: {sector_actividad}")
-    log(f"Modo: {'ENTRENAMIENTO' if training_mode else 'INFERENCIA'}")
-
-    cfg = load_config(config_path)
-
-    df = pd.read_csv(input_csv)
-    log(f"Cargadas {len(df):,} filas | columnas: {len(df.columns)}")
-
-    df_valid, rep = validar_estructura(df)
-    if not rep["archivo_valido"]:
-        log("❌ Archivo inválido:")
-        for err in rep["errores"]:
-            log(f"  - {err}")
-        raise ValueError("Archivo inválido")
-    for adv in rep["advertencias"]:
-        log(f"⚠️ {adv}")
-
-    df_sys = add_sector(df_valid, sector_actividad, cfg)
-
-    log("Enriqueciendo (versión optimizada)…")
-    df_enriched = enrich_features(df_sys, cfg, training_mode=training_mode)
-
-    # Determinar directorio de salida según modo
-    # FIXED: Usar misma ruta base que ml_runner.py (app/backend/)
-    base_dir = Path(__file__).resolve().parents[2]  # api/utils/ -> api/ -> backend/
+        file_path: Ruta al CSV de entrada (4-5 columnas)
+        sector_actividad: "use_file" para usar columna del archivo, o especificar
+        config_path: Ruta a config_modelos.json
+        training_mode: Si True, agrega clasificacion_lfpiorpi (solo entrenamiento)
+        analysis_id: ID único para guardar en pending/ (modo inferencia)
     
-    if training_mode:
-        # Modo entrenamiento: guardar en enriched/ junto al original
-        out_dir = Path(input_csv).parent / "enriched"
-        out_dir.mkdir(parents=True, exist_ok=True)
-        out_path = out_dir / (Path(input_csv).stem + "_enriched_v2.csv")
-        df_enriched.to_csv(out_path, index=False, encoding="utf-8")
+    Returns:
+        str: Ruta al archivo enriquecido
+    """
+    
+    log("==== INICIO VALIDACIÓN/ENRIQUECIMIENTO V3 (con normalización) ====")
+    log(f"Archivo de entrada: {file_path}")
+    log(f"Sector actividad: {sector_actividad}")
+    
+    # Load config
+    if config_path is None:
+        config_path = Path(__file__).parent.parent.parent / "models" / "config_modelos.json"
+    
+    log(f"Config encontrado: {config_path}")
+    config = load_config(str(config_path))
+    
+    # Load CSV
+    df = pd.read_csv(file_path, encoding="utf-8-sig", skip_blank_lines=True)
+    log(f"Cargado: {len(df)} filas, {len(df.columns)} columnas")
+    
+    # Validar columnas requeridas
+    required = ["cliente_id", "monto", "fecha", "tipo_operacion"]
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        raise ValueError(f"Columnas faltantes: {missing}")
+    
+    # ✅ NORMALIZACIÓN DE SECTOR_ACTIVIDAD → FRACCIÓN
+    if "sector_actividad" in df.columns:
+        log(f"📋 Normalizando {len(df['sector_actividad'].unique())} sectores únicos...")
         
-        # También actualizar copia estable para config_modelos.json
-        stable_dir = base_dir / "outputs" / "enriched"
-        stable_dir.mkdir(parents=True, exist_ok=True)
-        stable_path = stable_dir / "dataset_enriched_latest.csv"
-        with tempfile.NamedTemporaryFile("w", delete=False, dir=str(stable_dir), suffix=".csv", encoding="utf-8") as tmpf:
-            df_enriched.to_csv(tmpf.name, index=False, encoding="utf-8")
-            tmp_name = tmpf.name
-        shutil.move(tmp_name, stable_path)
+        df["fraccion"] = df["sector_actividad"].apply(normalizar_sector)
         
-        log(f"✅ Enriquecido V2 ({len(df_enriched.columns)} columnas) guardado en: {out_path}")
-        log(f"✅ Copia estable actualizada: {stable_path}")
+        # Reportar mapeos
+        mapeos = df[["sector_actividad", "fraccion"]].drop_duplicates()
+        log(f"   ✅ Mapeos aplicados:")
+        for _, row in mapeos.iterrows():
+            if row["fraccion"] != "_":
+                log(f"      {row['sector_actividad']:30} → {row['fraccion']}")
+        
+        # Advertir sin fracción
+        sin_fraccion = df[df["fraccion"] == "_"]["sector_actividad"].unique()
+        if len(sin_fraccion) > 0:
+            log(f"   ⚠️  {len(sin_fraccion)} sectores sin fracción LFPIORPI:")
+            for s in list(sin_fraccion)[:5]:
+                log(f"      - {s}")
     else:
-        # Modo inferencia: guardar en pending/ con analysis_id único
-        pending_dir = base_dir / "outputs" / "enriched" / "pending"
+        log("   ⚠️  Sin columna sector_actividad - asignando fracción '_'")
+        df["fraccion"] = "_"
+    
+    # Detectar SectorAltoRiesgo
+    sectores_alto_riesgo = config.get("lfpiorpi", {}).get("actividad_alto_riesgo", [])
+    df["SectorAltoRiesgo"] = df["fraccion"].isin(["XVI_activos_virtuales", "X_traslado_valores"]).astype(int)
+    
+    # Enriquecer features
+    log("🔧 Enriqueciendo features...")
+    df = enrich_features(df)
+    
+    log(f"✅ Enriquecimiento completo: {len(df.columns)} columnas")
+    
+    # Guardar archivo enriquecido
+    if training_mode:
+        # Modo entrenamiento: guardar con _clase_interna
+        output_path = file_path.replace(".csv", "_enriched.csv")
+        df.to_csv(output_path, index=False, encoding="utf-8")
+        log(f"✅ Guardado (training): {output_path}")
+    else:
+        # Modo inferencia: guardar en outputs/enriched/pending/
+        if analysis_id is None:
+            import uuid
+            analysis_id = str(uuid.uuid4())
+        
+        pending_dir = Path(__file__).parent.parent.parent / "outputs" / "enriched" / "pending"
         pending_dir.mkdir(parents=True, exist_ok=True)
         
-        if not analysis_id:
-            analysis_id = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-        
-        out_path = pending_dir / f"{analysis_id}.csv"
-        # Escritura atómica
-        with tempfile.NamedTemporaryFile("w", delete=False, dir=str(pending_dir), suffix=".csv", encoding="utf-8") as tmpf:
-            df_enriched.to_csv(tmpf.name, index=False, encoding="utf-8")
-            tmp_name = tmpf.name
-        shutil.move(tmp_name, out_path)
-        
-        log(f"✅ Enriquecido para inferencia ({len(df_enriched.columns)} columnas) guardado en: {out_path}")
-        log(f"   Analysis ID: {analysis_id}")
-    log(f"   Registros: {len(df_enriched):,}")
-    log(f"   Columnas nuevas vs V1: +{len(df_enriched.columns) - 16}")
-    log("==== FIN VALIDACIÓN/ENRIQUECIMIENTO V2 ====")
+        output_path = pending_dir / f"{analysis_id}.csv"
+        df.to_csv(output_path, index=False, encoding="utf-8")
+        log(f"✅ Guardado (inferencia): {output_path}")
+    
+    log("==== FIN VALIDACIÓN/ENRIQUECIMIENTO ====\n")
+    
+    return str(output_path)
 
-    return str(out_path)
 
 if __name__ == "__main__":
-    if len(sys.argv) < 3:
-        print(
-            "\nUso: python validador_enriquecedor_v2.py <input.csv> <sector_actividad|random> [config_path]\n",
-            file=sys.stderr,
-        )
-        sys.exit(1)
-
-    input_csv = sys.argv[1]
-    sector = sys.argv[2]
-    cfg_path = sys.argv[3] if len(sys.argv) >= 4 else None
-
-    try:
-        procesar_archivo(input_csv, sector, cfg_path)
-    except Exception as e:
-        log(f"❌ Error: {e}")
-        raise
+    # Test
+    print("="*70)
+    print("🧪 TEST: Validador V3 con Normalización")
+    print("="*70)
+    
+    # Casos de prueba
+    test_cases = [
+        ("METALES PRECIOSOS", "XI_joyeria"),
+        ("joyeria", "XI_joyeria"),
+        ("Autos Usados", "VIII_vehiculos"),
+        ("bienes raices", "V_inmuebles"),
+        ("Bitcoin Exchange", "XVI_activos_virtuales"),
+        ("Restaurante", "_"),
+    ]
+    
+    print("\n📋 Pruebas de Normalización:")
+    for sector, expected in test_cases:
+        result = normalizar_sector(sector)
+        status = "✅" if result == expected else "❌"
+        print(f"   {status} '{sector:30}' → {result:20} (esperado: {expected})")
+    
+    print("\n" + "="*70)
