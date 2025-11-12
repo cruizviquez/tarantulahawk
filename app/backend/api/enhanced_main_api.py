@@ -37,7 +37,7 @@ import httpx  # Para verificar con Supabase API
 # Import validador_enriquecedor from utils
 import sys
 sys.path.insert(0, str(Path(__file__).parent / "utils"))
-from validador_enriquecedor import enrich_features, validar_estructura, add_sector
+from validador_enriquecedor import enrich_features, procesar_archivo, normalizar_sector
 
 # Use shared pricing utility that reads config/pricing.json
 try:
@@ -800,27 +800,19 @@ def validar_enriquecer_datos(df: pd.DataFrame) -> pd.DataFrame:
     
     Returns clean DataFrame ready for ML processing
     """
-    # Load config
-    config_path = Path(__file__).parent.parent / "models" / "config_modelos.json"
-    with open(config_path, 'r', encoding='utf-8') as f:
-        cfg = json.load(f)
+    # V3: Validación integrada en enrich_features
+    # Verifica 5 columnas requeridas: cliente_id, monto, fecha, tipo_operacion, sector_actividad
+    required = ["cliente_id", "monto", "fecha", "tipo_operacion", "sector_actividad"]
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Columnas requeridas faltantes: {', '.join(missing)}"
+        )
     
-    # Step 1: Validate structure
-    df_valid, report = validar_estructura(df)
-    if not report["archivo_valido"]:
-        error_msg = "; ".join(report["errores"])
-        raise HTTPException(status_code=400, detail=f"Validación falló: {error_msg}")
-    
-    # Print warnings
-    for warning in report.get("advertencias", []):
-        print(f"⚠️ {warning}")
-    
-    # Step 2: sector_actividad is now provided in the uploaded file (no random generation)
-    # Skip add_sector() since user provides sector_actividad column
-    
-    # Step 3: Enrich features (26+ features)
-    print("🔧 Enriqueciendo con validador_enriquecedor.py (26+ features)...")
-    df_enriched = enrich_features(df_valid, cfg)
+    # Enrich features (incluye normalización de sector → fracción LFPIORPI)
+    print("🔧 Enriqueciendo con validador_enriquecedor v3 (26+ features)...")
+    df_enriched = enrich_features(df)
     
     print(f"✅ Enriquecimiento completo: {len(df_enriched)} filas, {len(df_enriched.columns)} columnas")
     return df_enriched

@@ -88,11 +88,22 @@ export async function GET(request: NextRequest) {
         .eq('id', data.user.id)
         .single()
 
-      const redirectUrl = (!profile || !profile.name || !profile.company)
-        ? new URL('/onboarding', origin)
-        : new URL('/dashboard', origin)
+      const targetPath = (!profile || !profile.name || !profile.company)
+        ? '/onboarding'
+        : '/dashboard'
 
-      return NextResponse.redirect(redirectUrl)
+      // ✅ Add slight delay to ensure cookies are set before redirect
+      await new Promise(resolve => setTimeout(resolve, 100))
+
+      const redirectUrl = new URL(targetPath, origin)
+      const response = NextResponse.redirect(redirectUrl, { status: 307 })
+      
+      // Force cookie persistence and disable caching
+      response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate')
+      response.headers.set('Pragma', 'no-cache')
+      response.headers.set('X-Auth-Success', 'true')
+      
+      return response
     }
   }
 

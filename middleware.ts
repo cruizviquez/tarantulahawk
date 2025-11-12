@@ -3,15 +3,16 @@ import type { NextRequest } from 'next/server';
 import { getUserFromCookies } from './app/lib/middleware-auth';
 
 // Rutas públicas que NO requieren autenticación
-const PUBLIC_ROUTES = ['/', '/auth/callback', '/auth/redirect', '/auth', '/auth/login', '/login', '/signup'];
+const PUBLIC_ROUTES = ['/', '/auth/callback', '/auth/redirect', '/auth', '/auth/login', '/login', '/signup', '/onboarding'];
 
 // APIs públicas que NO requieren autenticación (reducido a mínimo)
 const PUBLIC_API_PREFIXES = [
-  '/api/auth/hash',      // Magic link generation
-  '/api/auth/logout',    // Logout
-  '/api/turnstile',      // CAPTCHA validation
-  '/api/health',         // Health checks
-  '/api/heartbeat',      // Monitoring
+  '/api/auth/hash',        // Magic link token processing
+  '/api/auth/logout',      // Logout
+  '/api/auth/check-email', // Pre-signup email existence check (no auth required)
+  '/api/turnstile',        // CAPTCHA validation
+  '/api/health',           // Health checks
+  '/api/heartbeat',        // Monitoring
 ];
 
 // APIs que requieren autenticación (proteger explícitamente)
@@ -43,7 +44,7 @@ function addSecurityHeaders(response: NextResponse): NextResponse {
     "style-src 'self' 'unsafe-inline'; " +
     "img-src 'self' data: https:; " +
     "font-src 'self' data:; " +
-    "connect-src 'self' https://*.supabase.co https://*.github.dev wss://*.supabase.co; " +
+    "connect-src 'self' https://*.supabase.co https://*.github.dev https://challenges.cloudflare.com wss://*.supabase.co; " +
     "frame-src 'self' https://challenges.cloudflare.com;"
   );
 

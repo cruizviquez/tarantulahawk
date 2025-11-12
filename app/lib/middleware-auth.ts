@@ -50,9 +50,15 @@ export function isTokenExpired(payload: JWTPayload): boolean {
  */
 export function getUserFromCookies(request: NextRequest): { userId: string; isExpired: boolean } | null {
   // Supabase stores JWT in cookie like: sb-<project-ref>-auth-token
-  const authCookie = request.cookies.getAll().find(c => 
+  const allCookies = request.cookies.getAll();
+  const authCookie = allCookies.find(c => 
     c.name.startsWith('sb-') && c.name.includes('-auth-token')
   );
+  
+  // Debug: log all cookies if no auth found (dev only)
+  if ((!authCookie || !authCookie.value) && process.env.NODE_ENV !== 'production') {
+    console.log('[MW-AUTH] No Supabase cookie found. Available cookies:', allCookies.map(c => c.name).join(', '));
+  }
   
   if (!authCookie || !authCookie.value) {
     return null;
