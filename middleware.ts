@@ -176,9 +176,8 @@ export async function middleware(request: NextRequest) {
     if (!authValid) {
       trace('admin-redirect');
       const url = request.nextUrl.clone();
-      url.pathname = '/auth/login';
-      url.searchParams.set('auth', 'required');
-      url.searchParams.set('returnTo', pathname);
+      url.pathname = '/';
+      url.search = '';
       normalizeRedirectUrl(url);
       const resp = NextResponse.redirect(url);
       resp.headers.set('X-Middleware-Trace', 'admin-redirect');
@@ -195,9 +194,8 @@ export async function middleware(request: NextRequest) {
     if (!authValid) {
       trace('protected-redirect');
       const url = request.nextUrl.clone();
-      url.pathname = '/auth/login';
-      url.searchParams.set('auth', 'required');
-      url.searchParams.set('returnTo', pathname);
+      url.pathname = '/';
+      url.search = '';
       normalizeRedirectUrl(url);
       const resp = NextResponse.redirect(url);
       resp.headers.set('X-Middleware-Trace', 'protected-redirect');

@@ -36,7 +36,8 @@ except Exception as e:
 
 # Test 2: Verificar pending
 print("\n📋 Test 2: Verificar archivo pending")
-pending_path = Path('outputs/enriched/pending/quick_test.csv')
+BASE_DIR = Path(__file__).parent
+pending_path = BASE_DIR / 'outputs' / 'enriched' / 'pending' / 'quick_test.csv'
 if pending_path.exists():
     import pandas as pd
     df = pd.read_csv(pending_path, nrows=1)

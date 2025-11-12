@@ -27,6 +27,7 @@ from pathlib import Path
 from datetime import datetime
 from collections import Counter
 import pandas as pd
+import numpy as np
 
 # Importar predictor adaptativo (permite reglas + ML + guardrails)
 sys.path.insert(0, str(Path(__file__).parent))
@@ -89,6 +90,17 @@ def process_file(csv_path: Path, predictor: TarantulaHawkAdaptivePredictor) -> b
         # ✅ VERIFICAR GUARDRAILS
         guardrails_count = meta_pred.get("guardrails_applied", 0) if isinstance(meta_pred, dict) else 0
         log(f"      🛡️  Guardrails aplicados: {guardrails_count}")
+        
+        # ✅ CALCULAR SCORE EBR (Enfoque Basado en Riesgos)
+        log(f"\n   📊 Calculando Score EBR (Enfoque Basado en Riesgos)...")
+        scores_ebr = []
+        for idx, row in df.iterrows():
+            triggers = predictor._get_rule_triggers(row, df) if hasattr(predictor, "_get_rule_triggers") else []
+            score_ebr = predictor.calcular_score_ebr(row, triggers, df) if hasattr(predictor, "calcular_score_ebr") else 0.5
+            scores_ebr.append(score_ebr)
+        
+        scores_ebr = np.array(scores_ebr)
+        log(f"   📈 Score EBR promedio: {scores_ebr.mean():.3f}")
         
         # Generar detalle de transacciones (primeras 100) + triggers/origen
         transacciones = []
@@ -182,10 +194,13 @@ def process_file(csv_path: Path, predictor: TarantulaHawkAdaptivePredictor) -> b
             triggers = predictor._get_rule_triggers(row, df) if hasattr(predictor, "_get_rule_triggers") else []
             origen = determinar_origen(row, i, str(pred), strategy, triggers)
             
+            # ✅ CALCULAR SCORE EBR para esta transacción
+            score_ebr = float(scores_ebr[i]) if i < len(scores_ebr) else 0.5
+            
             # 🆕 GENERAR EXPLICABILIDAD COMPLETA usando TransactionExplainer
             metadata_explicabilidad = explainer.explicar_transaccion(
                 row=row,
-                probabilidades=proba_dict if proba_dict else None,
+                score_confianza=score_ebr,  # ✅ Usar Score EBR
                 triggers=triggers
             )
             
@@ -210,13 +225,13 @@ def process_file(csv_path: Path, predictor: TarantulaHawkAdaptivePredictor) -> b
                 "sector_actividad": str(row.get("sector_actividad", "")),
                 "clasificacion": pred,
                 "probabilidades": proba_dict,
-                "risk_score": anomaly_score,  # Legacy: puntaje de anomalía
+                "score_ebr": score_ebr,  # ✅ Score EBR (no confianza ML)
                 "razones": razones_lista,  # Frontend expects array
                 "nota": nota,
                 "triggers": triggers,
                 "origen": origen,
                 # 🆕 CAMPOS DE EXPLICABILIDAD
-                "score_confianza": metadata_explicabilidad.get('score_confianza'),
+                "score_confianza": metadata_explicabilidad.get('score_confianza'),  # Legacy, usar score_ebr
                 "nivel_confianza": metadata_explicabilidad.get('nivel_confianza'),
                 "explicacion_principal": metadata_explicabilidad.get('explicacion_principal'),
                 "explicacion_detallada": metadata_explicabilidad.get('explicacion_detallada'),
@@ -250,6 +265,7 @@ def process_file(csv_path: Path, predictor: TarantulaHawkAdaptivePredictor) -> b
                 "limpio": 0,  # No usado en clasificación actual
                 "ai_nuevos_casos": int(ai_new),
                 "estrategia": strategy,
+                "score_ebr_promedio": float(scores_ebr.mean()),  # ✅ Promedio Score EBR
                 "origen_clasificacion": {k: int(v) for k, v in origen_counts.items()},
                 "top_triggers": top_triggers,
                 "indicadores": indicadores
@@ -400,6 +416,9 @@ def process_file(csv_path: Path, predictor: TarantulaHawkAdaptivePredictor) -> b
         log(f"   ✅ Clasificación final (con guardrails LFPIORPI) aplicada")
         log(f"   🛡️  Guardrails aplicaron: {n_guardrails} transacciones")
         log(f"   📊 Distribución por origen: {Counter(df['origen'])}")
+        
+        # Agregar columna de Score EBR al DataFrame antes de guardar
+        df["score_ebr"] = scores_ebr
         
         # Guardar CSV enriquecido con predicciones
         processed_csv = PROCESSED_DIR / csv_path.name

@@ -54,15 +54,20 @@ __pycache__/
 *.so
 *.egg-info/
 
-# backend generated artifacts
+# backend generated artifacts (CONSOLIDATED - single source of truth)
 app/backend/outputs/
 app/backend/uploads/
 app/backend/history/
+app/backend/logs/
 
-# workspace generated artifacts
+# DEPRECATED: These folders should NOT exist (removed in consolidation 2025-11-12)
+# If they appear, they are likely created by error
 outputs/
 uploads/
 history/
+app/outputs/
+app/backend/api/outputs/
+app/backend/api/uploads/
 
 # jupyter
 .ipynb_checkpoints/

@@ -51,9 +51,44 @@ export async function GET(request: NextRequest) {
     }
   )
 
+  // Optional admin client for used_tokens (single-use enforcement)
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const supabaseAdmin = serviceRoleKey
+    ? createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        serviceRoleKey,
+        {
+          cookies: {
+            getAll() {
+              return []
+            },
+            setAll() {},
+          },
+        }
+      )
+    : null
+
   // Magic Link
   if (token_hash && type) {
     console.log('[AUTH] Processing Magic Link')
+
+    // Enforce single-use via used_tokens
+    try {
+      if (supabaseAdmin) {
+        const shortHash = token_hash.substring(0, 30)
+        const { data: used } = await supabaseAdmin
+          .from('used_tokens')
+          .select('token_hash')
+          .eq('token_hash', shortHash)
+          .maybeSingle()
+        if (used) {
+          return NextResponse.redirect(new URL('/?error=token_already_used', origin))
+        }
+      }
+    } catch (e) {
+      console.warn('[AUTH] used_tokens pre-check failed:', (e as any)?.message || e)
+      // Continue; Supabase will still enforce validity
+    }
 
     const { data, error: verifyError } = await supabase.auth.verifyOtp({
       token_hash,
@@ -87,6 +122,20 @@ export async function GET(request: NextRequest) {
         .select('name, company')
         .eq('id', data.user.id)
         .single()
+
+      // Mark token as used (best-effort)
+      try {
+        if (supabaseAdmin) {
+          const shortHash = token_hash.substring(0, 30)
+          await supabaseAdmin.from('used_tokens').insert({
+            token_hash: shortHash,
+            used_at: new Date().toISOString(),
+            expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+          })
+        }
+      } catch (e) {
+        console.warn('[AUTH] used_tokens mark failed:', (e as any)?.message || e)
+      }
 
       const targetPath = (!profile || !profile.name || !profile.company)
         ? '/onboarding'

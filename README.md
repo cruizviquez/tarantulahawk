@@ -24,6 +24,7 @@ Open [http://localhost:3000](http://localhost:3000) to see the application.
 - **[SECURITY_IMPLEMENTATION.md](SECURITY_IMPLEMENTATION.md)** - Security features and compliance
 - **[SUPABASE_CONFIG.md](SUPABASE_CONFIG.md)** - Database configuration and auth setup
 - **[supabase/README.md](supabase/README.md)** - Database schema and migrations
+- **[CONSOLIDATION_EXECUTIVE_SUMMARY.md](CONSOLIDATION_EXECUTIVE_SUMMARY.md)** - ⚠️ Folder consolidation (run once after clone)
 
 ## 🔑 Features
 
