@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { getUserFromCookies } from './app/lib/middleware-auth';
+import { createServerClient } from '@supabase/ssr';
 
 // Rutas públicas que NO requieren autenticación
 const PUBLIC_ROUTES = ['/', '/auth/callback', '/auth/redirect', '/auth', '/auth/login', '/login', '/signup', '/onboarding'];
@@ -104,11 +104,28 @@ export async function middleware(request: NextRequest) {
     return resp;
   }
   
-  // Get user info from cookies (includes role and expiry check)
-  const userInfo = getUserFromCookies(request);
-  const authValid = !!userInfo && !userInfo.isExpired;
+  // Simple session check using Supabase SSR
+  let authValid = false;
+  try {
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return request.cookies.get(name)?.value;
+          },
+          set() {},
+          remove() {},
+        },
+      }
+    );
+    const { data: { session } } = await supabase.auth.getSession();
+    authValid = !!session;
+  } catch (e) {
+    authValid = false;
+  }
   
-  // Check if path is API route
   const isApiRoute = pathname.startsWith('/api');
   trace('init', { isApiRoute, authValid });
   
