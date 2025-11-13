@@ -1,238 +1,410 @@
-        row: pd.Series
-    ) -> Dict[str, Any]:
-        """
-        Genera flags de revisión manual y alertas
-        
-        Criterios:
-        - Revisión manual: baja confianza, múltiples triggers sin confirmación ML
-        - Reclasificación: triggers indican inusual pero ML dice relevante
-        """
-        
-        flags = {
-            "requiere_revision_manual": False,
-            "sugerir_reclasificacion": False,
-            "alertas": []
-        }
-        
-        # 1. Baja confianza
-        if score_confianza < self.umbral_confianza_bajo:
-            flags["requiere_revision_manual"] = True
-            flags["alertas"].append({
-                "tipo": "baja_confianza",
-                "severidad": "warning",
-                "mensaje": f"Confianza del modelo baja ({score_confianza:.1%}). Se recomienda revisión manual."
-            })
-        
-        # 2. Múltiples triggers pero clasificación baja
-        triggers_inusuales = [t for t in triggers if t.startswith("inusual_")]
-        if len(triggers_inusuales) >= 2 and clasificacion == "relevante":
-            flags["sugerir_reclasificacion"] = True
-            flags["alertas"].append({
-                "tipo": "sugerir_reclasificacion",
-                "severidad": "info",
-                "mensaje": f"Se detectaron {len(triggers_inusuales)} indicadores de riesgo. Considere reclasificar como 'inusual'.",
-                "de": "relevante",
-                "a": "inusual"
-            })
-        
-        # 3. Efectivo alto sin ser preocupante
-        if row.get('EsEfectivo', 0) == 1 and row.get('monto', 0) > 100000 and clasificacion != "preocupante":
-            flags["alertas"].append({
-                "tipo": "efectivo_alto",
-                "severidad": "info",
-                "mensaje": f"Operación en efectivo de ${row['monto']:,.2f}. Verificar documentación."
-            })
-        
-        # 4. Internacional sin contexto
-        if row.get('EsInternacional', 0) == 1:
-            flags["alertas"].append({
-                "tipo": "internacional",
-                "severidad": "info",
-                "mensaje": "Operación internacional. Validar país de origen/destino."
-            })
-        
-        # 5. Primera operación alta
-        if row.get('ops_6m', 1) == 1 and row.get('monto', 0) > 50000:
-            flags["alertas"].append({
-                "tipo": "primera_operacion_alta",
-                "severidad": "warning",
-                "mensaje": "Primera operación del cliente con monto significativo. Revisar KYC."
-            })
-        
-        return flags
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+explicabilidad_transactions.py
+
+Sistema de explicabilidad para transacciones financieras AML.
+Genera explicaciones automáticas basadas en triggers y Score EBR.
+"""
+
+import pandas as pd
+from typing import Dict, List, Optional
+from datetime import datetime
+
+class TransactionExplainer:
+    """
+    Genera explicaciones automáticas de clasificaciones de transacciones.
     
-    def _generar_contexto_regulatorio(self, fraccion: str, monto: float) -> str:
-        """Genera contexto regulatorio según la fracción"""
+    Proporciona:
+    - Justificación de la clasificación
+    - Factores de riesgo detectados
+    - Nivel de confianza del análisis
+    - Recomendaciones de seguimiento
+    """
+    
+    def __init__(self, umbral_confianza_bajo: float = 0.4):
+        """
+        Args:
+            umbral_confianza_bajo: Score EBR bajo el cual se marca baja confianza
+        """
+        self.umbral_confianza_bajo = umbral_confianza_bajo
         
-        UMA = 113.14
-        
-        contextos = {
-            "XI_joyeria": {
-                "nombre": "Fracción XI - Joyería, Piedras Preciosas y Metales",
-                "umbral_aviso": 3210 * UMA,
-                "umbral_efectivo": 3210 * UMA,
-                "normativa": "Artículo 17 LFPIORPI - Actividades Vulnerables"
-            },
-            "VIII_vehiculos": {
-                "nombre": "Fracción VIII - Comercialización de Vehículos",
-                "umbral_aviso": 6420 * UMA,
-                "umbral_efectivo": 3210 * UMA,
-                "normativa": "Artículo 17 LFPIORPI - Actividades Vulnerables"
-            },
-            "V_inmuebles": {
-                "nombre": "Fracción V - Inmuebles",
-                "umbral_aviso": 8025 * UMA,
-                "umbral_efectivo": 8025 * UMA,
-                "normativa": "Artículo 17 LFPIORPI - Actividades Vulnerables"
-            },
-            "XVI_activos_virtuales": {
-                "nombre": "Fracción XVI - Activos Virtuales",
-                "umbral_aviso": 210 * UMA,
-                "umbral_efectivo": None,
-                "normativa": "Artículo 17 LFPIORPI - Actividades Vulnerables (2024)"
-            }
+        # Plantillas de explicaciones
+        self.explicaciones_triggers = {
+            # Guardrails LFPIORPI
+            "guardrail_aviso_umbral": "Monto supera umbral de aviso LFPIORPI Art. 18",
+            "guardrail_efectivo_umbral": "Operación en efectivo supera límite normativo",
+            "guardrail_acumulacion_6m": "Acumulación 6 meses cerca de umbral de reporte",
+            
+            # Triggers inusuales
+            "inusual_monto_rango_alto": "Monto en rango inusual ($100k-umbral)",
+            "inusual_nocturno": "Operación realizada en horario nocturno (22h-6h)",
+            "inusual_fin_semana": "Operación realizada en fin de semana",
+            "inusual_internacional": "Operación internacional",
+            "inusual_ratio_anomalo": "Desviación significativa vs patrón histórico",
+            "inusual_efectivo": "Operación en efectivo",
+            "inusual_monto_redondo": "Monto redondo (posible estructuración)",
+            "inusual_monto_alto_50k": "Monto superior a $50,000",
+            "inusual_monto_alto_100k": "Monto superior a $100,000",
+            "inusual_primera_operacion": "Cliente con historial limitado (≤1 op en 6m)",
+            "inusual_burst_operaciones": "Concentración inusual de operaciones en periodo corto",
+            "inusual_sector_alto_riesgo": "Sector económico de alto riesgo AML",
+            "inusual_estructuracion": "Posible estructuración de operaciones",
         }
         
-        if fraccion not in contextos:
-            return "Actividad no regulada específicamente como Actividad Vulnerable."
+        self.recomendaciones_por_clasificacion = {
+            "preocupante": [
+                "Revisar documentación soporte inmediatamente",
+                "Verificar identidad del cliente y beneficiario final",
+                "Evaluar para reporte ante UIF según LFPIORPI Art. 17",
+                "Documentar análisis en expediente del cliente"
+            ],
+            "inusual": [
+                "Investigar contexto de la operación",
+                "Revisar operaciones relacionadas del mismo cliente",
+                "Solicitar documentación adicional si es necesario",
+                "Monitorear actividad futura del cliente"
+            ],
+            "relevante": [
+                "Continuar monitoreo rutinario",
+                "No requiere acción inmediata",
+                "Mantener en archivo de consulta"
+            ]
+        }
+    
+    def explicar_transaccion(
+        self,
+        row: pd.Series,
+        score_ebr: Optional[float],
+        triggers: List[str]
+    ) -> Dict:
+        """
+        Genera explicación completa de una transacción.
         
-        ctx = contextos[fraccion]
-        umbral_aviso = ctx["umbral_aviso"]
+        Args:
+            row: Serie de pandas con datos de la transacción
+            score_ebr: Score EBR calculado (0.0-1.0)
+            triggers: Lista de triggers activados
         
-        partes = [
-            f"**{ctx['nombre']}**",
-            f"\nUmbral de aviso: ${umbral_aviso:,.2f} MXN ({int(umbral_aviso/UMA)} UMA)"
+        Returns:
+            Dict con explicación estructurada
+        """
+        clasificacion = str(row.get("clasificacion", "relevante"))
+        monto = float(row.get("monto", 0))
+        
+        # Identificar triggers activos
+        triggers_guardrail = [t for t in triggers if t.startswith("guardrail_")]
+        triggers_inusual = [t for t in triggers if t.startswith("inusual_")]
+        
+        # Generar explicación principal
+        if triggers_guardrail:
+            razon_principal = "Clasificada como PREOCUPANTE por cumplir umbral normativo LFPIORPI"
+            origen = "normativo"
+        elif triggers_inusual:
+            razon_principal = f"Clasificada como {clasificacion.upper()} por {len(triggers_inusual)} factor(es) de riesgo detectado(s)"
+            origen = "reglas"
+        else:
+            razon_principal = f"Clasificada como {clasificacion.upper()} por análisis de riesgo"
+            origen = "ml"
+        
+        # Factores de riesgo (solo los principales, máx 3)
+        factores_riesgo = []
+        for t in triggers:
+            probabilidades=None,
+            triggers: List[str] = None
+            if t in self.explicaciones_triggers:
+                factores_riesgo.append({
+                    "codigo": t,
+                    "descripcion": self.explicaciones_triggers[t],
+                    "tipo": "normativo" if t.startswith("guardrail_") else "behavioral"
+                })
+        triggers_principales = factores_riesgo[:3]
+        
+        # Nivel de confianza
+        if score_ebr is not None:
+            if score_ebr >= 0.7:
+                nivel_confianza = "alta"
+                comentario_confianza = "Clasificación respaldada por múltiples factores"
+            elif score_ebr >= self.umbral_confianza_bajo:
+                nivel_confianza = "media"
+                comentario_confianza = "Clasificación basada en factores moderados"
+            else:
+                nivel_confianza = "baja"
+                comentario_confianza = "Revisar contexto adicional recomendado"
+        else:
+            nivel_confianza = "no_disponible"
+            comentario_confianza = "Score no calculado"
+        
+        # Recomendaciones
+        recomendaciones = self.recomendaciones_por_clasificacion.get(
+            clasificacion,
+            ["Revisar clasificación manualmente"]
+        )
+
+        # Acción sugerida
+        if clasificacion == "preocupante":
+            accion_sugerida = "enviar reporte de inmediato a la UIF"
+        elif clasificacion == "inusual":
+            accion_sugerida = "revisar manualmente la transacción"
+        elif clasificacion == "relevante":
+            accion_sugerida = "analizar KYC"
+        else:
+            accion_sugerida = "revisar manualmente la transacción"
+        
+        # Generar contexto antes del return
+        contexto = self._generar_contexto(row, triggers)
+        return {
+            "clasificacion": clasificacion,
+            "razon_principal": razon_principal,
+            "origen": origen,
+            "score_ebr": score_ebr if score_ebr is not None else 0.0,
+            "nivel_confianza": nivel_confianza,
+            "comentario_confianza": comentario_confianza,
+            "triggers_principales": triggers_principales,
+            "n_triggers_principales": len(triggers_principales),
+            "accion_sugerida": accion_sugerida,
+            "recomendaciones": recomendaciones,
+            "contexto": contexto,
+            "requiere_revision_urgente": clasificacion == "preocupante",
+            "timestamp_explicacion": datetime.now().isoformat()
+        }
+    
+    def _generar_contexto(self, row: pd.Series, triggers: List[str]) -> Dict:
+        """Genera contexto adicional de la transacción"""
+        
+        monto = float(row.get("monto", 0))
+        ops_6m = int(row.get("ops_6m", 0))
+        monto_6m = float(row.get("monto_6m", 0))
+        
+        contexto = {
+            "monto_formateado": f"${monto:,.2f} MXN",
+            "operaciones_historicas": ops_6m,
+            "acumulado_6m": f"${monto_6m:,.2f} MXN" if monto_6m > 0 else "No disponible",
+        }
+        
+        # Indicadores temporales
+        if int(row.get("es_nocturno", 0)) == 1:
+            contexto["horario"] = "Nocturno (22h-6h)"
+        elif int(row.get("fin_de_semana", 0)) == 1:
+            contexto["horario"] = "Fin de semana"
+        else:
+            contexto["horario"] = "Horario normal"
+        
+        # Tipo de operación
+        detalles_operacion = []
+        if int(row.get("EsEfectivo", 0)) == 1:
+            detalles_operacion.append("Efectivo")
+        if int(row.get("EsInternacional", 0)) == 1:
+            detalles_operacion.append("Internacional")
+        if int(row.get("es_monto_redondo", 0)) == 1:
+            detalles_operacion.append("Monto redondo")
+        
+        if detalles_operacion:
+            contexto["tipo_operacion"] = ", ".join(detalles_operacion)
+        else:
+            contexto["tipo_operacion"] = "Operación estándar"
+        
+        # Perfil de riesgo del cliente
+        if ops_6m == 1:
+            contexto["perfil_cliente"] = "Cliente nuevo o esporádico"
+        elif ops_6m < 5:
+            contexto["perfil_cliente"] = "Cliente ocasional"
+        elif ops_6m < 20:
+            contexto["perfil_cliente"] = "Cliente regular"
+        else:
+            contexto["perfil_cliente"] = "Cliente frecuente"
+        
+        # Ratio vs promedio
+        ratio = float(row.get("ratio_vs_promedio", 1.0))
+        if ratio > 5.0:
+            contexto["patron_comportamiento"] = f"Monto {ratio:.1f}x superior al promedio"
+        elif ratio > 2.0:
+            contexto["patron_comportamiento"] = f"Monto {ratio:.1f}x superior al promedio"
+        else:
+            contexto["patron_comportamiento"] = "Consistente con patrón histórico"
+        
+        return contexto
+    
+    def generar_resumen_batch(
+        self,
+        explicaciones: List[Dict]
+    ) -> Dict:
+        """
+        Genera resumen de múltiples explicaciones.
+        
+        Args:
+            explicaciones: Lista de diccionarios de explicaciones
+        
+        Returns:
+            Dict con estadísticas agregadas
+        """
+        total = len(explicaciones)
+        
+        if total == 0:
+            return {
+                "total_transacciones": 0,
+                "error": "No hay explicaciones para resumir"
+            }
+        
+        # Contar por clasificación
+        clasificaciones = {}
+        for exp in explicaciones:
+            clasi = exp["clasificacion"]
+            clasificaciones[clasi] = clasificaciones.get(clasi, 0) + 1
+        
+        # Contar por origen
+        origenes = {}
+        for exp in explicaciones:
+            orig = exp["origen"]
+            origenes[orig] = origenes.get(orig, 0) + 1
+        
+        # Contar por nivel de confianza
+        niveles_confianza = {}
+        for exp in explicaciones:
+            nivel = exp["nivel_confianza"]
+            niveles_confianza[nivel] = niveles_confianza.get(nivel, 0) + 1
+        
+        # Factores más comunes
+        todos_factores = []
+        for exp in explicaciones:
+            todos_factores.extend([f["codigo"] for f in exp["factores_riesgo"]])
+        
+        from collections import Counter
+        factores_top = Counter(todos_factores).most_common(10)
+        
+        # Transacciones urgentes
+        urgentes = [
+            exp for exp in explicaciones
+            if exp["requiere_revision_urgente"]
         ]
         
-        if ctx["umbral_efectivo"]:
-            partes.append(f"\nLímite efectivo: ${ctx['umbral_efectivo']:,.2f} MXN ({int(ctx['umbral_efectivo']/UMA)} UMA)")
-        
-        partes.append(f"\nBase legal: {ctx['normativa']}")
-        
-        if monto >= umbral_aviso:
-            partes.append(f"\n\n⚠️ Esta transacción **SUPERA** el umbral de aviso.")
-        else:
-            porcentaje = (monto / umbral_aviso) * 100
-            partes.append(f"\n\nMonto representa el {porcentaje:.1f}% del umbral de aviso.")
-        
-        return "".join(partes)
+        return {
+            "total_transacciones": total,
+            "distribucion_clasificacion": clasificaciones,
+            "distribucion_origen": origenes,
+            "distribucion_confianza": niveles_confianza,
+            "transacciones_urgentes": len(urgentes),
+            "factores_riesgo_mas_comunes": [
+                {"codigo": codigo, "frecuencia": freq}
+                for codigo, freq in factores_top
+            ],
+            "score_ebr_promedio": sum(
+                exp["score_confianza"] for exp in explicaciones
+            ) / total if total > 0 else 0.0,
+            "timestamp_resumen": datetime.now().isoformat()
+        }
     
-    def _generar_acciones_sugeridas(
-        self,
-        clasificacion: str,
-        origen: str,
-        flags: Dict[str, Any],
-        row: pd.Series
-    ) -> List[str]:
-        """Genera lista de acciones sugeridas para el analista"""
+    def generar_texto_explicacion(self, explicacion: Dict) -> str:
+        """
+        Genera texto legible de una explicación.
         
-        acciones = []
+        Args:
+            explicacion: Dict con explicación estructurada
         
-        if clasificacion == "preocupante":
-            acciones.append("📤 Preparar aviso a UIF (obligatorio)")
-            acciones.append("🔍 Verificar documentación soporte completa")
-            acciones.append("👤 Validar identidad del cliente y beneficiario final")
-            
-            if row.get('EsEfectivo', 0) == 1:
-                acciones.append("💵 Documentar origen de efectivo")
+        Returns:
+            String con explicación en lenguaje natural
+        """
+        texto = []
         
-        elif clasificacion == "inusual":
-            acciones.append("📋 Documentar operación en expediente")
-            acciones.append("🔍 Revisar perfil transaccional del cliente")
-            acciones.append("⏰ Monitorear operaciones subsecuentes (30 días)")
+        # Encabezado
+        texto.append(f"CLASIFICACIÓN: {explicacion['clasificacion'].upper()}")
+        texto.append(f"Score EBR: {explicacion['score_confianza']:.2f} ({explicacion['nivel_confianza']})")
+        texto.append("")
         
-        if flags.get("requiere_revision_manual"):
-            acciones.append("👁️ **REVISIÓN MANUAL OBLIGATORIA** - Baja confianza del modelo")
+        # Razón principal
+        texto.append(f"JUSTIFICACIÓN:")
+        texto.append(f"  {explicacion['razon_principal']}")
+        texto.append("")
         
-        if flags.get("sugerir_reclasificacion"):
-            acciones.append("⚠️ Considerar reclasificación a nivel superior")
+        # Factores de riesgo
+        if explicacion['factores_riesgo']:
+            texto.append(f"FACTORES DETECTADOS ({len(explicacion['factores_riesgo'])}):")
+            for i, factor in enumerate(explicacion['factores_riesgo'], 1):
+                texto.append(f"  {i}. {factor['descripcion']}")
+            texto.append("")
         
-        if row.get('EsInternacional', 0) == 1:
-            acciones.append("🌍 Validar país de origen/destino en listas de países de alto riesgo")
+        # Contexto
+        ctx = explicacion['contexto']
+        texto.append("CONTEXTO:")
+        texto.append(f"  Monto: {ctx['monto_formateado']}")
+        texto.append(f"  Horario: {ctx.get('horario', 'N/A')}")
+        texto.append(f"  Tipo: {ctx.get('tipo_operacion', 'N/A')}")
+        texto.append(f"  Perfil: {ctx.get('perfil_cliente', 'N/A')}")
+        texto.append("")
         
-        if row.get('ops_6m', 1) == 1:
-            acciones.append("📝 Revisar expediente KYC del cliente")
+        # Recomendaciones
+        texto.append("RECOMENDACIONES:")
+        for i, rec in enumerate(explicacion['recomendaciones'], 1):
+            texto.append(f"  {i}. {rec}")
         
-        return acciones if acciones else ["✅ No se requieren acciones adicionales"]
+        return "\n".join(texto)
 
 
-# =====================================================
-# EJEMPLO DE USO EN PORTAL
-# =====================================================
-
-def enriquecer_para_portal(df: pd.DataFrame, probabilidades_dict: Dict = None) -> pd.DataFrame:
-    """
-    Enriquece DataFrame con metadata de explicabilidad para mostrar en portal
+def demo_explicabilidad():
+    """Función de demostración del sistema de explicabilidad"""
     
-    Args:
-        df: DataFrame con resultados del modelo
-        probabilidades_dict: {index: {clase: probabilidad}} (opcional)
+    print("="*70)
+    print("DEMO: Sistema de Explicabilidad TarantulaHawk")
+    print("="*70)
     
-    Returns:
-        DataFrame con columnas adicionales para el portal
-    """
+    # Crear explicador
+    explainer = TransactionExplainer()
     
-    explainer = TransactionExplainer(umbral_confianza_bajo=0.65)
+    # Ejemplo 1: Transacción preocupante
+    txn1 = pd.Series({
+        "cliente_id": "CLI-12345",
+        "monto": 350000,
+        "clasificacion": "preocupante",
+        "es_nocturno": 0,
+        "fin_de_semana": 0,
+        "EsEfectivo": 1,
+        "EsInternacional": 0,
+        "es_monto_redondo": 1,
+        "ops_6m": 5,
+        "monto_6m": 450000,
+        "ratio_vs_promedio": 4.2
+    })
     
-    metadata_list = []
+    triggers1 = ["guardrail_aviso_umbral", "inusual_efectivo_redondo"]
+    exp1 = explainer.explicar_transaccion(txn1, 0.85, triggers1)
     
-    for idx, row in df.iterrows():
-        # Obtener probabilidades si existen
-        probas = probabilidades_dict.get(idx) if probabilidades_dict else None
-        
-        # Obtener triggers (desde columna razones o recalcular)
-        razones_str = str(row.get('razones', ''))
-        triggers = razones_str.split('; ') if razones_str else []
-        
-        # Generar explicación
-        metadata = explainer.explicar_transaccion(row, probas, triggers)
-        metadata_list.append(metadata)
+    print("\n" + "="*70)
+    print("EJEMPLO 1: Transacción Preocupante")
+    print("="*70)
+    print(explainer.generar_texto_explicacion(exp1))
     
-    # Agregar columnas al DataFrame
-    df['score_confianza'] = [m['score_confianza'] for m in metadata_list]
-    df['nivel_confianza'] = [m['nivel_confianza'] for m in metadata_list]
-    df['explicacion_principal'] = [m['explicacion_principal'] for m in metadata_list]
-    df['requiere_revision_manual'] = [m['flags']['requiere_revision_manual'] for m in metadata_list]
-    df['sugerir_reclasificacion'] = [m['flags']['sugerir_reclasificacion'] for m in metadata_list]
-    df['num_alertas'] = [len(m['flags']['alertas']) for m in metadata_list]
+    # Ejemplo 2: Transacción inusual
+    txn2 = pd.Series({
+        "cliente_id": "CLI-67890",
+        "monto": 125000,
+        "clasificacion": "inusual",
+        "es_nocturno": 1,
+        "fin_de_semana": 1,
+        "EsEfectivo": 0,
+        "EsInternacional": 1,
+        "es_monto_redondo": 0,
+        "ops_6m": 15,
+        "monto_6m": 250000,
+        "ratio_vs_promedio": 2.1
+    })
     
-    # Guardar metadata completa en JSON para frontend
-    df['metadata_json'] = [metadata_list[i] for i in range(len(metadata_list))]
+    triggers2 = ["inusual_monto_rango_alto", "inusual_nocturno", "inusual_fin_semana"]
+    exp2 = explainer.explicar_transaccion(txn2, 0.62, triggers2)
     
-    return df
+    print("\n" + "="*70)
+    print("EJEMPLO 2: Transacción Inusual")
+    print("="*70)
+    print(explainer.generar_texto_explicacion(exp2))
+    
+    # Resumen batch
+    print("\n" + "="*70)
+    print("RESUMEN BATCH")
+    print("="*70)
+    
+    resumen = explainer.generar_resumen_batch([exp1, exp2])
+    import json
+    print(json.dumps(resumen, indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":
-    # Test
-    import json
-    
-    # Cargar ejemplo
-    df_test = pd.DataFrame({
-        'cliente_id': ['CLT001'],
-        'monto': [120000],
-        'clasificacion': ['relevante'],
-        'origen': ['ml'],
-        'fue_corregido_por_guardrail': [False],
-        'tipo_operacion': ['transferencia_nacional'],
-        'sector_actividad': ['joyeria_metales'],
-        'fraccion': ['XI_joyeria'],
-        'EsEfectivo': [0],
-        'EsInternacional': [0],
-        'es_nocturno': [1],
-        'fin_de_semana': [0],
-        'ops_6m': [1],
-        'razones': ['Nocturno Finsemana Alto']
-    })
-    
-    explainer = TransactionExplainer()
-    
-    metadata = explainer.explicar_transaccion(
-        df_test.iloc[0],
-        probabilidades={'relevante': 0.68, 'inusual': 0.25, 'preocupante': 0.07},
-        triggers=['inusual_nocturno_finsemana_alto', 'inusual_monto_alto']
-    )
-    
-    print("="*70)
-    print("🧪 EJEMPLO DE EXPLICACIÓN COMPLETA")
-    print("="*70)
-    print(json.dumps(metadata, indent=2, ensure_ascii=False))
+    demo_explicabilidad()

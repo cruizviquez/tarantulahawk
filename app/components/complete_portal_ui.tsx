@@ -92,7 +92,7 @@ interface AnalysisTransaction {
   risk_score: number;
   razones?: string[];
   // 🆕 Campos de Explicabilidad
-  score_confianza?: number;
+  score_ebr?: number;
   nivel_confianza?: 'alta' | 'media' | 'baja';
   explicacion_principal?: string;
   explicacion_detallada?: string;
@@ -1511,7 +1511,7 @@ return (
                         <th className="text-left py-2 pr-4">{language === 'es' ? 'Monto' : 'Amount'}</th>
                         <th className="text-left py-2 pr-4">{language === 'es' ? 'Tipo' : 'Type'}</th>
                         <th className="text-left py-2 pr-4">{language === 'es' ? 'Sector' : 'Sector'}</th>
-                        <th className="text-left py-2 pr-4">{language === 'es' ? 'Confianza' : 'Confidence'}</th>
+                        <th className="text-left py-2 pr-4">{language === 'es' ? 'Score EBR' : 'EBR Score'}</th>
                         <th className="text-left py-2 pr-4">{language === 'es' ? 'Explicación' : 'Explanation'}</th>
                         <th className="text-center py-2">{language === 'es' ? 'Detalles' : 'Details'}</th>
                       </tr>
@@ -1521,22 +1521,20 @@ return (
                         .filter((t: AnalysisTransaction) => t.clasificacion === classificationFilter)
                         .slice(0, 100)
                         .map((tx: AnalysisTransaction) => {
-                          const confianza = tx.score_confianza || (tx.risk_score ? tx.risk_score / 10 : 0.7);
-                          const nivel = tx.nivel_confianza || (confianza >= 0.85 ? 'alta' : confianza >= 0.65 ? 'media' : 'baja');
-                          const confianzaColor = nivel === 'alta' ? 'text-emerald-400 bg-emerald-500/10' : nivel === 'media' ? 'text-yellow-400 bg-yellow-500/10' : 'text-red-400 bg-red-500/10';
+                          const scoreEbr = tx.score_ebr ?? 0.0;
+                          const nivel = tx.nivel_confianza || (scoreEbr >= 0.85 ? 'alta' : scoreEbr >= 0.65 ? 'media' : 'baja');
                           const requiereRevision = tx.flags?.requiere_revision_manual;
-                          
                           return (
                             <tr key={tx.id} className="border-b border-gray-900 hover:bg-gray-800/40 cursor-pointer">
                               <td className="py-2 pr-4 font-mono text-xs">{tx.id}</td>
-                              <td className="py-2 pr-4">{tx.fecha}</td>
+                              <td className="py-2 pr-4">{tx.fecha}{tx.hora ? ` ${tx.hora}` : ''}</td>
                               <td className="py-2 pr-4 font-mono">${tx.monto.toLocaleString()}</td>
                               <td className="py-2 pr-4">{tx.tipo_operacion}</td>
                               <td className="py-2 pr-4">{tx.sector_actividad}</td>
                               <td className="py-2 pr-4">
                                 <div className="flex items-center gap-2">
-                                  <span className={`px-2 py-0.5 rounded text-xs font-semibold ${confianzaColor}`}>
-                                    {(confianza * 100).toFixed(0)}%
+                                  <span className="px-2 py-0.5 rounded text-xs font-semibold bg-white/10 text-white">
+                                    {scoreEbr.toFixed(2)}
                                   </span>
                                   {requiereRevision && (
                                     <span className="text-yellow-400" title={language === 'es' ? 'Requiere revisión manual' : 'Requires manual review'}>
@@ -1875,49 +1873,35 @@ return (
             </div>
 
             <div className="p-6 space-y-6">
-              {/* Score de Confianza */}
+              {/* Score EBR */}
               <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5">
                 <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-lg font-semibold text-teal-400">{language === 'es' ? 'Score de Confianza' : 'Confidence Score'}</h4>
+                  <h4 className="text-lg font-semibold text-teal-400">{language === 'es' ? 'Score EBR' : 'EBR Score'}</h4>
                   <div className="flex items-center gap-3">
-                    <span className={`px-4 py-2 rounded-lg text-xl font-bold ${
-                      (selectedTransaction.nivel_confianza === 'alta') ? 'bg-emerald-500/20 text-emerald-400' :
-                      (selectedTransaction.nivel_confianza === 'media') ? 'bg-yellow-500/20 text-yellow-400' :
-                      'bg-red-500/20 text-red-400'
-                    }`}>
-                      {selectedTransaction.score_confianza ? `${(selectedTransaction.score_confianza * 100).toFixed(1)}%` : 'N/A'}
+                    <span className="px-4 py-2 rounded-lg text-xl font-bold bg-white/10 text-white">
+                      {selectedTransaction.score_ebr !== undefined ? selectedTransaction.score_ebr.toFixed(2) : 'N/A'}
                     </span>
-                    <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                      (selectedTransaction.nivel_confianza === 'alta') ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' :
-                      (selectedTransaction.nivel_confianza === 'media') ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/30' :
-                      'bg-red-500/10 text-red-400 border border-red-500/30'
-                    }`}>
-                      {selectedTransaction.nivel_confianza === 'alta' ? (language === 'es' ? 'Alta' : 'High') :
-                       selectedTransaction.nivel_confianza === 'media' ? (language === 'es' ? 'Media' : 'Medium') :
-                       (language === 'es' ? 'Baja' : 'Low')}
+                    <span className="px-3 py-1 rounded-full text-sm font-semibold bg-white/10 text-white border border-white/20">
+                      {selectedTransaction.nivel_confianza ? (language === 'es' ? `Confianza: ${selectedTransaction.nivel_confianza}` : `Confidence: ${selectedTransaction.nivel_confianza}`) : ''}
                     </span>
                   </div>
                 </div>
               </div>
 
               {/* Explicación Principal */}
-              {selectedTransaction.explicacion_principal && (
-                <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-5">
-                  <h4 className="text-lg font-semibold text-blue-400 mb-2 flex items-center gap-2">
-                    <AlertCircle className="w-5 h-5" />
-                    {language === 'es' ? 'Explicación Principal' : 'Main Explanation'}
-                  </h4>
-                  <p className="text-gray-300 leading-relaxed">{selectedTransaction.explicacion_principal}</p>
-                </div>
-              )}
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-xl p-5">
+                <h4 className="text-lg font-semibold text-blue-400 mb-2 flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5" />
+                  {language === 'es' ? 'Explicación Principal' : 'Main Explanation'}
+                </h4>
+                <p className="text-gray-300 leading-relaxed">{selectedTransaction.explicacion_principal || '-'}</p>
+              </div>
 
               {/* Explicación Detallada */}
-              {selectedTransaction.explicacion_detallada && (
-                <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5">
-                  <h4 className="text-lg font-semibold text-gray-300 mb-3">{language === 'es' ? 'Explicación Detallada' : 'Detailed Explanation'}</h4>
-                  <p className="text-gray-400 leading-relaxed whitespace-pre-line">{selectedTransaction.explicacion_detallada}</p>
-                </div>
-              )}
+              <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5">
+                <h4 className="text-lg font-semibold text-gray-300 mb-3">{language === 'es' ? 'Explicación Detallada' : 'Detailed Explanation'}</h4>
+                <p className="text-gray-400 leading-relaxed whitespace-pre-line">{selectedTransaction.explicacion_detallada || '-'}</p>
+              </div>
 
               {/* Flags de Revisión */}
               {selectedTransaction.flags && (selectedTransaction.flags.requiere_revision_manual || selectedTransaction.flags.sugerir_reclasificacion || selectedTransaction.flags.alertas.length > 0) && (
