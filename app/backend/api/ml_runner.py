@@ -1,421 +1,348 @@
-# ml_runner.py
-# ==========================================================
-# Runner ML con enfoque basado en riesgos (LFPIORPI):
-# - Carga modelo supervisado (bundle .pkl) y, si existe, no supervisado (.pkl)
-# - Aplica matriz de ponderación de riesgo configurable
-# - Aplica guardrails normativos (UMAs, fracción, efectivo, acumulado 6m)
-# - Genera JSON de metadata compatible con la UI del portal
-#   (ver ejemplo de esquema que ya usas)  --> outputs/enriched/processed/<analysis_id>_metadata.json
-# ==========================================================
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+ml_runner.py - VERSIÓN FINAL CORREGIDA
+
+✅ CORRECCIONES APLICADAS:
+1. Triggers granulares (nocturno y fin_semana separados)
+2. Trigger de monto en rango alto ($100k-umbral)
+3. Lógica inusual: 1 trigger + monto alto = inusual
+4. Score EBR (Enfoque Basado en Riesgos) en lugar de confianza ML
+5. Sistema de explicabilidad completo
+
+Procesa archivos de outputs/enriched/pending/*.csv usando TarantulaHawkPredictor.
+"""
 
 import os
+import sys
 import json
-import uuid
-import argparse
+import shutil
+import traceback
 from pathlib import Path
 from datetime import datetime
-
-import numpy as np
+from collections import Counter
 import pandas as pd
+import numpy as np
 
-# Evitar warnings de loky en Windows
-os.environ.setdefault("LOKY_MAX_CPU_COUNT", "8")
+# Importar predictor adaptativo
+sys.path.insert(0, str(Path(__file__).parent))
+from predictor_adaptive import TarantulaHawkAdaptivePredictor
+from explicabilidad_transactions import TransactionExplainer
 
-# -------------------- utils de logging --------------------
-def log(msg: str):
-    print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
+# Paths
+BASE_DIR = Path(__file__).parent.parent
+PENDING_DIR = BASE_DIR / "outputs" / "enriched" / "pending"
+PROCESSED_DIR = BASE_DIR / "outputs" / "enriched" / "processed"
+FAILED_DIR = BASE_DIR / "outputs" / "enriched" / "failed"
 
-# -------------------- paths helpers -----------------------
-def resolve_path(p: str) -> str:
-    if not p:
-        return p
-    p = p.replace("\\", "/")
-    if os.path.isabs(p):
-        return p
-    return os.path.join(os.getcwd(), p)
+for d in [PENDING_DIR, PROCESSED_DIR, FAILED_DIR]:
+    d.mkdir(parents=True, exist_ok=True)
 
-# -------------------- carga config ------------------------
-def load_config(cfg_path: str) -> dict:
-    cfg_path = resolve_path(cfg_path)
-    if os.path.exists(cfg_path):
-        with open(cfg_path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    # default mínima si no hay config
-    return {
-        "paths": {
-            "dataset_enriched_path": "app/backend/uploads/enriched/dataset_pld_lfpiorpi_50000_enriched.csv",
-            "outputs_dir": "app/backend/outputs",
-            "supervised_bundle": "app/backend/outputs/modelo_ensemble_stack.pkl",
-            "unsupervised_bundle": "app/backend/outputs/no_supervisado_bundle.pkl"
-        },
-        "uma": {
-            "valor_diario_mxn": 108.57,  # EJEMPLO 2025; ajusta si lo deseas
-            "factor_umbral_aviso": 3210, # e.g. joyería
-            "factor_limite_efectivo": 3210
-        },
-        "guardrails": {
-            "usar_guardrails": True,
-            "obligatorio_preocupante_si_supera_umbral": True,
-            "obligatorio_inusual_si_quiere_decir_algo": True
-        },
-        "risk_matrix": {
-            "base_weights": {
-                "relevante": 0.2,
-                "inusual": 0.6,
-                "preocupante": 1.0
-            },
-            "feature_multipliers": {
-                "EsEfectivo": 1.15,
-                "EsInternacional": 1.15,
-                "SectorAltoRiesgo": 1.10,
-                "Acum6mAlcanzaAviso": 1.20
-            },
-            "anomalia_boost": 1.25,    # si no-superv marca anómala
-            "max_clip": 1.0
-        },
-        "thresholds": {
-            "preocupante": 0.30,
-            "inusual": 0.30
-        }
-    }
+def log(msg):
+    ts = datetime.now().strftime("%H:%M:%S")
+    print(f"[{ts}] {msg}", flush=True)
 
-# -------------------- UMA helpers -------------------------
-def compute_umbral_limites(cfg: dict, fraccion: str, efectivo: int):
-    """
-    Calcula umbrales por UMA. Si tuvieras una tabla por fracción, podrías especializar aquí.
-    Por simplicidad usamos factores del cfg y regresamos tuplas (umbral_aviso_mxn, limite_efectivo_mxn).
-    """
-    uma = cfg.get("uma", {})
-    valor = float(uma.get("valor_diario_mxn", 108.57))
-    fac_aviso = float(uma.get("factor_umbral_aviso", 3210))
-    fac_efec = float(uma.get("factor_limite_efectivo", 3210))
-    umbral_aviso = valor * fac_aviso
-    limite_efectivo = valor * fac_efec if efectivo == 1 else np.inf
-    return umbral_aviso, limite_efectivo
-
-# -------------------- guardrails --------------------------
-def apply_guardrails(row: pd.Series, cfg: dict, pred_label: str) -> (str, list):
-    """
-    Si supera umbral_normativo → forzar 'preocupante'.
-    También puedes introducir otras reglas duras si quieres.
-    Devuelve (label_final, alertas[])
-    """
-    alertas = []
-    if not cfg.get("guardrails", {}).get("usar_guardrails", True):
-        return pred_label, alertas
-
-    monto = float(row.get("monto", 0.0))
-    fraccion = row.get("fraccion", "")
-    efectivo = int(row.get("EsEfectivo", 0))
-
-    umbral_aviso_mxn, limite_efectivo_mxn = compute_umbral_limites(cfg, fraccion, efectivo)
-
-    # Hard rule: si excede umbral → preocupante
-    if monto >= umbral_aviso_mxn and cfg["guardrails"].get("obligatorio_preocupante_si_supera_umbral", True):
-        alertas.append({
-            "tipo": "umbral_normativo",
-            "severidad": "warning",
-            "mensaje": "Monto supera umbral LFPIORPI; clasificación forzada a PREOCUPANTE."
-        })
-        return "preocupante", alertas
-
-    # Hard rule: efectivo por arriba del límite (si aplica)
-    if efectivo == 1 and monto >= limite_efectivo_mxn and np.isfinite(limite_efectivo_mxn):
-        alertas.append({
-            "tipo": "limite_efectivo",
-            "severidad": "warning",
-            "mensaje": "Operación en efectivo supera límite LFPIORPI; revisar aviso."
-        })
-        # no forzamos la clase si no definimos tal regla, sólo advertimos
-        # si quieres forzar: return "preocupante", alertas
-
-    return pred_label, alertas
-
-# -------------------- riesgo por ponderación ----------------
-def risk_weighted_label(row: pd.Series, proba: dict, is_anomaly: bool, cfg: dict):
-    """
-    Construye un score ponderado por clase a partir de:
-      - probabilidades del ensemble
-      - multiplicadores por features regulatorias
-      - boost si anómala
-    Resultado: clase final, score_confianza [0..1]
-    """
-    rm = cfg.get("risk_matrix", {})
-    base = rm.get("base_weights", {"relevante": 0.2, "inusual": 0.6, "preocupante": 1.0})
-    mult = rm.get("feature_multipliers", {})
-    anom_boost = float(rm.get("anomalia_boost", 1.25))
-    max_clip = float(rm.get("max_clip", 1.0))
-
-    # Probabilidades
-    p_rel = float(proba.get("relevante", 0.0))
-    p_inu = float(proba.get("inusual", 0.0))
-    p_pre = float(proba.get("preocupante", 0.0))
-
-    # Multiplicadores por señales (si existen)
-    m = 1.0
-    for col, fac in mult.items():
-        val = float(row.get(col, 0.0))
-        if val >= 1.0:  # binaria
-            m *= float(fac)
-
-    if is_anomaly:
-        m *= anom_boost
-
-    # Score ponderado por clase
-    score_rel = p_rel * base.get("relevante", 0.2) * m
-    score_inu = p_inu * base.get("inusual", 0.6) * m
-    score_pre = p_pre * base.get("preocupante", 1.0) * m
-
-    # Clip general (opcional)
-    score_rel = min(score_rel, max_clip)
-    score_inu = min(score_inu, max_clip)
-    score_pre = min(score_pre, max_clip)
-
-    # clase por score mayor
-    scores = {
-        "relevante": score_rel,
-        "inusual": score_inu,
-        "preocupante": score_pre
-    }
-    final_label = max(scores, key=scores.get)
-    # “confianza” = score normalizado entre 0..1
-    total = score_rel + score_inu + score_pre
-    conf = (scores[final_label] / total) if total > 0 else 0.5
-    return final_label, float(conf)
-
-# -------------------- explicabilidad mínima ----------------
-def redact_explanations(row: pd.Series, label: str, conf: float, proba: dict, alertas: list, cfg: dict):
-    """
-    Redacta ‘explicacion_principal’, ‘explicacion_detallada’, ‘razones’,
-    ‘contexto_regulatorio’, ‘acciones_sugeridas’ alineado al esquema de tu UI.
-    """
-    monto = float(row.get("monto", 0.0))
-    tipo = str(row.get("tipo_operacion", ""))
-    frac = str(row.get("fraccion", ""))
-    sector = str(row.get("sector_actividad", ""))
-    efectivo = int(row.get("EsEfectivo", 0))
-
-    # contexto regulatorio por UMA
-    umbral_aviso, limite_efectivo = compute_umbral_limites(cfg, frac, efectivo)
-    pct = 0.0 if umbral_aviso <= 0 else (monto / umbral_aviso) * 100.0
-
-    contexto = (
-        f"**Fracción {frac or 'N/A'}**\n"
-        f"Umbral de aviso: ${umbral_aviso:,.2f} MXN\n"
-        f"Límite efectivo: ${limite_efectivo:,.2f} MXN\n"
-        f"Base legal: Art. 17 LFPIORPI - Actividades Vulnerables\n\n"
-        f"Monto representa el {pct:.1f}% del umbral de aviso."
-    )
-
-    razones = []
-    if int(row.get("EsInternacional", 0)) == 1:
-        razones.append("Transferencia Internacional")
-    if efectivo == 1:
-        razones.append("Operación en efectivo")
-    if int(row.get("SectorAltoRiesgo", 0)) == 1:
-        razones.append("Sector catalogado de alto riesgo")
-    if int(row.get("Acum6mAlcanzaAviso", 0)) == 1:
-        razones.append("Acumulado 6m alcanza umbral de aviso")
-
-    # explicación principal
-    expl_p = (
-        f"Clasificación '{label}' con confianza {conf*100:.0f}%."
-        f" Tipo: {tipo}; Sector: {sector}; Monto: ${monto:,.2f}."
-    )
-    if alertas:
-        expl_p += " (Se aplicaron reglas normativas)."
-
-    # detallada
-    expl_d = (
-        f"Probabilidades del ensemble → "
-        f"Relevante={proba.get('relevante', 0):.2f}, "
-        f"Inusual={proba.get('inusual', 0):.2f}, "
-        f"Preocupante={proba.get('preocupante', 0):.2f}.\n"
-        f"Se consideraron señales LFPIORPI (efectivo, transferencias internacionales, sector, acumulado 6m)."
-    )
-
-    acciones = []
-    if label == "preocupante":
-        acciones += ["📤 Preparar aviso a la UIF", "🔍 Verificar documentación soporte", "👤 Validar identidad y BF"]
-    elif label == "inusual":
-        acciones += ["👁️ Revisión manual", "📋 Documentar hallazgos", "🔎 Revisar perfil transaccional"]
-    else:
-        acciones += ["✔️ Operación dentro de perfil; monitoreo continuo"]
-
-    # confianza → nivel
-    if conf >= 0.85:
-        nivel = "alta"
-    elif conf >= 0.65:
-        nivel = "media"
-    else:
-        nivel = "baja"
-
-    flags = {
-        "requiere_revision_manual": (label != "relevante") or (nivel == "baja"),
-        "sugerir_reclasificacion": (nivel == "baja"),
-        "alertas": alertas
-    }
-
-    return expl_p, expl_d, razones, contexto, acciones, nivel
-
-# -------------------- carga de bundles ---------------------
-def try_load_pickle(p):
-    import pickle
-    p = resolve_path(p)
-    if os.path.exists(p):
-        with open(p, "rb") as f:
-            return pickle.load(f)
-    return None
-
-# ==========================================================
-# MAIN
-# ==========================================================
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--config", default="app/backend/models/config_modelos.json")
-    ap.add_argument("--input", default=None, help="CSV enriquecido; si no se da, se toma de config")
-    ap.add_argument("--analysis-id", default=None)
-    args = ap.parse_args()
-
-    cfg = load_config(args.config)
-    paths = cfg.get("paths", {})
-    dataset_path = resolve_path(args.input or paths.get("dataset_enriched_path", "app/backend/uploads/enriched/dataset_pld_lfpiorpi_50000_enriched.csv"))
-    outputs_dir = resolve_path(paths.get("outputs_dir", "app/backend/outputs"))
-    sup_bundle_path = resolve_path(paths.get("supervised_bundle", "app/backend/outputs/modelo_ensemble_stack.pkl"))
-    unsup_bundle_path = resolve_path(paths.get("unsupervised_bundle", "app/backend/outputs/no_supervisado_bundle.pkl"))
-
-    log("Runner ML (enfoque basado en riesgos)")
-    log(f"dataset: {dataset_path}")
-    log(f"outputs: {outputs_dir}")
-
-    # Carga dataset
-    if not os.path.exists(dataset_path):
-        raise FileNotFoundError(f"CSV no existe: {dataset_path}")
-    df = pd.read_csv(dataset_path)
-    log(f"Rows: {len(df):,}")
-
-    # Carga bundle supervisado
-    bundle = try_load_pickle(sup_bundle_path)
-    if bundle is None:
-        raise RuntimeError(f"No se encontró el bundle supervisado: {sup_bundle_path}")
-
-    model = bundle["model"]
-    scaler = bundle["scaler"]
-    feature_cols = bundle["feature_cols"]
-    class_mapping = bundle["class_mapping"]  # e.g. {'relevante':0,'inusual':1,'preocupante':2}
-    inv_mapping = {v: k for k, v in class_mapping.items()}
-
-    # Selección/One-hot igual que el entrenamiento
-    # (repite el pipeline que usaste al entrenar)
-    X_raw = df.drop(columns=["clasificacion_lfpiorpi"], errors="ignore").copy()
-    X_raw = X_raw.drop(columns=["cliente_id", "fecha", "fecha_dt"], errors="ignore")
-    cat_cols = [c for c in ["tipo_operacion", "sector_actividad", "fraccion"] if c in X_raw.columns]
-    X = pd.get_dummies(X_raw, columns=cat_cols, drop_first=True, dtype=float)
-
-    # Alinear a feature_cols
-    for c in feature_cols:
-        if c not in X.columns:
-            X[c] = 0.0
-    X = X[feature_cols]
-
-    # Sanitizar
-    X.replace([np.inf, -np.inf], np.nan, inplace=True)
-    X.fillna(0, inplace=True)
-
-    # Escalar
-    X_scaled = scaler.transform(X)
-
-    # Probabilidades del ensemble
-    proba = model.predict_proba(X_scaled)  # shape (n, 3)
-    # por fila, construir dict de clases
-    # Además, intentar marcar anomalía usando bundle (si existe)
-    unsup = try_load_pickle(unsup_bundle_path)
-    if unsup is not None:
-        try:
-            # si el no-supervisado guardó scaler/cols, alineamos
-            u_scaler = unsup.get("scaler", None)
-            u_cols = unsup.get("feature_cols", feature_cols)
-            Xu = X.copy()
-            for c in u_cols:
-                if c not in Xu.columns:
-                    Xu[c] = 0.0
-            Xu = Xu[u_cols]
-            if u_scaler is not None:
-                Xu = u_scaler.transform(Xu)
-            anom_scores = unsup["model"].decision_function(Xu)  # IsolationForest: menor → más anómalo
-            # umbral heurístico: percentil 2% más bajo
-            cut = np.percentile(anom_scores, 2.0)
-            is_anomaly = (anom_scores <= cut)
-        except Exception:
-            is_anomaly = np.zeros(len(df), dtype=bool)
-    else:
-        is_anomaly = np.zeros(len(df), dtype=bool)
-
-    # Thresholds (por si quieres usarlos en flags, no en la decisión final ponderada)
-    thr_p = float(cfg.get("thresholds", {}).get("preocupante", 0.3))
-    thr_i = float(cfg.get("thresholds", {}).get("inusual", 0.3))
-
-    # Construcción de metadata
-    records = []
-    for i, row in df.iterrows():
-        p = proba[i]
-        p_dict = {inv_mapping[j]: float(p[j]) for j in range(len(p))}
-        # etiqueta por mayor prob antes de ponderar (solo informativa)
-        base_pred = max(p_dict, key=p_dict.get)
-
-        # etiqueta ponderada por riesgo (propuesta EBR)
-        label_ebr, conf = risk_weighted_label(row, p_dict, bool(is_anomaly[i]), cfg)
-
-        # aplicar guardrails normativos (puede forzar)
-        final_label, alertas = apply_guardrails(row, cfg, label_ebr)
-
-        expl_p, expl_d, razones, contexto, acciones, nivel = redact_explanations(
-            row, final_label, conf, p_dict, alertas, cfg
+def process_file(csv_path: Path, predictor: TarantulaHawkAdaptivePredictor) -> bool:
+    """Procesa CSV enriquecido y genera resultados con Score EBR"""
+    
+    analysis_id = csv_path.stem
+    log(f"\n{'='*70}")
+    log(f"📄 Procesando: {csv_path.name}")
+    log(f"{'='*70}")
+    
+    try:
+        df = pd.read_csv(csv_path)
+        log(f"   Cargado: {len(df)} filas, {len(df.columns)} columnas")
+        
+        cliente_ids_originales = df["cliente_id"].copy() if "cliente_id" in df.columns else None
+        
+        # Ejecutar predictor
+        log(f"\n   🤖 Ejecutando TarantulaHawk Adaptive Predictor...")
+        predictions, probas, meta_pred = predictor.predict_adaptive(
+            df, return_probas=True, return_metadata=True
         )
-
-        record = {
-            "index": int(i),
-            "cliente_id": str(row.get("cliente_id", f"IDX{i}")),
-            "score_confianza": round(conf, 4),
-            "nivel_confianza": nivel,
-            "clasificacion": final_label,
-            "origen": "ml" if not alertas else "normativo",
-            "explicacion_principal": expl_p,
-            "explicacion_detallada": expl_d,
-            "razones": razones,
-            "flags": {
-                "requiere_revision_manual": bool((final_label != "relevante") or (nivel == "baja")),
-                "sugerir_reclasificacion": bool(nivel == "baja"),
-                "alertas": alertas
+        
+        # Clasificación
+        preocupante = (predictions == "preocupante").sum()
+        inusual = (predictions == "inusual").sum()
+        relevante = (predictions == "relevante").sum()
+        total = len(predictions)
+        
+        log(f"\n   📊 CLASIFICACIÓN:")
+        log(f"      🔴 Preocupante: {preocupante} ({preocupante/total*100:.1f}%)")
+        log(f"      🟠 Inusual: {inusual} ({inusual/total*100:.1f}%)")
+        log(f"      🟡 Relevante: {relevante} ({relevante/total*100:.1f}%)")
+        
+        guardrails_count = meta_pred.get("guardrails_applied", 0) if isinstance(meta_pred, dict) else 0
+        log(f"      🛡️  Guardrails aplicados: {guardrails_count}")
+        
+        # ✅ CALCULAR SCORE EBR (no confianza ML)
+        log(f"\n   📊 Calculando Score EBR (Enfoque Basado en Riesgos)...")
+        scores_ebr = []
+        for idx, row in df.iterrows():
+            triggers = predictor._get_rule_triggers(row, df) if hasattr(predictor, "_get_rule_triggers") else []
+            score = predictor.calcular_score_ebr(row, triggers, df) if hasattr(predictor, "calcular_score_ebr") else 0.5
+            scores_ebr.append(score)
+        
+        scores_ebr = np.array(scores_ebr)
+        
+        # Generar transacciones para JSON
+        transacciones = []
+        strategy = str(meta_pred.get("strategy", "unknown")) if isinstance(meta_pred, dict) else "unknown"
+        
+        classes = None
+        if probas is not None and getattr(predictor, "model", None) is not None:
+            try:
+                classes = predictor.model.classes_
+            except Exception:
+                pass
+        
+        for i in range(min(100, len(df))):
+            row = df.iloc[i]
+            pred = predictions[i]
+            
+            proba_dict = {}
+            if probas is not None and classes is not None:
+                proba_dict = {cls: float(probas[i, j]) for j, cls in enumerate(classes)}
+            
+            triggers = predictor._get_rule_triggers(row, df) if hasattr(predictor, "_get_rule_triggers") else []
+            
+            # Determinar origen
+            fue_corregido = any(t.startswith("guardrail_") for t in triggers)
+            if fue_corregido:
+                origen = "normativo"
+            elif strategy == "rule_based":
+                origen = "reglas"
+            else:
+                origen = "ml"
+            
+            razones_lista = []
+            for t in triggers[:3]:
+                if t.startswith("guardrail_"):
+                    razones_lista.append("Umbral normativo LFPIORPI")
+                elif t.startswith("inusual_"):
+                    razones_lista.append(t.replace("inusual_", "").replace("_", " ").title())
+                else:
+                    razones_lista.append(t.replace("_", " ").title())
+            
+            transacciones.append({
+                "id": str(row.get("cliente_id", f"TXN-{i+1:05d}")),
+                "monto": float(row.get("monto", 0)),
+                "fecha": str(row.get("fecha", "")),
+                "tipo_operacion": str(row.get("tipo_operacion", "")),
+                "sector_actividad": str(row.get("sector_actividad", "")),
+                "clasificacion": pred,
+                "probabilidades": proba_dict,
+                "score_ebr": float(scores_ebr[i]),  # ✅ Score EBR
+                "razones": razones_lista,
+                "triggers": triggers,
+                "origen": origen
+            })
+        
+        # Guardar JSON
+        output_json = PROCESSED_DIR / f"{analysis_id}.json"
+        results = {
+            "success": True,
+            "analysis_id": analysis_id,
+            "timestamp": datetime.now().isoformat(),
+            "resumen": {
+                "total_transacciones": int(total),
+                "preocupante": int(preocupante),
+                "inusual": int(inusual),
+                "relevante": int(relevante),
+                "estrategia": strategy,
+                "score_ebr_promedio": float(scores_ebr.mean()),
+                "indicadores": {
+                    "guardrails_aplicados": int(guardrails_count),
+                }
             },
-            "contexto_regulatorio": contexto,
-            "acciones_sugeridas": acciones
+            "transacciones": transacciones
         }
-        records.append(record)
+        
+        with open(output_json, 'w', encoding='utf-8') as f:
+            json.dump(results, f, indent=2, ensure_ascii=False)
+        
+        log(f"\n✅ Resultados guardados: {output_json.name}")
+        
+        # Guardar CSV
+        if cliente_ids_originales is not None and "cliente_id" not in df.columns:
+            df.insert(0, "cliente_id", cliente_ids_originales)
+        
+        df["clasificacion"] = predictions
+        df["score_ebr"] = scores_ebr  # ✅ Score EBR en CSV
+        
+        # Detectar guardrails
+        def fue_corregido_por_guardrail(row):
+            fraccion = str(row.get('fraccion', '_'))
+            monto = float(row.get('monto', 0))
+            es_efectivo = int(row.get('EsEfectivo', 0))
+            monto_6m = float(row.get('monto_6m', 0))
+            clasificacion = str(row.get('clasificacion', ''))
+            
+            if clasificacion != 'preocupante':
+                return False
+            
+            UMA = predictor.UMA
+            umbral_aviso = predictor._get_umbral_mxn(fraccion, "aviso_UMA")
+            umbral_efectivo = predictor._get_umbral_mxn(fraccion, "efectivo_max_UMA")
+            
+            if monto >= umbral_aviso:
+                return True
+            if es_efectivo == 1 and monto >= umbral_efectivo:
+                return True
+            if monto < umbral_aviso and monto_6m >= umbral_aviso:
+                return True
+            
+            return False
+        
+        df["fue_corregido_por_guardrail"] = df.apply(fue_corregido_por_guardrail, axis=1)
+        
+        # Determinar origen
+        def determinar_origen(row):
+            if row['fue_corregido_por_guardrail']:
+                return "normativo"
+            if strategy == "rule_based":
+                return "reglas"
+            return "ml"
+        
+        df["origen"] = df.apply(determinar_origen, axis=1)
+        
+        # Razones
+        def get_razones(row_idx):
+            row = df.iloc[row_idx]
+            if row['fue_corregido_por_guardrail']:
+                return "Umbral normativo LFPIORPI"
+            
+            triggers = predictor._get_rule_triggers(row, df) if hasattr(predictor, "_get_rule_triggers") else []
+            razones = []
+            for t in triggers[:3]:
+                if t.startswith("inusual_"):
+                    razones.append(t.replace("inusual_", "").replace("_", " ").title())
+                else:
+                    razones.append(t.replace("_", " ").title())
+            return "; ".join(razones) if razones else ""
+        
+        df["razones"] = [get_razones(i) for i in range(len(df))]
+        
+        n_guardrails = int(df["fue_corregido_por_guardrail"].sum())
+        
+        log(f"   ✅ Clasificación final (con guardrails LFPIORPI) aplicada")
+        log(f"   🛡️  Guardrails aplicaron: {n_guardrails} transacciones")
+        log(f"   📊 Distribución por origen: {Counter(df['origen'])}")
+        log(f"   📈 Score EBR promedio: {scores_ebr.mean():.3f}")
+        
+        # ✅ SISTEMA DE EXPLICABILIDAD
+        log(f"\n   🔍 Generando metadata de explicabilidad...")
+        
+        explainer = TransactionExplainer(umbral_confianza_bajo=0.4)
+        metadata_list = []
+        
+        for idx, row in df.iterrows():
+            triggers = predictor._get_rule_triggers(row, df) if hasattr(predictor, "_get_rule_triggers") else []
+            
+            # Aquí el "score" es EBR, no confianza ML
+            metadata = explainer.explicar_transaccion(row, None, triggers)
+            
+            # Reemplazar score_confianza con score_ebr
+            metadata["score_ebr"] = float(scores_ebr[idx])
+            metadata["score_confianza"] = float(scores_ebr[idx])  # Mantener compatibilidad
+            
+            metadata_list.append(metadata)
+        
+        # Guardar metadata JSON
+        metadata_json_path = PROCESSED_DIR / f"{analysis_id}_metadata.json"
+        with open(metadata_json_path, 'w', encoding='utf-8') as f:
+            json.dump({
+                "analysis_id": analysis_id,
+                "timestamp": datetime.now().isoformat(),
+                "transacciones": [
+                    {
+                        "index": i,
+                        "cliente_id": str(df.iloc[i]['cliente_id']),
+                        **metadata_list[i]
+                    }
+                    for i in range(len(df))
+                ]
+            }, f, indent=2, ensure_ascii=False)
+        
+        log(f"   ✅ Metadata guardada: {metadata_json_path.name}")
+        
+        # Guardar CSV
+        processed_csv = PROCESSED_DIR / csv_path.name
+        df.to_csv(processed_csv, index=False, encoding='utf-8')
+        log(f"✅ CSV guardado: processed/{csv_path.name}")
+        
+        csv_path.unlink()
+        
+        return True
+        
+    except Exception as e:
+        log(f"\n❌ ERROR: {str(e)}")
+        traceback.print_exc()
+        
+        failed_csv = FAILED_DIR / csv_path.name
+        shutil.move(str(csv_path), str(failed_csv))
+        
+        error_json = FAILED_DIR / f"{analysis_id}_error.json"
+        with open(error_json, 'w') as f:
+            json.dump({
+                "success": False,
+                "analysis_id": analysis_id,
+                "error": str(e),
+                "traceback": traceback.format_exc(),
+                "timestamp": datetime.now().isoformat()
+            }, f, indent=2)
+        
+        return False
 
-    # Ensamble de metadata
-    analysis_id = args.analysis_id or str(uuid.uuid4())
-    meta = {
-        "analysis_id": analysis_id,
-        "timestamp": datetime.now().isoformat(),
-        "transacciones": records
-    }
-
-    # Guardar
-    out_dir = Path(outputs_dir) / "enriched" / "processed"
-    out_dir.mkdir(parents=True, exist_ok=True)
-    json_path = out_dir / f"{analysis_id}_metadata.json"
-    with open(json_path, "w", encoding="utf-8") as f:
-        json.dump(meta, f, ensure_ascii=False, indent=2)
-
-    # CSV plano opcional
-    flat_csv = Path(outputs_dir) / f"{analysis_id}_predicciones.csv"
-    pd.DataFrame(records).to_csv(flat_csv, index=False, encoding="utf-8")
-
-    log("====================================================")
-    log(f"✅ Metadata guardada: {json_path}")
-    log(f"✅ CSV resultados:    {flat_csv}")
-    log("Listo.")
+def main():
+    log("\n" + "="*70)
+    log("🚀 ML RUNNER - VERSIÓN FINAL")
+    log("="*70)
+    
+    log("\n📦 Inicializando Predictor...")
+    try:
+        predictor = TarantulaHawkAdaptivePredictor(base_dir=str(BASE_DIR), verbose=True)
+    except Exception as e:
+        log(f"❌ Error: {e}")
+        return 1
+    
+    if len(sys.argv) > 1:
+        analysis_id = sys.argv[1]
+        csv_file = PENDING_DIR / f"{analysis_id}.csv"
+        
+        if not csv_file.exists():
+            log(f"❌ Archivo no encontrado: {csv_file}")
+            return 1
+        
+        files_to_process = [csv_file]
+    else:
+        files_to_process = list(PENDING_DIR.glob("*.csv"))
+    
+    if not files_to_process:
+        log("\nℹ️  No hay archivos pendientes")
+        return 0
+    
+    log(f"\n📋 Archivos a procesar: {len(files_to_process)}")
+    
+    success_count = 0
+    failed_count = 0
+    
+    for csv_path in files_to_process:
+        if process_file(csv_path, predictor):
+            success_count += 1
+        else:
+            failed_count += 1
+    
+    log("\n" + "="*70)
+    log("📊 RESUMEN")
+    log("="*70)
+    log(f"✅ Exitosos: {success_count}")
+    log(f"❌ Fallidos: {failed_count}")
+    log(f"📁 Resultados en: {PROCESSED_DIR}")
+    log("="*70 + "\n")
+    
+    return 0 if failed_count == 0 else 1
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

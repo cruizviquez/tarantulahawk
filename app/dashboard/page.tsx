@@ -1,11 +1,12 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
-import CompletePortalUI from '@/app/components/complete_portal_ui'
+// import dynamic from 'next/dynamic'
+import CompletePortalUIClient from './CompletePortalUIClient';
 import SessionMonitor from '@/app/components/SessionMonitor'
 import { Suspense } from 'react'
 
-export const dynamic = 'force-dynamic'
+
 
 export default async function DashboardPage() {
   const cookieStore = await cookies()
@@ -94,7 +95,9 @@ export default async function DashboardPage() {
         inactivityTimeout={15 * 60 * 1000} 
       />
       
-      <CompletePortalUI 
+      {/** Usar el portal clásico en dashboard **/}
+      {/* Usar el portal clásico en dashboard, importado como Client Component */}
+      <CompletePortalUIClient
         user={{
           id: user.id,
           email: user.email || '',

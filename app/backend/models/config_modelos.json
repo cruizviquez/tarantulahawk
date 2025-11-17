@@ -57,8 +57,8 @@
             },
             "test_size": 0.2,
             "cv_folds": 3,
-            "threshold_preocupante": 0.5,
-            "threshold_inusual": 0.4,
+            "threshold_preocupante": 0.51,
+            "threshold_inusual": 0.45,
             "enable_shap": true
         },
         "no_supervisado": {

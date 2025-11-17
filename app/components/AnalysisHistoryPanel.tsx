@@ -23,12 +23,13 @@ interface HistoryItem {
 
 interface Props {
   history: HistoryItem[];
-  language: 'es' | 'en';
-  apiUrl: string;
-  token: string;
+  language?: 'es' | 'en';
+  apiUrl?: string;
+  token?: string;
+  onSelectAnalysis?: (analysisId: string) => void;
 }
 
-export default function AnalysisHistoryPanel({ history, language, apiUrl, token }: Props) {
+export default function AnalysisHistoryPanel({ history, language = 'es', apiUrl = '', token = '', onSelectAnalysis }: Props) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [detailsCache, setDetailsCache] = useState<Record<string, any>>({});
 
@@ -39,6 +40,9 @@ export default function AnalysisHistoryPanel({ history, language, apiUrl, token 
     }
 
     setExpandedId(analysisId);
+    if (onSelectAnalysis) {
+      onSelectAnalysis(analysisId);
+    }
 
     // Fetch details if not cached
     if (!detailsCache[analysisId]) {

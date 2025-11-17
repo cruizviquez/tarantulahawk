@@ -16,8 +16,6 @@ Uso:
     predictions, probas, metadata = predictor.predict_adaptive(df_enriched)
 """
 
-print("🔧 PREDICTOR_ADAPTIVE.PY LOADED - VERSION: 2025-11-11-v2 (UPDATED)")
-
 import os
 import json
 import joblib
@@ -160,13 +158,15 @@ class TarantulaHawkAdaptivePredictor:
             strategy = "rule_based"
             predictions = self._predict_rule_based(df)
             probas = None
+            
         elif n < 1000:
             strategy = "hybrid"
             predictions, probas = self._predict_hybrid(df, n)
+            
         else:
             strategy = "ml_pure"
             predictions, probas = self._predict_ml_pure(df)
-
+        
         # Metadata
         metadata = None
         if return_metadata:
@@ -182,48 +182,55 @@ class TarantulaHawkAdaptivePredictor:
                 metadata["reglas_disparadas"] = trigger_counts
                 metadata["small_volume_adjustments"] = {
                     "preocupante_guardrail": int(trigger_counts.get("guardrail", 0)),
-                    "inusual_multi_trigger": int(trigger_counts.get("inusual_multi", 0)),
-                    "inusual_3plus": int(trigger_counts.get("inusual_3plus", 0))
+                    "inusual_multi_trigger": int(trigger_counts.get("inusual_multi", 0))
                 }
+            
             if self.verbose:
                 print(f"\n📊 Estrategia: {strategy.upper()} (n={n})")
                 print(f"   Distribución: {metadata['distribución']}")
-        # Siempre retornar 3 valores para consistencia
-        return predictions, probas, metadata
+        
+        if return_probas:
+            return predictions, probas, metadata
+        else:
+            return predictions, metadata
     
     def _predict_rule_based(self, df: pd.DataFrame) -> np.ndarray:
-        """
-        Lógica granular:
-        - PREOCUPANTE: guardrail_* (normativa LFPIORPI, suficiente por sí solo)
-        - INUSUAL: score_ebr >= 0.4 (umbral sugerido, ajustable)
-        - RELEVANTE: score_ebr < 0.4
-        """
+        """Clasificación determinista para bajo volumen utilizando agregación de disparadores."""
         predictions = []
         trigger_totals: Counter = Counter()
+        inusual_multi = 0
         guardrail_total = 0
-        inusual_count = 0
-        relevante_count = 0
 
         for _, row in df.iterrows():
             triggers = self._get_rule_triggers(row, df)
-            # Guardrails = PREOCUPANTE
+            monto = float(row.get("monto", 0))  # ✅ Obtener monto aquí
+
             if any(t.startswith("guardrail_") for t in triggers):
                 predictions.append("preocupante")
                 guardrail_total += 1
             else:
-                score_ebr = self.calcular_score_ebr(row, triggers, df)
-                if score_ebr >= 0.4:
+                # Contar triggers de inusual
+                inusual_triggers = [t for t in triggers if t.startswith("inusual_") or t == "sector_riesgo"]
+                
+                # ✅ LÓGICA CORREGIDA - EBR (Enfoque Basado en Riesgos)
+                # Clasificar como inusual si:
+                # 1. Tiene 2+ triggers de cualquier tipo, O
+                # 2. Tiene 1 trigger + está en rango de monto alto ($100k+)
+                if len(inusual_triggers) >= 2:
                     predictions.append("inusual")
-                    inusual_count += 1
+                    inusual_multi += 1
+                elif len(inusual_triggers) >= 1 and monto >= 100_000:
+                    # Un trigger es suficiente si el monto es significativo
+                    predictions.append("inusual")
+                    inusual_multi += 1
                 else:
                     predictions.append("relevante")
-                    relevante_count += 1
+
             trigger_totals.update(triggers)
 
         # Guardar conteos para metadatos
         trigger_totals["guardrail"] += guardrail_total
-        trigger_totals["inusual_ebr"] = inusual_count
-        trigger_totals["relevante_ebr"] = relevante_count
+        trigger_totals["inusual_multi"] += inusual_multi
         self._last_trigger_counts = dict(trigger_totals)
 
         return np.array(predictions)
@@ -319,14 +326,7 @@ class TarantulaHawkAdaptivePredictor:
         return False
 
     def _get_rule_triggers(self, row: pd.Series, df: pd.DataFrame) -> list:
-        """
-        ✅ CORREGIDO: Triggers granulares y lógica mejorada
-        
-        Cambios:
-        1. Separados: es_nocturno y fin_de_semana (antes era 1 solo)
-        2. Nuevo: inusual_monto_rango_alto ($100k-umbral)
-        3. Lógica: 1+ triggers = inusual (antes requería 2+)
-        """
+        """Devuelve lista de etiquetas de disparadores de reglas por fila."""
         triggers = []
 
         if self._es_preocupante_normativa(row, df):
@@ -337,89 +337,57 @@ class TarantulaHawkAdaptivePredictor:
             umbral_aviso = self._get_umbral_mxn(fraccion, "aviso_UMA")
             umbral_efectivo = self._get_umbral_mxn(fraccion, "efectivo_max_UMA")
             if monto >= umbral_aviso:
-                triggers.append("guardrail_aviso_umbral")
+                triggers.append("guardrail_monto")
             if es_efectivo == 1 and monto >= umbral_efectivo:
-                triggers.append("guardrail_efectivo_umbral")
+                triggers.append("guardrail_efectivo")
             if monto < umbral_aviso and monto_6m >= umbral_aviso:
-                triggers.append("guardrail_acumulacion_6m")
-            return triggers
-
-        # Si hay guardrails, retornar temprano
-        if any(t.startswith("guardrail_") for t in triggers):
+                triggers.append("guardrail_acumulacion")
             return triggers
 
         monto = float(row.get("monto", 0.0))
+        if int(row.get("SectorAltoRiesgo", 0)) == 1 and monto > 50000:
+            triggers.append("sector_riesgo")
+
+        ratio_vs_prom = float(row.get("ratio_vs_promedio", 1.0))
+        if ratio_vs_prom > 3.0:
+            triggers.append("inusual_desviacion_perfil")
+
         fraccion = str(row.get("fraccion", "_"))
         umbral_aviso = self._get_umbral_mxn(fraccion, "aviso_UMA")
         
-        # ✅ 1. MONTO EN RANGO INUSUAL ($100k-umbral)
-        if umbral_aviso > 0:
-            if 100_000 <= monto < umbral_aviso:
-                triggers.append("inusual_monto_rango_alto")
-        elif monto >= 100_000:
+        # ✅ CRÍTICO: Trigger por rango de monto (EBR - Enfoque Basado en Riesgos)
+        # Montos en "zona gris" entre normal y preocupante requieren atención
+        if 100_000 <= monto < umbral_aviso and monto >= 100_000:
             triggers.append("inusual_monto_rango_alto")
         
-        # ✅ 2. NOCTURNO (separado)
-        if int(row.get("es_nocturno", 0)) == 1:
-            triggers.append("inusual_nocturno")
-        
-        # ✅ 3. FIN DE SEMANA (separado)
-        if int(row.get("fin_de_semana", 0)) == 1:
-            triggers.append("inusual_fin_semana")
-        
-        # 4. INTERNACIONAL (granular)
-        if int(row.get("EsInternacional", 0)) == 1:
-            triggers.append("inusual_internacional")
-        
-        # 5. RATIO VS PROMEDIO
-        ratio_vs_prom = float(row.get("ratio_vs_promedio", 1.0))
-        if ratio_vs_prom > 5.0:
-            triggers.append("inusual_ratio_anomalo")
-        
-        # 6. EFECTIVO (granular)
-        if int(row.get("EsEfectivo", 0)) == 1:
-            triggers.append("inusual_efectivo")
-        
-        # 7. MONTO REDONDO (granular)
-        if int(row.get("es_monto_redondo", 0)) == 1:
-            triggers.append("inusual_monto_redondo")
-        
-        # 8. MONTO ALTO 50K+ (granular)
-        if monto > 50_000:
-            triggers.append("inusual_monto_alto_50k")
-        
-        # 9. MONTO ALTO 100K+ (granular)
-        if monto > 100_000:
-            triggers.append("inusual_monto_alto_100k")
-        
-        # 10. PRIMERA OPERACIÓN (granular)
-        ops_6m = int(row.get("ops_6m", 0))
-        if ops_6m <= 1:
-            triggers.append("inusual_primera_operacion")
-        
-        # 11. BURST DE OPERACIONES
-        if int(row.get("posible_burst", 0)) == 1:
-            triggers.append("inusual_burst_operaciones")
-        
-        # 12. SECTOR ALTO RIESGO (granular)
-        if int(row.get("SectorAltoRiesgo", 0)) == 1:
-            triggers.append("inusual_sector_alto_riesgo")
-        
-        # 10. ESTRUCTURACIÓN (mantener lógica original)
         if ("fecha" in row.index or "fecha_dt" in row.index) and "monto" in df.columns:
             fecha_col = "fecha_dt" if "fecha_dt" in df.columns else "fecha"
-            try:
-                fecha_actual = pd.to_datetime(row[fecha_col])
-                mask = (
-                    pd.to_datetime(df[fecha_col]).between(
-                        fecha_actual - pd.Timedelta(days=7),
-                        fecha_actual + pd.Timedelta(days=7)
-                    ) & (df["monto"] > umbral_aviso * 0.8) & (df["monto"] < umbral_aviso)
-                )
-                if int(mask.sum()) >= 3:
-                    triggers.append("inusual_estructuracion")
-            except:
-                pass
+            fecha_actual = pd.to_datetime(row[fecha_col])
+            mask = (
+                pd.to_datetime(df[fecha_col]).between(
+                    fecha_actual - pd.Timedelta(days=7),
+                    fecha_actual + pd.Timedelta(days=7)
+                ) & (df["monto"] > umbral_aviso * 0.8) & (df["monto"] < umbral_aviso)
+            )
+            if int(mask.sum()) >= 3:
+                triggers.append("inusual_estructuracion")
+
+        # ✅ TRIGGERS GRANULARES (separados para contar correctamente)
+        if int(row.get("es_nocturno", 0)) == 1 and monto > 100000:
+            triggers.append("inusual_nocturno_monto_alto")
+        
+        if int(row.get("fin_de_semana", 0)) == 1 and monto > 100000:
+            triggers.append("inusual_finsemana_monto_alto")
+
+        if int(row.get("EsEfectivo", 0)) == 1 and int(row.get("es_monto_redondo", 0)) == 1 and monto > 100000:
+            triggers.append("inusual_efectivo_redondo_alto")
+
+        if int(row.get("posible_burst", 0)) == 1 and monto > 50000:
+            triggers.append("inusual_burst_alto")
+
+        freq_mensual = float(row.get("frecuencia_mensual", 1))
+        if freq_mensual > 20 and monto > 50000:
+            triggers.append("inusual_alta_frecuencia_monto")
 
         return triggers
     
@@ -459,9 +427,11 @@ class TarantulaHawkAdaptivePredictor:
             # Prioridad 1: Si rules dice preocupante → SIEMPRE preocupante
             if pred_rules[i] == "preocupante":
                 predictions.append("preocupante")
+            
             # Prioridad 2: Si ML muy confiado (>0.8) → confiar en ML
-            elif proba_ml is not None and proba_ml[i].max() > 0.8:
+            elif proba_ml[i].max() > 0.8:
                 predictions.append(pred_ml[i])
+            
             # Prioridad 3: Desacuerdo → elegir el más conservador
             else:
                 severidad = {"relevante": 0, "inusual": 1, "preocupante": 2}
@@ -469,6 +439,7 @@ class TarantulaHawkAdaptivePredictor:
                     predictions.append(pred_ml[i])
                 else:
                     predictions.append(pred_rules[i])
+        
         return np.array(predictions), proba_ml
     
     def _predict_ml_pure(self, df: pd.DataFrame) -> Tuple[np.ndarray, np.ndarray]:
@@ -482,26 +453,34 @@ class TarantulaHawkAdaptivePredictor:
         # Preparar features
         X = self._prepare_features(df)
         
-        """
-        Lógica granular:
-        - PREOCUPANTE: guardrail_* (normativa LFPIORPI, suficiente por sí solo)
-        - INUSUAL: 3+ triggers inusuales (evita falsos positivos)
-        - RELEVANTE: 0-2 triggers o bajo riesgo
-        """
-        preds = []
-        for _, row in df.iterrows():
-            triggers = self._get_rule_triggers(row, df)
-            # Guardrails = PREOCUPANTE
-            if any(t.startswith("guardrail_") for t in triggers):
-                preds.append("preocupante")
-                continue
-            # 3+ triggers inusuales = INUSUAL
-            triggers_inusual = [t for t in triggers if t.startswith("inusual_")]
-            if len(triggers_inusual) >= 3:
-                preds.append("inusual")
-            else:
-                preds.append("relevante")
-        return np.array(preds), None
+        # Escalar
+        X_scaled = self.scaler.transform(X)
+        
+        # Predecir probabilidades
+        probas = self.model.predict_proba(X_scaled)
+        classes = self.model.classes_
+        
+        # Aplicar thresholds optimizados
+        idx_pre = np.argmax(classes == "preocupante")
+        idx_inu = np.argmax(classes == "inusual")
+        
+        thr_p = self.thresholds["preocupante"]
+        thr_i = self.thresholds["inusual"]
+        
+        predictions = np.where(
+            probas[:, idx_pre] >= thr_p, 
+            "preocupante",
+            np.where(
+                probas[:, idx_inu] >= thr_i, 
+                "inusual", 
+                "relevante"
+            )
+        )
+        
+        # Aplicar guardrails LFPIORPI (override si necesario)
+        predictions = self._apply_guardrails_vectorized(df, predictions)
+        
+        return predictions, probas
     
     def _prepare_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """Preparar features para ML (one-hot, alinear, sanitizar)"""
@@ -644,99 +623,6 @@ class TarantulaHawkAdaptivePredictor:
                 "expected_accuracy": "~99.5%",
                 "justification": "Volumen suficiente para aprendizaje robusto"
             }
-    
-    def calcular_score_ebr(self, row: pd.Series, triggers: list, df: pd.DataFrame) -> float:
-        """
-        ✅ Score EBR (Enfoque Basado en Riesgos) 0.0-1.0
-        
-        NO es la confianza del ML, es una PONDERACIÓN de factores de riesgo
-        que refleja qué tan sospechosa es la transacción considerando TODAS las variables.
-        
-        Este es el VALOR AGREGADO del sistema vs reglas simples de LFPIORPI.
-        
-        Returns:
-            float: Score 0.0 (sin riesgo) a 1.0 (riesgo máximo)
-        """
-        score = 0.0
-        
-        # Pesos por tipo de factor (suma total = 1.0)
-        PESOS = {
-            "monto": 0.25,           # 25% - Cuánto dinero
-            "temporal": 0.15,        # 15% - Cuándo (horario, día)
-            "frecuencia": 0.15,      # 15% - Qué tan seguido
-            "patron": 0.20,          # 20% - Desviación del comportamiento normal
-            "tipo_operacion": 0.15,  # 15% - Cómo (efectivo, internacional)
-            "contexto": 0.10,        # 10% - Sector, acumulación
-        }
-        
-        monto = float(row.get("monto", 0))
-        umbral_aviso = self._get_umbral_mxn(str(row.get("fraccion", "_")), "aviso_UMA")
-        
-        # 1. FACTOR MONTO (0.0-0.25)
-        if umbral_aviso > 0 and umbral_aviso < 1e10:
-            ratio_umbral = min(monto / umbral_aviso, 1.0)
-            score += PESOS["monto"] * ratio_umbral
-        elif monto >= 100_000:
-            score += PESOS["monto"] * min(monto / 500_000, 1.0)
-        
-        # 2. FACTOR TEMPORAL (0.0-0.15)
-        factor_temporal = 0.0
-        if int(row.get("es_nocturno", 0)) == 1:
-            factor_temporal += 0.5
-        if int(row.get("fin_de_semana", 0)) == 1:
-            factor_temporal += 0.5
-        score += PESOS["temporal"] * factor_temporal
-        
-        # 3. FACTOR FRECUENCIA (0.0-0.15)
-        ops_6m = float(row.get("ops_6m", 1))
-        if ops_6m > 20:
-            factor_freq = min(ops_6m / 50, 1.0)
-            score += PESOS["frecuencia"] * factor_freq
-        elif ops_6m == 1 and monto > 100_000:
-            score += PESOS["frecuencia"] * 0.7
-        
-        # 4. FACTOR PATRÓN (0.0-0.20)
-        ratio_vs_prom = float(row.get("ratio_vs_promedio", 1.0))
-        if ratio_vs_prom > 3.0:
-            factor_patron = min((ratio_vs_prom - 1) / 10, 1.0)
-            score += PESOS["patron"] * factor_patron
-        
-        monto_std_6m = float(row.get("monto_std_6m", 0))
-        if monto_std_6m > 0:
-            cv = monto_std_6m / max(monto, 1)
-            score += PESOS["patron"] * min(cv / 2, 1.0) * 0.5
-        
-        # 5. FACTOR TIPO OPERACIÓN (0.0-0.15)
-        factor_tipo = 0.0
-        if int(row.get("EsEfectivo", 0)) == 1:
-            factor_tipo += 0.6
-        if int(row.get("EsInternacional", 0)) == 1:
-            factor_tipo += 0.4
-        if int(row.get("es_monto_redondo", 0)) == 1 and monto > 50_000:
-            factor_tipo += 0.3
-        score += PESOS["tipo_operacion"] * min(factor_tipo, 1.0)
-        
-        # 6. FACTOR CONTEXTO (0.0-0.10)
-        factor_contexto = 0.0
-        if int(row.get("SectorAltoRiesgo", 0)) == 1:
-            factor_contexto += 0.5
-        
-        monto_6m = float(row.get("monto_6m", 0))
-        if umbral_aviso > 0 and monto_6m >= umbral_aviso * 0.8:
-            factor_contexto += 0.5
-        
-        if int(row.get("posible_burst", 0)) == 1:
-            factor_contexto += 0.3
-        
-        score += PESOS["contexto"] * min(factor_contexto, 1.0)
-        
-        # Boost por triggers
-        n_triggers = len([t for t in triggers if t.startswith("inusual_")])
-        boost = min(n_triggers * 0.05, 0.15)
-        
-        score = min(score + boost, 1.0)
-        
-        return score
 
 
 # =============================================================================
@@ -833,3 +719,168 @@ if __name__ == "__main__":
     print("\n" + "="*70)
     print("✅ Tests completados")
     print("="*70)
+
+    def calcular_score_ebr(self, row: pd.Series, triggers: list, df: pd.DataFrame) -> float:
+        """
+        Score EBR (Enfoque Basado en Riesgos) - VERSIÓN CORREGIDA
+        
+        Ponderación de factores de riesgo 0.0-1.0
+        NO es confianza del ML, es RIESGO TOTAL de la transacción
+        
+        Score Alto = Mayor Riesgo (0.8+ = preocupante, 0.5-0.8 = inusual, <0.5 = relevante)
+        
+        Returns:
+            float: Score 0.0 (sin riesgo) a 1.0 (riesgo máximo)
+        """
+        score = 0.0
+        
+        # Extraer datos básicos
+        monto = float(row.get("monto", 0))
+        es_efectivo = int(row.get("EsEfectivo", 0))
+        es_internacional = int(row.get("EsInternacional", 0))
+        es_nocturno = int(row.get("es_nocturno", 0))
+        fin_semana = int(row.get("fin_de_semana", 0))
+        es_monto_redondo = int(row.get("es_monto_redondo", 0))
+        sector_riesgo = int(row.get("SectorAltoRiesgo", 0))
+        
+        fraccion = str(row.get("fraccion", "_"))
+        umbral_aviso = self._get_umbral_mxn(fraccion, "aviso_UMA")
+        
+        # ===== FACTOR 1: MONTO (peso 30%) =====
+        # Escala logarítmica para capturar rangos amplios
+        if umbral_aviso > 0 and umbral_aviso < 1e10:
+            ratio = monto / umbral_aviso
+            
+            if ratio >= 1.0:
+                # Supera umbral → Score máximo
+                factor_monto = 1.0
+            elif ratio >= 0.8:
+                # 80-100% del umbral → Score alto
+                factor_monto = 0.7 + (ratio - 0.8) * 1.5  # 0.7 a 1.0
+            elif ratio >= 0.5:
+                # 50-80% del umbral → Score medio-alto
+                factor_monto = 0.4 + (ratio - 0.5) * 1.0  # 0.4 a 0.7
+            else:
+                # <50% del umbral → Score bajo-medio
+                factor_monto = min(ratio * 0.8, 0.4)  # 0.0 a 0.4
+        else:
+            # Sin umbral específico, usar escala genérica
+            if monto >= 500_000:
+                factor_monto = 1.0
+            elif monto >= 200_000:
+                factor_monto = 0.7
+            elif monto >= 100_000:
+                factor_monto = 0.5
+            elif monto >= 50_000:
+                factor_monto = 0.3
+            else:
+                factor_monto = min(monto / 100_000, 0.2)
+        
+        score += 0.30 * factor_monto
+        
+        # ===== FACTOR 2: TIPO DE OPERACIÓN (peso 25%) =====
+        factor_tipo = 0.0
+        
+        if es_efectivo == 1:
+            # Efectivo = ALTO RIESGO
+            if monto >= 100_000:
+                factor_tipo = 1.0  # Efectivo alto = máximo riesgo
+            elif monto >= 50_000:
+                factor_tipo = 0.7
+            else:
+                factor_tipo = 0.4
+        elif es_internacional == 1:
+            # Internacional = MEDIO RIESGO
+            if monto >= 100_000:
+                factor_tipo = 0.7
+            else:
+                factor_tipo = 0.4
+        else:
+            # Nacional/Tarjeta = BAJO RIESGO
+            factor_tipo = 0.2
+        
+        # Bonus: Monto redondo en efectivo
+        if es_efectivo == 1 and es_monto_redondo == 1 and monto > 50_000:
+            factor_tipo = min(factor_tipo + 0.2, 1.0)
+        
+        score += 0.25 * factor_tipo
+        
+        # ===== FACTOR 3: TEMPORAL (peso 15%) =====
+        factor_temporal = 0.0
+        
+        if es_nocturno == 1 and fin_semana == 1:
+            # Nocturno + Fin de semana = ALTO RIESGO
+            factor_temporal = 1.0
+        elif es_nocturno == 1:
+            factor_temporal = 0.6
+        elif fin_semana == 1:
+            factor_temporal = 0.5
+        else:
+            factor_temporal = 0.1
+        
+        score += 0.15 * factor_temporal
+        
+        # ===== FACTOR 4: FRECUENCIA/PATRÓN (peso 15%) =====
+        ops_6m = float(row.get("ops_6m", 1))
+        ratio_vs_prom = float(row.get("ratio_vs_promedio", 1.0))
+        monto_std_6m = float(row.get("monto_std_6m", 0))
+        
+        factor_patron = 0.0
+        
+        # Alta frecuencia con monto alto
+        if ops_6m > 20 and monto > 50_000:
+            factor_patron = min(ops_6m / 50, 0.8)
+        
+        # Desviación del perfil
+        if ratio_vs_prom > 3.0:
+            factor_patron = max(factor_patron, min(ratio_vs_prom / 10, 0.8))
+        
+        # Primera operación grande = RIESGO
+        if ops_6m == 1 and monto > 100_000:
+            factor_patron = max(factor_patron, 0.7)
+        
+        # Comportamiento errático
+        if monto_std_6m > 0:
+            cv = monto_std_6m / max(monto, 1)  # Coef. variación
+            if cv > 1.0:  # Alta variabilidad
+                factor_patron = max(factor_patron, 0.5)
+        
+        score += 0.15 * factor_patron
+        
+        # ===== FACTOR 5: CONTEXTO (peso 15%) =====
+        monto_6m = float(row.get("monto_6m", 0))
+        posible_burst = int(row.get("posible_burst", 0))
+        
+        factor_contexto = 0.0
+        
+        # Sector de alto riesgo
+        if sector_riesgo == 1:
+            if monto > 100_000:
+                factor_contexto = 1.0
+            else:
+                factor_contexto = 0.5
+        
+        # Acumulación cercana a umbral
+        if umbral_aviso > 0 and monto_6m >= umbral_aviso * 0.7:
+            factor_contexto = max(factor_contexto, 0.8)
+        
+        # Burst de operaciones
+        if posible_burst == 1:
+            factor_contexto = max(factor_contexto, 0.6)
+        
+        score += 0.15 * factor_contexto
+        
+        # ===== BOOST POR TRIGGERS =====
+        # Más triggers = mayor confianza en el riesgo
+        n_triggers = len([t for t in triggers if t.startswith("inusual_")])
+        
+        if any(t.startswith("guardrail_") for t in triggers):
+            # Guardrail = Score mínimo 0.85
+            score = max(score, 0.85)
+        elif n_triggers >= 3:
+            score = min(score + 0.10, 1.0)
+        elif n_triggers >= 2:
+            score = min(score + 0.05, 1.0)
+        
+        # Normalizar a [0.0, 1.0]
+        return max(0.0, min(score, 1.0))
