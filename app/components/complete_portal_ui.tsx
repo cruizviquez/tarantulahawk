@@ -93,7 +93,6 @@ interface AnalysisTransaction {
   razones?: string[];
   // 🆕 Campos de Explicabilidad
   score_ebr?: number;
-  hora?: string;
   nivel_confianza?: 'alta' | 'media' | 'baja';
   explicacion_principal?: string;
   explicacion_detallada?: string;
