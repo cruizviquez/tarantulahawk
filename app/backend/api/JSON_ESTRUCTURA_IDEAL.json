@@ -1,0 +1,199 @@
+{
+  "success": true,
+  "analysis_id": "xxx",
+  "timestamp": "2025-11-24T...",
+  
+  "resumen": {
+    "total_transacciones": 55,
+    "preocupante": 5,
+    "inusual": 2,
+    "relevante": 48,
+    "estrategia": "ml_hibrido_guardrails",
+    "ica_promedio": 0.89,
+    "score_ebr_promedio": 38.4,
+    "guardrails_aplicados": 5
+  },
+  
+  "transacciones": [
+    {
+      // ===================================================================
+      // IDENTIFICACIÓN
+      // ===================================================================
+      "cliente_id": "CLT10726",
+      "fecha": "2025-02-08",
+      "monto": 3807.95,
+      "umas": 35.1,
+      "sector_actividad": "joyeria_metales",
+      "tipo_operacion": "transferencia_nacional",
+      
+      // ===================================================================
+      // CLASIFICACIÓN FINAL (LO ÚNICO QUE IMPORTA AL FRONTEND)
+      // ===================================================================
+      "clasificacion": "relevante",
+      "nivel_riesgo": "bajo",
+      "origen": "ml_ebr_consenso",
+      
+      // ===================================================================
+      // MÉTRICAS PRINCIPALES
+      // ===================================================================
+      "ica": 1.0,
+      "score_ebr": 26.0,
+      
+      // ===================================================================
+      // GUARDRAILS LFPIORPI
+      // ===================================================================
+      "guardrail_aplicado": false,
+      "guardrail_razon": null,
+      
+      // ===================================================================
+      // EXPLICABILIDAD (LO QUE NECESITA EL FRONTEND)
+      // ===================================================================
+      "razones": [
+        "Monto dentro de parámetros habituales",
+        "Sector de riesgo medio",
+        "Operación nacional sin alertas"
+      ],
+      "fundamento_legal": "FUNDAMENTO LEGAL LFPIORPI\n\nArtículo 17, Fracción XI\nLa presente operación se clasifica como actividad vulnerable conforme a la fracción XI del artículo 17 de la Ley Federal para la Prevención e Identificación de Operaciones con Recursos de Procedencia Ilícita (LFPIORPI), que regula: comercialización de joyas, metales preciosos, piedras preciosas o relojes.\n\nAnálisis de Umbrales (UMAs)\n- Monto de la operación: $3,807.95 MXN\n- Equivalente aproximado: 35.1 UMAs (UMA vigente: $108.57 MXN)\n- Umbral relevante (aviso): 325 UMAs ($35,285.25 MXN)\n- Umbral preocupante (reporte): 650 UMAs ($70,570.50 MXN)\n\nClasificación Final: RELEVANTE\n\nInterpretación Normativa:\nEsta operación se encuentra dentro de los parámetros habituales del perfil transaccional del cliente y no rebasa umbrales legales significativos, clasificándose como RELEVANTE. Se mantiene registro para efectos de trazabilidad y cumplimiento.\n\nAcción Requerida: Registro documental conforme políticas internas.",
+      
+      // ===================================================================
+      // DETALLE TÉCNICO (OPCIONAL - PARA AUDITORÍA)
+      // ===================================================================
+      "detalle_tecnico": {
+        "ml": {
+          "etiqueta": "relevante",
+          "probabilidades": {
+            "relevante": 1.0,
+            "inusual": 0.0,
+            "preocupante": 0.0
+          }
+        },
+        "ebr": {
+          "score": 26.0,
+          "nivel": "bajo",
+          "clasificacion": "relevante"
+        },
+        "no_supervisado": {
+          "anomaly_score": 0.0,
+          "is_outlier": false
+        },
+        "fusion": {
+          "fuente": "consenso",
+          "requiere_revision": false,
+          "motivo": "ML y EBR coinciden en relevante"
+        }
+      }
+    },
+    
+    // Ejemplo con guardrail
+    {
+      "cliente_id": "CLT99999",
+      "fecha": "2025-02-10",
+      "monto": 85000.0,
+      "umas": 782.9,
+      "sector_actividad": "activos_virtuales",
+      "tipo_operacion": "deposito_efectivo",
+      
+      // CLASIFICACIÓN FINAL
+      "clasificacion": "preocupante",
+      "nivel_riesgo": "alto",
+      "origen": "normativo",
+      
+      // MÉTRICAS
+      "ica": 0.72,
+      "score_ebr": 60.0,
+      
+      // GUARDRAILS
+      "guardrail_aplicado": true,
+      "guardrail_razon": "Rebasa 650 UMAs (Art. 18 LFPIORPI)",
+      
+      // EXPLICABILIDAD
+      "razones": [
+        "Rebasa umbrales normativos LFPIORPI (UMAs)",
+        "Sector de alto riesgo (activos virtuales)",
+        "Operación en efectivo"
+      ],
+      "fundamento_legal": "FUNDAMENTO LEGAL LFPIORPI\n\nArtículo 17, Fracción XVI\n...\nInterpretación Normativa:\nEsta operación rebasa los umbrales establecidos en las Reglas de Carácter General de la LFPIORPI para actividades vulnerables, clasificándose como PREOCUPANTE. Conforme al artículo 18 de la LFPIORPI, se requiere presentar aviso a la Unidad de Inteligencia Financiera (UIF) dentro de los plazos establecidos.\n\nAcción Requerida: Generar aviso a UIF conforme artículo 18 LFPIORPI.",
+      
+      "detalle_tecnico": {
+        "ml": {
+          "etiqueta": "inusual",
+          "probabilidades": {
+            "relevante": 0.15,
+            "inusual": 0.72,
+            "preocupante": 0.13
+          }
+        },
+        "ebr": {
+          "score": 60.0,
+          "nivel": "medio",
+          "clasificacion": "inusual"
+        },
+        "no_supervisado": {
+          "anomaly_score": 0.35,
+          "is_outlier": false
+        },
+        "fusion": {
+          "fuente": "guardrail_lfpiorpi",
+          "requiere_revision": true,
+          "motivo": "Forzado a preocupante por rebasar 650 UMAs (Art. 18 LFPIORPI)"
+        }
+      }
+    },
+    
+    // Ejemplo con discrepancia ML vs EBR
+    {
+      "cliente_id": "CLT69598",
+      "fecha": "2025-02-12",
+      "monto": 160250.28,
+      "umas": 1475.7,
+      "sector_actividad": "comercio_minorista",
+      "tipo_operacion": "transferencia_nacional",
+      
+      // CLASIFICACIÓN FINAL
+      "clasificacion": "inusual",
+      "nivel_riesgo": "medio",
+      "origen": "criterio_conservador",
+      
+      // MÉTRICAS
+      "ica": 0.82,
+      "score_ebr": 60.0,
+      
+      // GUARDRAILS
+      "guardrail_aplicado": false,
+      "guardrail_razon": null,
+      
+      // EXPLICABILIDAD
+      "razones": [
+        "Monto elevado respecto al perfil histórico",
+        "Score EBR indica riesgo medio",
+        "Discrepancia entre ML y EBR requiere revisión"
+      ],
+      "fundamento_legal": "...",
+      
+      "detalle_tecnico": {
+        "ml": {
+          "etiqueta": "relevante",
+          "probabilidades": {
+            "relevante": 0.82,
+            "inusual": 0.15,
+            "preocupante": 0.03
+          }
+        },
+        "ebr": {
+          "score": 60.0,
+          "nivel": "medio",
+          "clasificacion": "inusual"
+        },
+        "no_supervisado": {
+          "anomaly_score": 0.22,
+          "is_outlier": false
+        },
+        "fusion": {
+          "fuente": "criterio_conservador_ebr",
+          "requiere_revision": true,
+          "motivo": "EBR detectó mayor riesgo (inusual) que ML (relevante). Se aplica criterio conservador usando EBR."
+        }
+      }
+    }
+  ]
+}

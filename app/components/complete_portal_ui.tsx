@@ -33,21 +33,27 @@ import { HistoryTab } from './HistoryTab';
 import { AdminTab } from './AdminTab';
 import ProfileModal from './ProfileModal';
 
+// Helper: mapear etiqueta/clasificación a nivel de riesgo
+const mapClasificacionToNivelRiesgo = (
+  clasificacion: string | undefined
+): 'bajo' | 'medio' | 'alto' => {
+  if (!clasificacion) return 'bajo';
+  const c = clasificacion.toLowerCase();
+  if (c === 'preocupante') return 'alto';
+  if (c === 'inusual') return 'medio';
+  return 'bajo'; // relevante u otro
+};
+
 const TarantulaHawkLogo = ({ className = "w-10 h-10" }) => (
   <svg viewBox="0 0 400 400" className={className} xmlns="http://www.w3.org/2000/svg">
     <defs>
       <linearGradient id="emeraldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
         <stop offset="0%" style={{stopColor: '#065f46'}} />
-        <stop offset="50%" style={{stopColor: '#047857'}} />
-        <stop offset="100%" style={{stopColor: '#10B981'}} />
-      </linearGradient>
-      <linearGradient id="tealGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" style={{stopColor: '#00CED1'}} />
-        <stop offset="50%" style={{stopColor: '#20B2AA'}} />
-        <stop offset="100%" style={{stopColor: '#48D1CC'}} />
+        <stop offset="50%" style={{stopColor: '#10B981'}} />
+        <stop offset="100%" style={{stopColor: '#34D399'}} />
       </linearGradient>
     </defs>
-    <circle cx="200" cy="200" r="190" fill="none" stroke="url(#tealGrad)" strokeWidth="3" opacity="0.4"/>
+    <circle cx="200" cy="200" r="190" fill="none" stroke="url(#emeraldGrad)" strokeWidth="3" opacity="0.4"/>
     <ellipse cx="200" cy="230" rx="35" ry="85" fill="#0A0A0A"/>
     <ellipse cx="200" cy="170" rx="18" ry="20" fill="#0F0F0F"/>
     <ellipse cx="200" cy="145" rx="32" ry="35" fill="#0F0F0F"/>
@@ -55,8 +61,8 @@ const TarantulaHawkLogo = ({ className = "w-10 h-10" }) => (
     <ellipse cx="200" cy="215" rx="32" ry="10" fill="url(#emeraldGrad)" opacity="0.95"/>
     <path d="M 168 135 Q 95 90 82 125 Q 75 160 115 170 Q 148 175 168 158 Z" fill="url(#emeraldGrad)" opacity="0.9"/>
     <path d="M 232 135 Q 305 90 318 125 Q 325 160 285 170 Q 252 175 232 158 Z" fill="url(#emeraldGrad)" opacity="0.9"/>
-    <ellipse cx="188" cy="108" rx="5" ry="4" fill="#00CED1"/>
-    <ellipse cx="212" cy="108" rx="5" ry="4" fill="#00CED1"/>
+    <ellipse cx="188" cy="108" rx="5" ry="4" fill="#10B981"/>
+    <ellipse cx="212" cy="108" rx="5" ry="4" fill="#10B981"/>
   </svg>
 );
 
@@ -114,9 +120,17 @@ interface AnalysisTransaction {
   clasificacion: string;
   risk_score: number;
   razones?: string[];
+
   // 🆕 Campos de Explicabilidad
   score_ebr?: number;
   hora?: string;
+
+  // 🆕 Nivel de riesgo (bajo/medio/alto) derivado de la etiqueta
+  nivel_riesgo?: 'bajo' | 'medio' | 'alto';
+
+  // 🆕 Índice de Confianza Algorítmica (ICA)
+  ica_score?: number;
+
   nivel_confianza?: 'alta' | 'media' | 'baja';
   explicacion_principal?: string;
   explicacion_detallada?: string;
@@ -717,39 +731,54 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
           processing_time_ms: 0, // No viene en el JSON actual
           ai_nuevos_casos: result.resumen.alertas_generadas || 0
         },
-        transacciones: (result.transacciones || []).map((tx: any) => ({
-          id: tx.datos_transaccion?.id || tx.id || '',
-          monto: typeof tx.datos_transaccion?.monto === 'string' 
-            ? parseFloat(tx.datos_transaccion.monto.replace(/[$,MXN]/g, '')) || 0
-            : tx.datos_transaccion?.monto || 0,
-          fecha: tx.datos_transaccion?.fecha || tx.fecha || '',
-          tipo_operacion: tx.datos_transaccion?.tipo || tx.tipo_operacion || '',
-          sector_actividad: tx.datos_transaccion?.sector || tx.sector_actividad || '',
-          clasificacion: tx.clasificacion_final?.resultado || tx.clasificacion || 'relevante',
-          risk_score: tx.indice_ebr?.score || tx.risk_score || 0,
-          score_ebr: tx.indice_ebr?.score || tx.score_ebr || 0,
-          explicacion_principal: tx.nivel_riesgo_consolidado?.razon || tx.explicacion_principal || '',
-          razones: tx.nivel_riesgo_consolidado?.razon ? [tx.nivel_riesgo_consolidado.razon] : [],
-          hora: tx.datos_transaccion?.hora || tx.hora || 'N/A',
-          nivel_confianza: tx.indice_ebr?.nivel_riesgo_ebr === 'bajo' ? 'alta' : 
-                          tx.indice_ebr?.nivel_riesgo_ebr === 'medio' ? 'media' : 'baja',
-          explicacion_detallada: tx.nivel_riesgo_consolidado?.detalle || tx.explicacion_detallada || '',
-          flags: {
-            requiere_revision_manual: tx.clasificacion_final?.requiere_revision_manual || false,
-            sugerir_reclasificacion: false,
-            alertas: Object.keys(tx.alertas || {}).map(key => ({
-              tipo: key,
-              severidad: tx.alertas[key]?.severidad || 'info',
-              mensaje: tx.alertas[key]?.mensaje || '',
-              de: tx.alertas[key]?.de || '',
-              a: tx.alertas[key]?.a || ''
-            }))
-          },
-          contexto_regulatorio: tx.fundamento_juridico?.descripcion || tx.contexto_regulatorio || '',
-          acciones_sugeridas: [tx.nivel_riesgo_consolidado?.accion].filter(Boolean),
-          probabilidades: {},
-          origen: tx.clasificacion_final?.origen || 'ebr'
-        })),
+        transacciones: (result.transacciones || []).map((tx: any) => {
+          const clasificacionFinal =
+            tx.clasificacion_final || tx.clasificacion || 'relevante';
+
+          const montoNum =
+            typeof tx.monto === 'string'
+              ? parseFloat(tx.monto.replace(/[$,MXN\s]/g, '')) || 0
+              : tx.monto || 0;
+
+          const scoreEbr =
+            typeof tx.score_ebr === 'number'
+              ? tx.score_ebr
+              : (typeof tx.ebr_score === 'number' ? tx.ebr_score : 0);
+
+          const icaScore =
+            typeof tx.ica === 'number'
+              ? tx.ica
+              : (typeof tx.risk_score === 'number' ? tx.risk_score : undefined);
+
+          return {
+            id: tx.id || '',
+            monto: montoNum,
+            fecha: tx.fecha || '',
+            tipo_operacion: tx.tipo_operacion || '',
+            sector_actividad: tx.sector_actividad || '',
+            clasificacion: clasificacionFinal,
+            // Para compat: mantenemos risk_score pero lo usamos como ICA
+            risk_score: icaScore ?? 0,
+            ica_score: icaScore ?? 0,
+            score_ebr: scoreEbr,
+            explicacion_principal: tx.explicacion_principal || '',
+            razones: tx.razones || [],
+            hora: tx.hora || 'N/A',
+            // Si backend manda nivel_riesgo lo respetamos; si no, lo derivamos
+            nivel_riesgo: tx.nivel_riesgo || mapClasificacionToNivelRiesgo(clasificacionFinal),
+            nivel_confianza: tx.nivel_confianza || 'media',
+            explicacion_detallada: tx.explicacion_detallada || '',
+            flags: tx.flags || {
+              requiere_revision_manual: false,
+              sugerir_reclasificacion: false,
+              alertas: []
+            },
+            contexto_regulatorio: tx.contexto_regulatorio || '',
+            acciones_sugeridas: tx.acciones_sugeridas || [],
+            probabilidades: tx.probabilidades || {},
+            origen: tx.origen || 'ebr'
+          } as AnalysisTransaction;
+        }),
         costo: result.costo || 0,
         xml_path: result.xml_path,
         file_name: selectedFile.name
@@ -1050,157 +1079,121 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
 
 return (
     <div className="min-h-screen bg-black text-white">
-      {/* Header */}
-      <div className="border-b border-gray-800 bg-gray-900/50 backdrop-blur-sm">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
+      {/* Header with Navigation */}
+      <header className="bg-gray-900/80 backdrop-blur-sm border-b border-emerald-500/20 sticky top-0 z-50">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="flex justify-between items-center h-16">
             <div className="flex items-center gap-3">
               <TarantulaHawkLogo />
               <div>
-                <div className="text-xl font-black bg-gradient-to-r from-blue-500 to-teal-400 bg-clip-text text-transparent">
-                  TARANTULAHAWK
-                </div>
-                <div className="text-xs text-gray-500">AML Compliance Portal</div>
+                <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 via-teal-400 to-emerald-400 bg-clip-text text-transparent">TARANTULAHAWK</h1>
+                <p className="text-xs text-gray-400">AML Compliance Portal</p>
               </div>
             </div>
 
-            {user && (
-              <div className="flex items-center gap-4">
-                {/* Language Switcher */}
-                <button 
-                  onClick={() => setLanguage(language === 'es' ? 'en' : 'es')}
-                  className="px-3 py-2 border border-gray-700 rounded-lg text-sm hover:border-teal-500 transition"
+            {/* Navigation Tabs */}
+            <nav className="flex items-center gap-1">
+              <button
+                onClick={() => setActiveTab('upload')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+                  activeTab === 'upload'
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                <Database className="w-4 h-4" />
+                {language === 'es' ? 'Datos' : 'Data'}
+              </button>
+              <button
+                onClick={() => setActiveTab('dashboard')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+                  activeTab === 'dashboard'
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                <BarChart3 className="w-4 h-4" />
+                Dashboard
+              </button>
+              <button
+                onClick={() => setActiveTab('history')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+                  activeTab === 'history'
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                <Clock className="w-4 h-4" />
+                {language === 'es' ? 'Historial' : 'History'}
+              </button>
+              <button
+                onClick={() => setActiveTab('add-funds')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+                  activeTab === 'add-funds'
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                <CreditCard className="w-4 h-4" />
+                {language === 'es' ? 'Fondos' : 'Funds'}
+              </button>
+              {isAdmin && (
+                <button
+                  onClick={() => setActiveTab('admin')}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+                    activeTab === 'admin'
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                      : 'text-gray-400 hover:text-white'
+                  }`}
                 >
-                  {language === 'es' ? 'EN' : 'ES'}
+                  <User className="w-4 h-4" />
+                  Admin
                 </button>
+              )}
+            </nav>
 
-                <div className="text-right">
-                  <div className="text-xs text-gray-400">{language === 'es' ? 'Saldo' : 'Balance'}</div>
-                  <div className="text-lg font-bold text-teal-400">${user.balance.toFixed(2)}</div>
-                </div>
-                <button 
-                  onClick={() => setActiveTab('add-funds')}
-                  className="px-4 py-2 bg-teal-600 rounded-lg font-semibold hover:bg-teal-700 transition flex items-center gap-2"
-                >
-                  <CreditCard className="w-4 h-4" />
-                  {language === 'es' ? 'Agregar Fondos' : 'Add Funds'}
-                </button>
-                
-                {/* Profile Dropdown */}
-                <div className="relative">
-                  <button 
-                    onClick={() => setShowProfileMenu(!showProfileMenu)}
-                    className="w-10 h-10 bg-gray-800 rounded-full flex items-center justify-center hover:bg-gray-700 transition"
-                  >
-                    <span className="font-bold">{user.email[0].toUpperCase()}</span>
-                  </button>
-                  
-                  {showProfileMenu && (
-                    <div className="absolute right-0 mt-2 w-56 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl overflow-hidden z-50">
-                      <div className="p-4 border-b border-gray-800">
-                        <div className="font-semibold text-white truncate">{user.name}</div>
-                        <div className="text-xs text-gray-400 truncate">{user.email}</div>
-                      </div>
-                      <button 
-                        onClick={() => { setShowProfileModal(true); setShowProfileMenu(false); }}
-                        className="w-full px-4 py-3 text-left hover:bg-gray-800 transition flex items-center gap-3"
-                      >
-                        <Key className="w-4 h-4" />
-                        {language === 'es' ? 'Mi Perfil' : 'My Profile'}
-                      </button>
-                      <button 
-                        onClick={() => { setActiveTab('account'); setShowProfileMenu(false); }}
-                        className="w-full px-4 py-3 text-left hover:bg-gray-800 transition flex items-center gap-3"
-                      >
-                        <Database className="w-4 h-4" />
-                        {language === 'es' ? 'Cuenta' : 'Account'}
-                      </button>
-                      <button 
-                        onClick={() => window.location.href = '/api/auth/logout'}
-                        className="w-full px-4 py-3 text-left hover:bg-blue-900/50 transition flex items-center gap-3 text-blue-400"
-                      >
-                        <Lock className="w-4 h-4" />
-                        {language === 'es' ? 'Cerrar Sesión' : 'Logout'}
-                      </button>
-                    </div>
-                  )}
-                </div>
+            {/* User Menu */}
+            <div className="flex items-center gap-3">
+              <div className="text-right">
+                <p className="text-sm text-white font-medium">{user.name}</p>
+                <p className="text-xs text-gray-400">${user.balance.toFixed(2)} USD</p>
               </div>
-            )}
+              <button
+                onClick={() => setLanguage(language === 'es' ? 'en' : 'es')}
+                className="px-3 py-2 border border-gray-700 rounded-lg text-sm hover:border-emerald-500 transition"
+              >
+                {language === 'es' ? 'EN' : 'ES'}
+              </button>
+              <button
+                onClick={() => setShowProfileModal(true)}
+                className="w-10 h-10 bg-emerald-500/20 rounded-full flex items-center justify-center border border-emerald-500/30 hover:bg-emerald-500/30 transition-all"
+              >
+                <span className="font-bold">{user.email[0].toUpperCase()}</span>
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      </header>
 
       <div className="max-w-7xl mx-auto px-6 py-8">
-        {/* Tabs */}
-        <div className="flex gap-4 mb-8 border-b border-gray-800">
-          <button
-            onClick={() => setActiveTab('upload')}
-            className={`px-6 py-3 font-semibold border-b-2 transition ${
-              activeTab === 'upload' 
-                ? 'border-blue-500 text-white' 
-                : 'border-transparent text-gray-500 hover:text-gray-300'
-            }`}
-          >
-            <Upload className="w-4 h-4 inline mr-2" />
-            {language === 'es' ? 'Subir Datos' : 'Upload Data'}
-          </button>
-          <button
-            onClick={() => setActiveTab('dashboard')}
-            className={`px-6 py-3 font-semibold border-b-2 transition ${
-              activeTab === 'dashboard' 
-                ? 'border-blue-500 text-white' 
-                : 'border-transparent text-gray-500 hover:text-gray-300'
-            }`}
-          >
-            <BarChart3 className="w-4 h-4 inline mr-2" />
-            Dashboard
-          </button>
-          <button
-            onClick={() => setActiveTab('history')}
-            className={`px-6 py-3 font-semibold border-b-2 transition ${
-              activeTab === 'history' 
-                ? 'border-blue-500 text-white' 
-                : 'border-transparent text-gray-500 hover:text-gray-300'
-            }`}
-          >
-            <Clock className="w-4 h-4 inline mr-2" />
-            {language === 'es' ? 'Historial' : 'History'}
-          </button>
-          <button
-            onClick={() => setActiveTab('add-funds')}
-            className={`px-6 py-3 font-semibold border-b-2 transition ${
-              activeTab === 'add-funds' 
-                ? 'border-blue-500 text-white' 
-                : 'border-transparent text-gray-500 hover:text-gray-300'
-            }`}
-          >
-            <CreditCard className="w-4 h-4 inline mr-2" />
-            {language === 'es' ? 'Agregar Fondos' : 'Add Funds'}
-          </button>
-          {isAdmin && (
-            <button
-              onClick={() => setActiveTab('admin')}
-              className={`px-6 py-3 font-semibold border-b-2 transition ${
-                activeTab === 'admin' 
-                  ? 'border-blue-500 text-white' 
-                  : 'border-transparent text-gray-500 hover:text-gray-300'
-              }`}
-            >
-              <User className="w-4 h-4 inline mr-2" />
-              Admin
-            </button>
-          )}
+        {/* ML Progress Tracker - ALWAYS VISIBLE */}
+        <div className="mb-6">
+          <MLProgressTracker 
+            stage={processingStage}
+            progress={processingProgress}
+            language={language}
+            fileName={selectedFile?.name}
+          />
         </div>
 
         {/* Upload Tab */}
         {activeTab === 'upload' && (
-          <div className="space-y-8">
-            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8">
-              <h2 className="text-2xl font-bold mb-6">{language === 'es' ? 'Subir Datos de Transacciones' : 'Upload Transaction Data'}</h2>
+          <div className="space-y-4">
+            <div className="bg-gray-900 border border-gray-800 rounded-2xl p-4">
+              <h2 className="text-xl font-bold mb-4">{language === 'es' ? 'Subir Datos de Transacciones' : 'Upload Transaction Data'}</h2>
               
               {/* File Format Info - CSV Only */}
-              <div className="flex items-center justify-center gap-6 mb-6 text-sm">
+              <div className="flex items-center justify-center gap-6 mb-4 text-sm">
                 <div className="flex items-center gap-2 px-4 py-2 bg-black/50 border border-gray-800 rounded-lg">
                   <FileText className="w-5 h-5 text-blue-400" />
                   <span className="text-gray-300">CSV</span>
@@ -1212,26 +1205,26 @@ return (
                 </div>
               </div>
 
-              {/* Upload Area */}
-              <div className="border-2 border-dashed border-gray-700 rounded-xl p-12 text-center hover:border-teal-500 transition">
-                <Upload className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-                <div className="text-lg font-semibold mb-2">{language === 'es' ? 'Arrastra tu archivo aquí o haz clic para seleccionar' : 'Drop your file here or click to browse'}</div>
-                <div className="text-sm text-gray-500 mb-4">
+              {/* Upload Area - REDUCED SIZE */}
+              <div className="border-2 border-dashed border-gray-700 rounded-xl p-3 text-center hover:border-teal-500 transition mb-4">
+                <Database className="w-6 h-6 text-gray-600 mx-auto mb-2" />
+                <div className="text-sm font-semibold mb-1">{language === 'es' ? 'Arrastra tu archivo aquí o haz clic para seleccionar' : 'Drop your file here or click to browse'}</div>
+                <div className="text-xs text-gray-500 mb-2">
                   {language === 'es' ? 'Solo CSV hasta 500MB. Exporta Excel como CSV.' : 'CSV only up to 500MB. Export Excel as CSV.'}
                 </div>
                 
-                {/* Estimated Cost Display */}
+                {/* Estimated Cost Display - COMPACT */}
                 {estimatedTransactions > 0 && (
-                  <div className="mb-4 p-4 bg-teal-900/20 border border-teal-800/30 rounded-lg">
-                    <div className="text-sm font-semibold text-teal-400 mb-2">
+                  <div className="mb-2 p-2 bg-teal-900/20 border border-teal-800/30 rounded-lg">
+                    <div className="text-xs font-semibold text-teal-400 mb-1">
                       {language === 'es' ? 'Costo Estimado' : 'Estimated Cost'}
                     </div>
-                    <div className="text-2xl font-bold mb-1">${estimatedCost.toFixed(2)}</div>
+                    <div className="text-sm font-bold mb-1">${estimatedCost.toFixed(2)}</div>
                     <div className="text-xs text-gray-400">
                       {estimatedTransactions.toLocaleString()} {language === 'es' ? 'transacciones' : 'transactions'}
                     </div>
                     {insufficientFunds && (
-                      <div className="mt-2 text-xs text-blue-400 flex items-center justify-center gap-1">
+                      <div className="mt-1 text-xs text-blue-400 flex items-center justify-center gap-1">
                         <AlertTriangle className="w-3 h-3" />
                         {language === 'es' ? 'Fondos insuficientes' : 'Insufficient funds'}
                       </div>
@@ -1251,7 +1244,7 @@ return (
                 />
                 <label
                   htmlFor="file-upload"
-                  className={`inline-block px-6 py-3 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-lg font-semibold transition ${
+                  className={`inline-block px-4 py-2 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-lg font-semibold transition text-sm ${
                     fileUploaded || isLoading 
                       ? 'opacity-50 cursor-not-allowed' 
                       : 'hover:from-blue-700 hover:to-emerald-600 cursor-pointer'
@@ -1266,64 +1259,68 @@ return (
                 </label>
               </div>
 
-              {/* ML Progress Tracker - Shows when processing */}
-              {processingStage && processingStage !== '' && (
-                <MLProgressTracker 
-                  stage={processingStage}
-                  progress={processingProgress}
-                  language={language}
-                  fileName={selectedFile?.name}
-                />
+              {/* ANALYZE BUTTON */}
+              {fileReadyForAnalysis && (
+                <div className="mb-4 flex justify-center">
+                  <button 
+                    onClick={handleAnalyzeWithAI}
+                    disabled={isLoading}
+                    className="px-6 py-3 bg-gradient-to-r from-teal-600 to-blue-600 hover:from-teal-700 hover:to-blue-700 rounded-lg font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 max-w-xs"
+                  >
+                    <Zap className="w-4 h-4" />
+                    {language === 'es' ? 'Analizar con IA' : 'Analyze with AI'}
+                  </button>
+                </div>
               )}
 
-              {/* Detailed File Statistics Panel */}
+              {/* Detailed File Statistics Panel - COMPACT */}
               {fileStats && (
-                <div className="mt-6 bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-xl p-6">
-                  <div className="flex items-center justify-between mb-4">
+                <div className="mt-3 bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-xl p-3">
+                  <div className="flex items-center justify-between mb-2">
                     <h3 className="text-lg font-bold flex items-center gap-2">
-                      <FileSpreadsheet className="w-5 h-5 text-teal-400" />
+                      <FileSpreadsheet className="w-4 h-4 text-teal-400" />
                       {language === 'es' ? 'Análisis del Archivo' : 'File Analysis'}
                     </h3>
                     <button 
                       onClick={clearSelectedFile}
-                      className="px-3 py-1 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/50 rounded-lg text-xs text-blue-400 hover:text-blue-300 transition flex items-center gap-1"
+                      className="px-2 py-1 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/50 rounded text-xs text-blue-400 hover:text-blue-300 transition flex items-center gap-1"
                     >
                       <AlertTriangle className="w-3 h-3" />
-                      {language === 'es' ? 'Eliminar Archivo' : 'Remove File'}
+                      {language === 'es' ? 'Eliminar' : 'Remove'}
                     </button>
                   </div>
                   
-                  <div className="grid md:grid-cols-2 gap-4 mb-4">
+                  <div className="grid md:grid-cols-2 gap-2 mb-2">
                     {/* File Info */}
-                    <div className="bg-black/50 border border-gray-800 rounded-lg p-4">
+                    <div className="bg-black/50 border border-gray-800 rounded-lg p-2">
                       <div className="text-xs text-gray-500 mb-1">{language === 'es' ? 'Archivo' : 'File'}</div>
                       <div className="font-semibold text-sm truncate">{fileStats.fileName}</div>
                       <div className="text-xs text-gray-600 mt-1">{(fileStats.fileSize / 1024 / 1024).toFixed(2)} MB</div>
                     </div>
                     
                     {/* Transaction Count */}
-                    <div className="bg-black/50 border border-gray-800 rounded-lg p-4">
+                    <div className="bg-black/50 border border-gray-800 rounded-lg p-2">
                       <div className="text-xs text-gray-500 mb-1">{language === 'es' ? 'Transacciones Detectadas' : 'Transactions Detected'}</div>
                       <div className="text-2xl font-bold text-teal-400">{fileStats.rows.toLocaleString()}</div>
                       <div className="text-xs text-gray-600 mt-1">{language === 'es' ? 'filas procesables' : 'processable rows'}</div>
                     </div>
                   </div>
                   
-                  <div className="grid md:grid-cols-3 gap-4 mb-4">
+                  <div className="grid md:grid-cols-3 gap-2 mb-2">
                     {/* Total Cost */}
-                    <div className="bg-black/50 border border-gray-800 rounded-lg p-4">
+                    <div className="bg-black/50 border border-gray-800 rounded-lg p-2">
                       <div className="text-xs text-gray-500 mb-1">{language === 'es' ? 'Costo Total' : 'Total Cost'}</div>
                       <div className="text-xl font-bold text-emerald-400">${estimatedCost.toFixed(2)} USD</div>
                     </div>
                     
                     {/* Available Balance */}
-                    <div className="bg-black/50 border border-gray-800 rounded-lg p-4">
+                    <div className="bg-black/50 border border-gray-800 rounded-lg p-2">
                       <div className="text-xs text-gray-500 mb-1">{language === 'es' ? 'Saldo Disponible' : 'Available Balance'}</div>
                       <div className="text-xl font-bold text-teal-400">${user.balance.toFixed(2)} USD</div>
                     </div>
                     
                     {/* Balance After Processing */}
-                    <div className="bg-black/50 border border-gray-800 rounded-lg p-4">
+                    <div className="bg-black/50 border border-gray-800 rounded-lg p-2">
                       <div className="text-xs text-gray-500 mb-1">{language === 'es' ? 'Saldo Después' : 'Balance After'}</div>
                       <div className={`text-xl font-bold ${user.balance >= estimatedCost ? 'text-green-400' : 'text-blue-400'}`}>
                         ${Math.max(0, user.balance - estimatedCost).toFixed(2)} USD
@@ -1331,37 +1328,17 @@ return (
                     </div>
                   </div>
                   
-                  {/* Visual Balance Comparison */}
-                  <div className="mb-4">
-                    <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
-                      <span>{language === 'es' ? 'Comparación de Saldo' : 'Balance Comparison'}</span>
-                      <span>{((estimatedCost / user.balance) * 100).toFixed(1)}% {language === 'es' ? 'del saldo' : 'of balance'}</span>
-                    </div>
-                    <div className="w-full bg-gray-800 rounded-full h-3 overflow-hidden">
-                      <div 
-                        className={`h-full transition-all duration-500 ${
-                          insufficientFunds 
-                            ? 'bg-gradient-to-r from-blue-600 to-blue-400' 
-                            : estimatedCost / user.balance > 0.8
-                            ? 'bg-gradient-to-r from-emerald-600 to-emerald-400'
-                            : 'bg-gradient-to-r from-teal-600 to-teal-400'
-                        }`}
-                        style={{ width: `${Math.min(100, (estimatedCost / user.balance) * 100)}%` }}
-                      />
-                    </div>
-                  </div>
-                  
-                  {/* Status Message Box */}
+                  {/* Status Message Box - COMPACT */}
                   {statusMessage ? (
-                    <div className={`rounded-lg p-4 flex items-start gap-3 ${
+                    <div className={`rounded-lg p-3 flex items-start gap-3 ${
                       statusMessage.type === 'success' ? 'bg-teal-900/20 border border-teal-800/30' :
                       statusMessage.type === 'error' ? 'bg-blue-900/20 border border-blue-800/30' :
                       statusMessage.type === 'warning' ? 'bg-emerald-900/20 border border-emerald-800/30' :
                       'bg-blue-900/20 border border-blue-800/30'
                     }`}>
-                      {statusMessage.type === 'success' && <CheckCircle className="w-5 h-5 text-teal-400 flex-shrink-0 mt-0.5" />}
-                      {statusMessage.type === 'error' && <AlertTriangle className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />}
-                      {statusMessage.type === 'warning' && <AlertTriangle className="w-5 h-5 text-emerald-400 flex-shrink-0 mt-0.5" />}
+                      {statusMessage.type === 'success' && <CheckCircle className="w-4 h-4 text-teal-400 flex-shrink-0 mt-0.5" />}
+                      {statusMessage.type === 'error' && <AlertTriangle className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />}
+                      {statusMessage.type === 'warning' && <AlertTriangle className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />}
                       <div className="flex-1">
                         <div className={`text-sm ${
                           statusMessage.type === 'success' ? 'text-gray-300' :
@@ -1371,21 +1348,11 @@ return (
                         }`}>
                           {statusMessage.message}
                         </div>
-                        {fileReadyForAnalysis && statusMessage.type === 'success' && (
-                          <button 
-                            onClick={handleAnalyzeWithAI}
-                            disabled={isLoading}
-                            className="mt-3 px-6 py-3 bg-gradient-to-r from-teal-600 to-blue-600 hover:from-teal-700 hover:to-blue-700 rounded-lg font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                          >
-                            <Zap className="w-4 h-4" />
-                            {language === 'es' ? 'Analizar con IA' : 'Analyze with AI'}
-                          </button>
-                        )}
                       </div>
                     </div>
                   ) : insufficientFunds ? (
-                    <div className="bg-blue-900/20 border border-blue-800/30 rounded-lg p-4 flex items-start gap-3">
-                      <AlertTriangle className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+                    <div className="bg-blue-900/20 border border-blue-800/30 rounded-lg p-2 flex items-start gap-3">
+                      <AlertTriangle className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
                       <div>
                         <div className="font-semibold text-blue-400 mb-1">
                           {language === 'es' ? 'Fondos Insuficientes' : 'Insufficient Funds'}
@@ -1395,44 +1362,27 @@ return (
                             ? `Necesitas $${(estimatedCost - user.balance).toFixed(2)} USD adicionales para procesar este archivo.` 
                             : `You need an additional $${(estimatedCost - user.balance).toFixed(2)} USD to process this file.`}
                         </div>
-                        <button 
-                          onClick={() => setActiveTab('pricing')}
-                          className="mt-3 text-sm px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition"
-                        >
-                          {language === 'es' ? 'Agregar Fondos' : 'Add Funds'}
-                        </button>
                       </div>
                     </div>
                   ) : (
-                    <div className="bg-teal-900/20 border border-teal-800/30 rounded-lg p-4 flex items-start gap-3">
-                      <CheckCircle className="w-5 h-5 text-teal-400 flex-shrink-0 mt-0.5" />
+                    <div className="bg-teal-900/20 border border-teal-800/30 rounded-lg p-2 flex items-start gap-3">
                       <div className="flex-1">
                         <div className="font-semibold text-teal-400 mb-1">
                           {language === 'es' ? 'Listo para Procesar' : 'Ready to Process'}
                         </div>
-                        <div className="text-sm text-gray-400 mb-3">
+                        <div className="text-sm text-gray-400 mb-2">
                           {language === 'es' 
                             ? `Tu saldo es suficiente. Después del procesamiento tendrás $${(user.balance - estimatedCost).toFixed(2)} USD disponibles.`
                             : `Your balance is sufficient. After processing you'll have $${(user.balance - estimatedCost).toFixed(2)} USD available.`}
                         </div>
-                        {fileReadyForAnalysis && (
-                          <button 
-                            onClick={handleAnalyzeWithAI}
-                            disabled={isLoading}
-                            className="px-6 py-3 bg-gradient-to-r from-teal-600 to-blue-600 hover:from-teal-700 hover:to-blue-700 rounded-lg font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                          >
-                            <Zap className="w-4 h-4" />
-                            {language === 'es' ? 'Analizar con IA' : 'Analyze with AI'}
-                          </button>
-                        )}
                       </div>
                     </div>
                   )}
                 </div>
               )}
 
-              {/* Required Fields Info */}
-              <div className="mt-6 p-4 bg-teal-900/20 border border-teal-800/30 rounded-lg">
+              {/* Required Fields Info - COMPACT */}
+              <div className="mt-3 p-2 bg-teal-900/20 border border-teal-800/30 rounded-lg">
                 {(() => {
                   const required = ['cliente_id','monto','fecha','tipo_operacion','sector_actividad'];
                   const detectedSet = new Set(detectedColumns.map(c => c.toLowerCase().trim()));
@@ -1458,21 +1408,21 @@ return (
                         ))}
                       </div>
                       {detectedColumns.length > 0 && (
-                        <div className="mt-3 text-xs flex items-center gap-2">
+                        <div className="mt-2 text-xs flex items-center gap-2">
                           {missing.length === 0 ? (
                             <>
-                              <CheckCircle2 className="w-4 h-4 text-teal-400" />
+                              <CheckCircle2 className="w-3 h-3 text-teal-400" />
                               <span className="text-teal-400">{language === 'es' ? 'Todos los campos requeridos presentes' : 'All required fields present'}</span>
                             </>
                           ) : (
                             <>
-                              <AlertTriangle className="w-4 h-4 text-blue-400" />
+                              <AlertTriangle className="w-3 h-3 text-blue-400" />
                               <span className="text-blue-400">{language === 'es' ? `Faltan: ${missing.join(', ')}` : `Missing: ${missing.join(', ')}`}</span>
                             </>
                           )}
                         </div>
                       )}
-                      <button className="mt-3 text-xs text-teal-400 hover:text-teal-300 underline">
+                      <button className="mt-2 text-xs text-teal-400 hover:text-teal-300 underline">
                         {language === 'es' ? 'Descargar Plantilla de Ejemplo' : 'Download Sample Template'}
                       </button>
                     </>
@@ -1493,8 +1443,9 @@ return (
               isLoading={isLoading}
               onRefresh={() => {/* Implement refresh logic */}}
               onViewDetails={(result) => {
+                // Guardar transacción seleccionada, pero NO abrir el modal padre.
+                // El modal de detalle se renderiza ahora desde `DashboardTab`.
                 setSelectedTransaction(result);
-                setShowTransactionModal(true);
               }}
               onDownloadReport={(result) => {/* Implement download logic */}}
               classificationFilter={classificationFilter}
@@ -1806,18 +1757,60 @@ return (
             </div>
 
             <div className="p-6 space-y-6">
-              {/* Score EBR */}
               <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-lg font-semibold text-teal-400">{language === 'es' ? 'Score EBR' : 'EBR Score'}</h4>
-                  <div className="flex items-center gap-3">
-                    <span className="px-4 py-2 rounded-lg text-xl font-bold bg-white/10 text-white">
-                      {selectedTransaction.score_ebr !== undefined ? selectedTransaction.score_ebr.toFixed(2) : 'N/A'}
+                <h4 className="text-lg font-semibold text-teal-400">
+                  {language === 'es' ? 'Índices de Riesgo' : 'Risk Indices'}
+                </h4>
+                <div className="flex flex-wrap items-center gap-3 mt-3">
+                  {/* EBR */}
+                  <div className="flex items-center gap-2">
+                    <BarChart3 className="w-4 h-4 text-teal-300 inline-block mr-1" />
+                    <span className="text-xs text-gray-400">
+                      {language === 'es' ? 'EBR (índice de riesgo)' : 'EBR (risk index)'}
                     </span>
-                    <span className="px-3 py-1 rounded-full text-sm font-semibold bg-white/10 text-white border border-white/20">
-                      {selectedTransaction.nivel_confianza ? (language === 'es' ? `Confianza: ${selectedTransaction.nivel_confianza}` : `Confidence: ${selectedTransaction.nivel_confianza}`) : ''}
+                    <span className="px-3 py-1 rounded-lg text-lg font-bold bg-white/10 text-white">
+                      {selectedTransaction.score_ebr !== undefined
+                        ? selectedTransaction.score_ebr.toFixed(2)
+                        : 'N/A'}
                     </span>
                   </div>
+
+                  {/* ICA */}
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-emerald-300 inline-block mr-1" />
+                    <span className="text-xs text-gray-400">
+                      {language === 'es'
+                        ? 'ICA (Índice de Confianza Algorítmica)'
+                        : 'ACA (Algorithmic Confidence Index)'}
+                    </span>
+                    <span className="px-3 py-1 rounded-lg text-lg font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/40">
+                      {selectedTransaction.ica_score !== undefined
+                        ? selectedTransaction.ica_score.toFixed(2)
+                        : 'N/A'}
+                    </span>
+                  </div>
+
+                  {/* Nivel de riesgo semántico */}
+                  {selectedTransaction.nivel_riesgo && (
+                    <span className="flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-teal-500/10 text-teal-300 border border-teal-400/40">
+                      <AlertTriangle className="w-4 h-4 text-yellow-300 inline-block" />
+                      {language === 'es'
+                        ? `Nivel de riesgo: ${
+                            selectedTransaction.nivel_riesgo === 'alto'
+                              ? 'Alto'
+                              : selectedTransaction.nivel_riesgo === 'medio'
+                              ? 'Medio'
+                              : 'Bajo'
+                          }`
+                        : `Risk level: ${
+                            selectedTransaction.nivel_riesgo === 'alto'
+                              ? 'High'
+                              : selectedTransaction.nivel_riesgo === 'medio'
+                              ? 'Medium'
+                              : 'Low'
+                          }`}
+                    </span>
+                  )}
                 </div>
               </div>
 

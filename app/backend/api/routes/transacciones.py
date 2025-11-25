@@ -44,7 +44,13 @@ async def analisis(file: UploadFile = File(...)):
     for _, row in df.iterrows():
         # Aquí deberías obtener triggers reales; usamos ejemplo fijo para demo
         triggers = ["guardrail_aviso_umbral"] if row["pred_es_sospechoso"] == 1 else ["inusual_monto_rango_alto"]
-        explicacion = explainer.explicar_transaccion(row, row["score_ebr"], triggers)
+        explicacion = explainer.explicar_transaccion(
+            row, 
+            row["score_ebr"],  # score_ebr
+            triggers,  # triggers
+            "ml",  # origen
+            None  # probas_ml
+        )
         explicaciones.append({
             "clasificacion": explicacion["clasificacion"],
             "score_ebr": explicacion["score_ebr"],

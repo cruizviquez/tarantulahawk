@@ -10,8 +10,14 @@ interface SessionMonitorProps {
 
 export default function SessionMonitor({ 
   userId, 
-  inactivityTimeout = 15 * 60 * 1000 
+  inactivityTimeout
 }: SessionMonitorProps) {
+  // Determine effective timeout, allowing env var to control default when prop omitted
+  const envTimeoutRaw = typeof process !== 'undefined' && process.env ? process.env.NEXT_PUBLIC_SESSION_INACTIVITY_TIMEOUT : undefined
+  const envTimeout = envTimeoutRaw ? Number(envTimeoutRaw) : undefined
+  const effectiveTimeout = inactivityTimeout !== undefined
+    ? inactivityTimeout
+    : (envTimeout && envTimeout > 0 ? envTimeout : Number.POSITIVE_INFINITY)
   const lastActivityRef = useRef<number>(Date.now())
   const warningShownRef = useRef<boolean>(false)
   const [showWarning, setShowWarning] = useState(false)
@@ -49,6 +55,11 @@ export default function SessionMonitor({
   }
 
   useEffect(() => {
+    // If monitoring disabled, do nothing
+    if (!Number.isFinite(effectiveTimeout) || effectiveTimeout <= 0) {
+      return
+    }
+
     const events = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click']
     
     events.forEach(event => {
@@ -60,17 +71,15 @@ export default function SessionMonitor({
 
     const checkInterval = setInterval(() => {
       const inactiveTime = Date.now() - lastActivityRef.current
-
-      if (inactiveTime >= inactivityTimeout - WARNING_TIME && !warningShownRef.current) {
+      if (inactiveTime >= effectiveTimeout - WARNING_TIME && !warningShownRef.current) {
         setShowWarning(true)
         warningShownRef.current = true
       }
-
-      if (inactiveTime >= inactivityTimeout) {
+      if (inactiveTime >= effectiveTimeout) {
         handleLogout()
       }
       // Background heartbeat while user is active (< timeout)
-      if (inactiveTime < inactivityTimeout) {
+      if (inactiveTime < effectiveTimeout) {
         void sendHeartbeat()
       }
     }, 30000)

@@ -37,7 +37,22 @@ import httpx  # Para verificar con Supabase API
 # Import validador_enriquecedor from utils
 import sys
 sys.path.insert(0, str(Path(__file__).parent / "utils"))
-from validador_enriquecedor import enrich_features, procesar_archivo, normalizar_sector
+try:
+    # Try explicit import via importlib to provide better diagnostics on failure
+    import importlib
+    import validador_enriquecedor as _ve
+    importlib.reload(_ve)
+    enrich_features = getattr(_ve, 'enrich_features', None)
+    procesar_archivo = getattr(_ve, 'procesar_archivo', None)
+    normalizar_sector = getattr(_ve, 'normalizar_sector', None)
+    missing = [n for n in ('enrich_features','procesar_archivo','normalizar_sector') if globals().get(n) is None]
+    if missing:
+        raise ImportError(f"validador_enriquecedor missing symbols: {missing}")
+except Exception as e:
+    import traceback
+    print("❌ Error importing validador_enriquecedor:", e)
+    traceback.print_exc()
+    raise
 
 # Use shared pricing utility that reads config/pricing.json
 try:
@@ -148,15 +163,21 @@ async def check_email_exists(request: Request):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# Add logging middleware to debug CORS
+# Add logging middleware (reducido para producción)
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    print(f"📥 Request: {request.method} {request.url.path}")
-    print(f"   Origin: {request.headers.get('origin', 'None')}")
+    # ✅ CORREGIDO: Solo loguear en modo debug
+    debug_mode = os.getenv("DEBUG_MODE", "").lower() in ("1", "true", "yes")
+    if debug_mode:
+        print(f"📥 Request: {request.method} {request.url.path}")
+        print(f"   Origin: {request.headers.get('origin', 'None')}")
+    
     response = await call_next(request)
-    print(f"📤 Response: {response.status_code}")
-    print(f"   CORS Allow-Origin: {response.headers.get('access-control-allow-origin', 'MISSING')}")
-    print(f"   CORS Allow-Credentials: {response.headers.get('access-control-allow-credentials', 'MISSING')}")
+    
+    if debug_mode:
+        print(f"📤 Response: {response.status_code}")
+        print(f"   CORS Allow-Origin: {response.headers.get('access-control-allow-origin', 'MISSING')}")
+    
     return response
 
 # Load ML models on startup
@@ -199,6 +220,9 @@ ML_MODELS = {
     "no_supervisado": None,
     "refuerzo": None
 }
+
+# ✅ CORREGIDO: Progress tracking global (en producción usar Redis)
+ANALYSIS_PROGRESS = {}
 
 # Load ML models on startup
 def cargar_modelos_ml():
@@ -302,7 +326,7 @@ class Transaccion(BaseModel):
     monto: float = Field(..., gt=0, description="Transaction amount (MXN/USD)")
     fecha: str = Field(..., description="ISO format date")
     tipo_operacion: str = Field(..., description="Operation type")
-    sector_actividad: str = Field(..., description="Business sector")
+    sector_actividad: Optional[str] = Field(None, description="Business sector (optional - inferred if missing)")
     frecuencia_mensual: int = Field(default=1, ge=1)
     cliente_id: int = Field(..., gt=0)
     tipo_persona: Optional[str] = "fisica"
@@ -383,22 +407,18 @@ def calcular_costo_actualizado(num_transacciones: int, billing: Dict[str, Any]) 
     Returns:
         Dict con: costo, requires_payment
     """
-    # Use shared pricing tiers utility for consistency
-    try:
-        if PricingTier is not None:
-            costo = float(PricingTier.calculate_cost(int(max(0, num_transacciones))))
-        else:
-            raise ImportError("PricingTier not available")
-    except Exception:
-        # Fallback if pricing_tiers unavailable
-        costo = calcular_costo(num_transacciones)
+    # Calcular costo
+    costo = calcular_costo(num_transacciones)
     
-    requires_payment = costo > billing["balance"]
+    balance = float(billing.get("balance", 0.0))
+    requires_payment = costo > balance
+    
+    print(f"💵 [BILLING] Cálculo: {num_transacciones} txns → ${costo:.2f} | Balance: ${balance:.2f} | Requiere pago: {requires_payment}")
     
     return {
         "costo": costo,
         "requires_payment": requires_payment,
-        "current_balance": billing["balance"]
+        "current_balance": balance
     }
 
 
@@ -502,12 +522,14 @@ def generar_api_key() -> tuple:
 
 def crear_jwt_token(user_id: str, email: str) -> str:
     """Create JWT token for portal users"""
-    expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    from datetime import timezone
+    now = datetime.now(timezone.utc)
+    expire = now + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     payload = {
         "sub": user_id,
         "email": email,
         "exp": expire,
-        "iat": datetime.utcnow()
+        "iat": now
     }
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
@@ -546,7 +568,7 @@ def verificar_hmac_signature(
         current_time = time.time()
         if abs(current_time - request_time) > 300:  # 5 minutes
             return False
-    except:
+    except (ValueError, TypeError):
         return False
     
     # Check nonce (prevent replay)
@@ -620,18 +642,9 @@ def validar_usuario_portal(
         # Fallback to X-User-ID for backwards compatibility (development only)
         raise HTTPException(status_code=401, detail="Authentication required")
 
-"""
-✅ FUNCIÓN PARA COPIAR Y PEGAR EN enhanced_main_api.py
-
-Instrucciones:
-1. Abrir enhanced_main_api.py
-2. Buscar la línea 348 (después de la función validar_usuario_portal)
-3. Copiar y pegar TODO este código
-4. Guardar archivo
-"""
 
 # ===================================================================
-# ✅ NUEVO: VALIDACIÓN JWT DE SUPABASE
+# ✅ VALIDACIÓN JWT DE SUPABASE
 # ===================================================================
 
 async def verificar_token_supabase(
@@ -783,27 +796,6 @@ async def verificar_token_supabase(
 # Alias for backwards compatibility
 validar_supabase_jwt = verificar_token_supabase
 
-# ===================================================================
-# EJEMPLO DE USO EN ENDPOINTS
-# ===================================================================
-
-# ANTES:
-# @app.post("/api/portal/validate")
-# async def validar_archivo(
-#     file: UploadFile = File(...),
-#     user: Dict = Depends(validar_supabase_jwt)  # ❌ Viejo
-# ):
-
-# DESPUÉS:
-# @app.post("/api/portal/validate")
-# async def validar_archivo(
-#     file: UploadFile = File(...),
-#     user: Dict = Depends(validar_supabase_jwt)  # ✅ Nuevo
-# ):
-#     user_id = user["user_id"]
-#     email = user["email"]
-#     # ... resto del código
-
 
 
 
@@ -811,17 +803,61 @@ validar_supabase_jwt = verificar_token_supabase
 # DATA VALIDATION & ENRICHMENT (LFPIORPI Compliant)
 # ===================================================================
 
-# LFPIORPI thresholds (official Mexican law)
-UMBRAL_RELEVANTE = 170_000  # MXN - Must report to UIF
-UMBRAL_EFECTIVO = 165_000  # MXN - Cash operations threshold
-UMBRAL_ESTRUCTURACION_MIN = 150_000  # Structuring detection
-UMBRAL_ESTRUCTURACION_MAX = 169_999
+# ✅ CORREGIDO: Cargar umbrales desde config_modelos.json en lugar de hardcodear
+def cargar_config_lfpiorpi() -> Dict[str, Any]:
+    """Carga configuración LFPIORPI desde config_modelos.json"""
+    config_path = Path(__file__).parent.parent / "models" / "config_modelos.json"
+    if config_path.exists():
+        with open(config_path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {}
 
-# High-risk sectors per LFPIORPI
-SECTORES_ALTO_RIESGO = {
-    "casa_cambio", "joyeria_metales", "arte_antiguedades", 
-    "transmision_dinero", "casino", "apuestas"
-}
+def get_uma_diaria(cfg: Dict = None) -> float:
+    """Obtiene UMA diaria desde config"""
+    if cfg is None:
+        cfg = cargar_config_lfpiorpi()
+    return float(cfg.get("lfpiorpi", {}).get("uma_diaria", 113.14))
+
+def get_umbral_aviso_mxn(fraccion: str, cfg: Dict = None) -> float:
+    """Obtiene umbral de aviso en MXN para una fracción LFPIORPI"""
+    if cfg is None:
+        cfg = cargar_config_lfpiorpi()
+    uma = get_uma_diaria(cfg)
+    umbrales = cfg.get("lfpiorpi", {}).get("umbrales", {})
+    
+    # Buscar umbral específico para la fracción
+    if fraccion in umbrales:
+        return uma * umbrales[fraccion].get("aviso_UMA", 645)
+    # Fallback a umbral general
+    return uma * umbrales.get("_general", {}).get("aviso_UMA", 645)
+
+def get_umbral_efectivo_mxn(fraccion: str, cfg: Dict = None) -> float:
+    """Obtiene umbral de efectivo en MXN para una fracción LFPIORPI"""
+    if cfg is None:
+        cfg = cargar_config_lfpiorpi()
+    uma = get_uma_diaria(cfg)
+    umbrales = cfg.get("lfpiorpi", {}).get("umbrales", {})
+    
+    if fraccion in umbrales:
+        return uma * umbrales[fraccion].get("efectivo_max_UMA", 8025)
+    return uma * umbrales.get("_general", {}).get("efectivo_max_UMA", 8025)
+
+def get_sectores_alto_riesgo(cfg: Dict = None) -> set:
+    """Obtiene lista de sectores de alto riesgo desde config"""
+    if cfg is None:
+        cfg = cargar_config_lfpiorpi()
+    return set(cfg.get("lfpiorpi", {}).get("actividad_alto_riesgo", [
+        "activos_virtuales", "criptomonedas", "traslado_valores",
+        "casa_cambio", "cambio_divisas", "transmision_dinero", "joyeria_metales"
+    ]))
+
+# Cache de config para evitar lecturas repetidas
+_CONFIG_CACHE = None
+def get_cached_config() -> Dict:
+    global _CONFIG_CACHE
+    if _CONFIG_CACHE is None:
+        _CONFIG_CACHE = cargar_config_lfpiorpi()
+    return _CONFIG_CACHE
 
 def validar_enriquecer_datos(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -836,8 +872,9 @@ def validar_enriquecer_datos(df: pd.DataFrame) -> pd.DataFrame:
     Returns clean DataFrame ready for ML processing
     """
     # V3: Validación integrada en enrich_features
-    # Verifica 5 columnas requeridas: cliente_id, monto, fecha, tipo_operacion, sector_actividad
-    required = ["cliente_id", "monto", "fecha", "tipo_operacion", "sector_actividad"]
+    # ✅ CORREGIDO: sector_actividad es OPCIONAL (se infiere si falta)
+    required = ["cliente_id", "monto", "fecha", "tipo_operacion"]
+    optional = ["sector_actividad", "hora", "id_transaccion"]
     missing = [c for c in required if c not in df.columns]
     if missing:
         raise HTTPException(
@@ -873,8 +910,8 @@ def procesar_transacciones_core(
     if not analysis_id:
         analysis_id = str(uuid.uuid4())
 
-    # Dict para tracking de progreso en tiempo real
-    ANALYSIS_PROGRESS = {}    
+    # ✅ CORREGIDO: Usar ANALYSIS_PROGRESS global
+    global ANALYSIS_PROGRESS
     
     # Initialize progress tracking
     ANALYSIS_PROGRESS[analysis_id] = {
@@ -959,19 +996,24 @@ def procesar_transacciones_core(
                 print(f"   🎯 Casos detectados: {casos_detectados}")
         except Exception as e:
             print(f"   ⚠️ Error en modelo supervisado: {e}")
-            scores_supervisado = np.random.rand(total_txns) * 0.3  # Fallback
+            # ✅ CORREGIDO: Fallback conservador en lugar de aleatorio
+            scores_supervisado = np.zeros(total_txns)  # Sin ML = score 0 (conservador)
     else:
-        print("\n⚠️ Modelo Supervisado no disponible - usando fallback")
-        scores_supervisado = np.random.rand(total_txns) * 0.3
+        print("\n⚠️ Modelo Supervisado no disponible - usando fallback conservador")
+        scores_supervisado = np.zeros(total_txns)  # Sin ML = score 0
     
     # ============================================================
-    # LAYER 2: UNSUPERVISED MODEL
+    # LAYER 2: UNSUPERVISED MODEL + ANOMALY DETECTION
     # ============================================================
     ANALYSIS_PROGRESS[analysis_id].update({
         "stage": "ml_unsupervised",
         "progress": 55,
         "message": "Aplicando IA No Supervisada (Detección de Anomalías)...",
     })
+    
+    # Track anomaly flags for each transaction
+    anomaly_flags = [False] * total_txns
+    top_anomalies_indices = []
     
     if ML_MODELS["no_supervisado"] is not None:
         try:
@@ -1004,28 +1046,38 @@ def procesar_transacciones_core(
                     # Convert to [0,1] range (lower = more anomalous)
                     scores_no_supervisado = 1 - ((anomaly_scores - anomaly_scores.min()) / 
                                                 (anomaly_scores.max() - anomaly_scores.min() + 1e-10))
+                    
+                    # ✅ MARCAR TOP ANOMALÍAS (top 10% más anómalas)
+                    threshold_anomaly = np.percentile(scores_no_supervisado, 90)  # Top 10% más anómalas
+                    for i, score in enumerate(scores_no_supervisado):
+                        if score >= threshold_anomaly:
+                            anomaly_flags[i] = True
+                            top_anomalies_indices.append(i)
+                    
                     anomalias = int((scores_no_supervisado > 0.7).sum())
                     ANALYSIS_PROGRESS[analysis_id].update({
                         "progress": 70,
                         "details": {
                             "casos_detectados_supervisado": ANALYSIS_PROGRESS[analysis_id]["details"].get("casos_detectados_supervisado", 0),
-                            "anomalias_adicionales": anomalias
+                            "anomalias_adicionales": anomalias,
+                            "top_anomalies_count": len(top_anomalies_indices)
                         }
                     })
                     print(f"   ✅ {len(scores_no_supervisado)} anomalías analizadas")
                     print(f"   📊 Anomalías detectadas: {anomalias}")
+                    print(f"   🎯 Top anomalías marcadas: {len(top_anomalies_indices)}")
             else:
                 print(f"   ⚠️ No hay features válidas para el modelo")
-                scores_no_supervisado = np.random.rand(total_txns) * 0.4
+                scores_no_supervisado = np.zeros(total_txns)  # ✅ Conservador
         except Exception as e:
             print(f"   ⚠️ Error en modelo no supervisado: {e}")
-            scores_no_supervisado = np.random.rand(total_txns) * 0.4
+            scores_no_supervisado = np.zeros(total_txns)  # ✅ Conservador
     else:
-        print("\n⚠️ Modelo No Supervisado no disponible - usando fallback")
-        scores_no_supervisado = np.random.rand(total_txns) * 0.4
+        print("\n⚠️ Modelo No Supervisado no disponible - usando fallback conservador")
+        scores_no_supervisado = np.zeros(total_txns)  # ✅ Conservador
     
     # ============================================================
-    # LAYER 3: REINFORCEMENT LEARNING
+    # LAYER 3: REINFORCEMENT LEARNING + ANOMALY INTEGRATION
     # ============================================================
     ANALYSIS_PROGRESS[analysis_id].update({
         "stage": "ml_reinforcement",
@@ -1035,44 +1087,55 @@ def procesar_transacciones_core(
     
     if ML_MODELS["refuerzo"] is not None:
         try:
-            print("\n🟡 Capa 3: Modelo Refuerzo (Q-Learning Thresholds)")
+            print("\n🟡 Capa 3: Modelo Refuerzo (Q-Learning Thresholds + Anomalías)")
             q_table = ML_MODELS["refuerzo"]
             
-            # Apply adaptive thresholds based on Q-learning
+            # Combine supervised + unsupervised scores
             combined_scores = (scores_supervisado + scores_no_supervisado) / 2
             
-            # Adjust scores based on learned thresholds
+            # Apply adaptive thresholds based on Q-learning + anomaly flags
             for i in range(total_txns):
                 score = combined_scores[i]
-                # Simple Q-learning adjustment (can be enhanced)
-                state = int(score * 10)  # Discretize to 0-10
+                is_top_anomaly = anomaly_flags[i]  # From unsupervised layer
+                
+                # Discretize score for Q-table lookup
+                state = int(score * 10)  # 0-10 scale
                 state_key = str(state)
                 
                 if state_key in q_table:
                     q_values = q_table[state_key]
                     best_action = max(q_values, key=q_values.get)
                     
-                    # Adjust score based on learned action
+                    # Base adjustment from Q-learning
                     if best_action == 'increase_threshold':
                         scores_refuerzo[i] = score * 1.2
                     elif best_action == 'decrease_threshold':
                         scores_refuerzo[i] = score * 0.8
                     else:
                         scores_refuerzo[i] = score
+                    
+                    # ✅ BOOST TOP ANOMALÍAS: Si es top anomalía, aumentar score adicionalmente
+                    if is_top_anomaly:
+                        scores_refuerzo[i] *= 1.3  # 30% boost for top anomalies
+                        print(f"   🚨 Anomalía top #{i+1}: score boosted {score:.3f} → {scores_refuerzo[i]:.3f}")
                 else:
                     scores_refuerzo[i] = score
             
-            ajustes = int((scores_refuerzo != (scores_supervisado + scores_no_supervisado) / 2).sum())
+            ajustes = int((scores_refuerzo != combined_scores).sum())
+            top_anomaly_boosts = sum(1 for flag in anomaly_flags if flag)
+            
             ANALYSIS_PROGRESS[analysis_id].update({
                 "progress": 90,
                 "details": {
                     **ANALYSIS_PROGRESS[analysis_id]["details"],
-                    "ajustes_threshold": ajustes
+                    "ajustes_threshold": ajustes,
+                    "top_anomaly_boosts": top_anomaly_boosts
                 }
             })
             print(f"   ✅ {total_txns} ajustes adaptativos aplicados")
             print(f"   📊 Score final promedio: {scores_refuerzo.mean():.3f}")
             print(f"   ⚙️  Thresholds ajustados: {ajustes} transacciones")
+            print(f"   🚨 Top anomalías boosted: {top_anomaly_boosts}")
         except Exception as e:
             print(f"   ⚠️ Error en modelo refuerzo: {e}")
             scores_refuerzo = (scores_supervisado + scores_no_supervisado) / 2
@@ -1107,27 +1170,37 @@ def procesar_transacciones_core(
     print(f"{'='*70}")
     
     lfpiorpi_overrides = 0
+    cfg = get_cached_config()  # ✅ Usar config cacheado
     
     for i in range(total_txns):
         row = df.iloc[i]
         monto = float(row.get("monto", 0))
         es_efectivo = int(row.get("EsEfectivo", 0))
-        es_estructurada = int(row.get("EsEstructurada", 0))
         
-        # Rule 1: Monto >= 170,000 MXN → PREOCUPANTE
-        if monto >= 170000:
+        # ✅ CORREGIDO: Calcular structuring desde features disponibles
+        es_monto_redondo = int(row.get("es_monto_redondo", 0))
+        posible_burst = int(row.get("posible_burst", 0))
+        es_estructurada = es_monto_redondo and posible_burst  # Indicador de structuring
+        
+        # ✅ CORREGIDO: Obtener umbral según fracción de la transacción
+        fraccion = str(row.get("fraccion", "_general"))
+        umbral_aviso = get_umbral_aviso_mxn(fraccion, cfg)
+        umbral_efectivo = get_umbral_efectivo_mxn(fraccion, cfg)
+        
+        # Rule 1: Monto >= umbral de aviso → PREOCUPANTE
+        if monto >= umbral_aviso:
             if final_scores[i] < 0.85:
                 final_scores[i] = 0.85
                 lfpiorpi_overrides += 1
         
-        # Rule 2: Efectivo >= 165,000 MXN → PREOCUPANTE
-        elif es_efectivo and monto >= 165000:
+        # Rule 2: Efectivo >= umbral de efectivo → PREOCUPANTE
+        elif es_efectivo and monto >= umbral_efectivo:
             if final_scores[i] < 0.85:
                 final_scores[i] = 0.85
                 lfpiorpi_overrides += 1
         
-        # Rule 3: Estructuración + Efectivo → PREOCUPANTE
-        elif es_estructurada and es_efectivo:
+        # Rule 3: Estructuración (monto redondo + burst) + Efectivo → PREOCUPANTE
+        elif es_estructurada and es_efectivo and monto >= (umbral_aviso * 0.7):
             if final_scores[i] < 0.85:
                 final_scores[i] = 0.85
                 lfpiorpi_overrides += 1
@@ -1190,6 +1263,8 @@ def procesar_transacciones_core(
             razones.append("Patrón sospechoso detectado (ML Supervisado)")
         if scores_no_supervisado[i] > 0.7:
             razones.append("Anomalía detectada (ML No Supervisado)")
+        if anomaly_flags[i]:  # Top anomaly flag
+            razones.append("Top anomalía identificada (ML No Supervisado)")
         if float(row.get("monto", 0)) > 100000:
             razones.append("Monto elevado")
         
@@ -1245,30 +1320,53 @@ def procesar_transacciones_core(
     return resultados
 
 def calcular_costo(num_transacciones: int, _tier: str = "ignored") -> float:
-    """Calculate processing cost using shared config-driven tiers when available."""
+    """
+    Calculate processing cost using tiered pricing.
+    
+    Modelo escalonado:
+    - 1-2,000 txns: $1.00/txn
+    - 2,001-5,000 txns: $0.75/txn  
+    - 5,001-10,000 txns: $0.50/txn
+    - 10,001+ txns: $0.35/txn
+    """
+    # Try shared pricing utility first
     try:
         if PricingTier is not None:
-            return float(PricingTier.calculate_cost(int(max(0, num_transacciones))))
-    except Exception:
-        pass
-    # Fallback to hardcoded tiers if shared utility unavailable
+            cost = float(PricingTier.calculate_cost(int(max(0, num_transacciones))))
+            print(f"💰 [PRICING] PricingTier: {num_transacciones} txns = ${cost:.2f}")
+            return cost
+    except Exception as e:
+        print(f"⚠️  [PRICING] PricingTier falló: {e}, usando cálculo local")
+    
+    # Fallback: cálculo local escalonado
     remaining = int(max(0, num_transacciones))
     cost = 0.0
+    
     if remaining == 0:
         return 0.0
+    
+    # Tier 1: 1-2,000 @ $1.00
     take = min(remaining, 2000)
     cost += take * 1.0
     remaining -= take
+    
+    # Tier 2: 2,001-5,000 @ $0.75
     if remaining > 0:
         take = min(remaining, 3000)
         cost += take * 0.75
         remaining -= take
+    
+    # Tier 3: 5,001-10,000 @ $0.50
     if remaining > 0:
         take = min(remaining, 5000)
         cost += take * 0.50
         remaining -= take
+    
+    # Tier 4: 10,001+ @ $0.35
     if remaining > 0:
         cost += remaining * 0.35
+    
+    print(f"💰 [PRICING] Local calc: {num_transacciones} txns = ${cost:.2f}")
     return cost
 
 def generar_xml_lfpiorpi_oficial(
@@ -1561,7 +1659,9 @@ async def validar_archivo_portal(
         
         # Get column names from the dataframe
         columns = df.columns.tolist()
-        required_cols = ["cliente_id", "monto", "fecha", "tipo_operacion", "sector_actividad"]
+        # ✅ CORREGIDO: sector_actividad es OPCIONAL
+        required_cols = ["cliente_id", "monto", "fecha", "tipo_operacion"]
+        optional_cols = ["sector_actividad", "hora", "id_transaccion"]
         missing = [c for c in required_cols if c not in columns]
 
         if missing:
@@ -1575,7 +1675,8 @@ async def validar_archivo_portal(
                 detail={
                     "error": "Archivo inválido - faltan columnas obligatorias",
                     "missing_columns": missing,
-                    "required": required_cols
+                    "required": required_cols,
+                    "optional": optional_cols
                 }
             )
         
@@ -1673,8 +1774,9 @@ async def upload_archivo_portal(
             os.remove(file_path)
             raise HTTPException(status_code=400, detail="Formato no soportado. Use .csv")
 
-        # REQUIRED COLUMNS ENFORCEMENT (hard stop before enrichment)
-        required_cols = ["cliente_id", "monto", "fecha", "tipo_operacion", "sector_actividad"]
+        # ✅ CORREGIDO: sector_actividad es OPCIONAL (se infiere en validador_enriquecedor)
+        required_cols = ["cliente_id", "monto", "fecha", "tipo_operacion"]
+        optional_cols = ["sector_actividad", "hora", "id_transaccion"]
         missing = [c for c in required_cols if c not in df.columns]
         if missing:
             try:
@@ -1686,7 +1788,9 @@ async def upload_archivo_portal(
                 detail={
                     "error": "Archivo inválido - faltan columnas obligatorias",
                     "missing_columns": missing,
-                    "required": required_cols
+                    "required": required_cols,
+                    "optional": optional_cols,
+                    "note": "sector_actividad es opcional y se inferirá automáticamente"
                 }
             )
         
@@ -1697,29 +1801,32 @@ async def upload_archivo_portal(
         
         try:
             config_path = Path(__file__).parent.parent / "models" / "config_modelos.json"
-            # Import inside try-catch to catch import errors
-            import sys
-            utils_path = Path(__file__).parent / "utils"
-            if str(utils_path) not in sys.path:
-                sys.path.insert(0, str(utils_path))
             
-            from validador_enriquecedor import procesar_archivo
-            
+            # ✅ CORREGIDO: Usar procesar_archivo ya importado al inicio (no re-importar)
             # Enrich en modo inferencia (no agrega clasificacion_lfpiorpi)
-            # No inventar sector_actividad: exigir columna ya validada
             enriched_path = procesar_archivo(
                 str(file_path),
-                sector_actividad="use_file",  # marcador semántico (ignored if file already has column)
+                sector_actividad="use_file",  # marcador semántico (usa columna del archivo si existe)
                 config_path=str(config_path),
                 training_mode=False,
                 analysis_id=analysis_id
             )
             
             print(f"✅ Enriquecido guardado en: {enriched_path}")
-            
+
             # Verify file was actually created
             if not Path(enriched_path).exists():
                 raise FileNotFoundError(f"Enriched file not found: {enriched_path}")
+
+            # Ensure runner sees the enriched file where it expects: outputs/enriched/pending/<analysis_id>.csv
+            try:
+                pending_dir = Path(__file__).parent.parent / "outputs" / "enriched" / "pending"
+                pending_dir.mkdir(parents=True, exist_ok=True)
+                pending_path = pending_dir / f"{analysis_id}.csv"
+                shutil.copy2(enriched_path, pending_path)
+                print(f"✅ Copied enriched to pending: {pending_path}")
+            except Exception as copy_err:
+                print(f"⚠️ Could not copy enriched to pending: {copy_err}")
                 
         except Exception as enrich_error:
             print(f"❌ Error en enriquecimiento:")
@@ -1750,12 +1857,20 @@ async def upload_archivo_portal(
         print(result.stdout)
         
         # STEP 3: Load results from processed/{analysis_id}.json
-        results_path = Path(__file__).parent.parent / "outputs" / "enriched" / "processed" / f"{analysis_id}.json"
+        # ✅ CORREGIDO: Buscar ambos formatos de archivo
+        results_dir = Path(__file__).parent.parent / "outputs" / "enriched" / "processed"
+        results_path = results_dir / f"{analysis_id}.json"
+        results_path_v2 = results_dir / f"{analysis_id}_v2.json"
         
-        if not results_path.exists():
-            raise HTTPException(status_code=500, detail="No se generaron resultados")
+        # Intentar ambos paths
+        if results_path_v2.exists():
+            actual_path = results_path_v2
+        elif results_path.exists():
+            actual_path = results_path
+        else:
+            raise HTTPException(status_code=500, detail=f"No se generaron resultados. Buscado: {results_path.name} o {results_path_v2.name}")
         
-        with open(results_path, 'r', encoding='utf-8') as f:
+        with open(actual_path, 'r', encoding='utf-8') as f:
             resultados = json.load(f)
         
         # STEP 4: Billing - Check balance and charge user
@@ -1819,7 +1934,7 @@ async def upload_archivo_portal(
                 "pagado": True,
                 "original_file_path": f"uploads/archived/{user_id}/{analysis_id}_original.csv",
                 "processed_file_path": f"outputs/enriched/processed/{analysis_id}.csv",
-                "json_results_path": f"outputs/enriched/processed/{analysis_id}.json",
+                "json_results_path": f"outputs/enriched/processed/{analysis_id}_v2.json",
                 "xml_path": resultados.get("xml_path"),
                 "resumen": resultados["resumen"],
                 "estrategia": resultados["resumen"].get("estrategia"),

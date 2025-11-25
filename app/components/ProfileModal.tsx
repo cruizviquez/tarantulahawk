@@ -57,6 +57,13 @@ export default function ProfileModal({ user, onClose, onUpdate }: ProfileModalPr
     }
   };
 
+  const handleLogout = () => {
+    // Navigate to server logout route which will clear session cookies and redirect
+    if (typeof window !== 'undefined') {
+      window.location.href = '/api/auth/logout';
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
       <div className="bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden">
@@ -252,6 +259,13 @@ export default function ProfileModal({ user, onClose, onUpdate }: ProfileModalPr
 
         {/* Footer */}
         <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-800 bg-gray-900/50">
+          <button
+            onClick={handleLogout}
+            className="px-5 py-2 border border-red-600 rounded-lg text-red-400 hover:bg-red-700/10 transition font-semibold"
+          >
+            Cerrar sesión
+          </button>
+
           <button
             onClick={onClose}
             className="px-6 py-2 border border-gray-700 rounded-lg text-gray-300 hover:bg-gray-800 transition font-semibold"

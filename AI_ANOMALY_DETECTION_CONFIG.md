@@ -143,8 +143,10 @@ NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbG...
 SUPABASE_SERVICE_ROLE_KEY=eyJhbG... # ⚠️ NUNCA exponer en cliente
 
-# Session Timeout (opcional - default: 15 min)
-SESSION_INACTIVITY_TIMEOUT=900000 # 15 minutos en milisegundos
+# Session Timeout (opcional - default: disabled)
+# Set `NEXT_PUBLIC_SESSION_INACTIVITY_TIMEOUT` to 0 to disable, or a positive integer (milliseconds) to enable auto-logout client-side.
+# Example: 900000 = 15 minutes
+NEXT_PUBLIC_SESSION_INACTIVITY_TIMEOUT=0 # 0 => disabled; e.g., 900000 for 15 minutes
 
 # AI Alert Settings (opcional)
 SLACK_WEBHOOK_URL=https://hooks.slack.com/... # Para alertas en Slack

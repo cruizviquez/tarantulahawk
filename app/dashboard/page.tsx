@@ -90,9 +90,10 @@ export default async function DashboardPage() {
 
   return (
     <Suspense fallback={<DashboardLoading />}>
+      {/* Session inactivity monitoring: use NEXT_PUBLIC_SESSION_INACTIVITY_TIMEOUT if provided, otherwise disabled */}
       <SessionMonitor 
         userId={user.id} 
-        inactivityTimeout={15 * 60 * 1000} 
+        inactivityTimeout={process.env.NEXT_PUBLIC_SESSION_INACTIVITY_TIMEOUT ? Number(process.env.NEXT_PUBLIC_SESSION_INACTIVITY_TIMEOUT) : 0} 
       />
       
       {/** Usar el portal clásico en dashboard **/}
