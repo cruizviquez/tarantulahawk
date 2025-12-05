@@ -66,10 +66,10 @@ export default function ProfileModal({ user, onClose, onUpdate }: ProfileModalPr
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[9999] p-4">
-      <div className="bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden">
+      <div className="bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-2xl max-w-2xl w-full shadow-2xl overflow-hidden text-sm">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-800">
-          <h2 className="text-2xl font-bold text-white">Mi Cuenta</h2>
+          <h2 className="text-xl font-bold text-white">Mi Cuenta</h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-white transition p-2 hover:bg-gray-800 rounded-lg"
@@ -105,7 +105,7 @@ export default function ProfileModal({ user, onClose, onUpdate }: ProfileModalPr
         </div>
 
         {/* Content */}
-        <div className="p-6 max-h-[60vh] overflow-y-auto">
+        <div className="p-4 max-h-[65vh] overflow-y-auto">
           {activeTab === 'profile' ? (
             <div className="space-y-6">
               {/* Avatar */}
@@ -198,6 +198,20 @@ export default function ProfileModal({ user, onClose, onUpdate }: ProfileModalPr
                   className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-teal-400"
                   placeholder="+1 (555) 123-4567"
                 />
+              </div>
+              {/* Giro de Negocio (read-only) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-2">Giro de Negocio</label>
+                <input
+                  type="text"
+                  value={
+                    // Prefer human-friendly sector, fall back to fraccion code
+                    (user as any).sector_actividad || (user as any).fraccion_lfpiorpi || ''
+                  }
+                  disabled
+                  className="w-full px-4 py-2 bg-gray-800/50 border border-gray-700 rounded-lg text-gray-300 cursor-not-allowed"
+                />
+                <p className="text-xs text-gray-500 mt-1">Giro registrado (solo lectura)</p>
               </div>
             </div>
           ) : (

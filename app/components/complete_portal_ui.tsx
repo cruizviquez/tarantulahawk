@@ -212,6 +212,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
   const [estimatedCost, setEstimatedCost] = useState<number>(0);
   const [insufficientFunds, setInsufficientFunds] = useState<boolean>(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  
   const [fileStats, setFileStats] = useState<{rows: number, fileName: string, fileSize: number} | null>(null);
   const [processingStage, setProcessingStage] = useState<string>(''); // '', 'uploading', 'validating', 'ml_supervised', 'ml_unsupervised', 'ml_reinforcement', 'generating_report', 'complete'
   const [processingProgress, setProcessingProgress] = useState<number>(0);
@@ -682,22 +683,23 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
   	// Get auth token from Supabase
   	const token = await getAuthToken();
   
-  	// Send file for processing
+    // Send file for processing
   	const formData = new FormData();
   	formData.append('file', selectedFile);
   	setProcessingStage('ml_supervised');
   	setProcessingProgress(10);
   	console.log('🤖 Iniciando análisis con IA...');
   
-    	const response = await fetch(`${API_URL}/api/portal/upload`, {
-    	  method: 'POST',
-    	  headers: {
-      	    'Authorization': `Bearer ${token}`,
-            'X-User-ID': user.id,
-          },
-          body: formData,
-          credentials: 'include',
-        });
+      // Send file
+      const response = await fetch(`${API_URL}/api/portal/upload`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'X-User-ID': user.id,
+        },
+        body: formData,
+        credentials: 'include',
+      });
   
         if (!response.ok) {
           const errorText = await response.text();
@@ -1849,7 +1851,7 @@ return (
                         <span>{language === 'es' ? 'Se sugiere reclasificación' : 'Reclassification suggested'}</span>
                       </div>
                     )}
-                    {selectedTransaction.flags.alertas.map((alerta, idx) => (
+                    {selectedTransaction.flags.alertas.map((alerta: { tipo?: string; severidad: 'info' | 'warning' | 'error'; mensaje: string; de?: string; a?: string }, idx: number) => (
                       <div key={idx} className={`p-3 rounded-lg ${
                         alerta.severidad === 'error' ? 'bg-red-500/10 border border-red-500/30' :
                         alerta.severidad === 'warning' ? 'bg-yellow-500/10 border border-yellow-500/30' :
@@ -1890,7 +1892,7 @@ return (
                 <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5">
                   <h4 className="text-lg font-semibold text-gray-300 mb-3">{language === 'es' ? 'Razones de Clasificación' : 'Classification Reasons'}</h4>
                   <div className="flex flex-wrap gap-2">
-                    {selectedTransaction.razones.map((razon, idx) => (
+                    {selectedTransaction.razones.map((razon: string, idx: number) => (
                       <span key={idx} className="px-3 py-1 bg-teal-500/10 text-teal-400 rounded-full text-sm border border-teal-500/30">
                         {razon}
                       </span>

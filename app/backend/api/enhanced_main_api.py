@@ -315,6 +315,8 @@ class Usuario(BaseModel):
     password: str
     company: Optional[str] = None
     tier: str = "free"  # free, small, enterprise
+    sector_actividad: Optional[str] = None
+    fraccion_lfpiorpi: Optional[str] = None
 
 class APIKey(BaseModel):
     key: str
@@ -1503,7 +1505,10 @@ def generar_xml_lfpiorpi_oficial(
 @app.post("/api/auth/register")
 async def registrar_usuario(usuario: Usuario):
     """Register new user (portal flow)"""
-    
+    # Require giro_negocio / fraccion on registration
+    if not (usuario.sector_actividad or usuario.fraccion_lfpiorpi):
+        raise HTTPException(status_code=400, detail="El campo 'giro_negocio' (sector_actividad) es obligatorio en el registro")
+
     # Check if email exists
     for user_data in USERS_DB.values():
         if user_data["email"] == usuario.email:
@@ -1518,6 +1523,8 @@ async def registrar_usuario(usuario: Usuario):
         "company": usuario.company,
         "tier": usuario.tier,
         "balance": 0.0,
+        "sector_actividad": usuario.sector_actividad,
+        "fraccion_lfpiorpi": usuario.fraccion_lfpiorpi,
         "created_at": datetime.now(),
         "total_analyses": 0
     }
@@ -1525,12 +1532,67 @@ async def registrar_usuario(usuario: Usuario):
     # Generate JWT token
     token = crear_jwt_token(user_id, usuario.email)
     
+    # Persist profile in Supabase (if available)
+    try:
+        if supabase_admin:
+            profile_payload = {
+                "id": user_id,
+                "email": usuario.email,
+                "company": usuario.company,
+                "sector_actividad": usuario.sector_actividad,
+                "fraccion_lfpiorpi": usuario.fraccion_lfpiorpi,
+                "account_balance_usd": 0.0,
+                "created_at": datetime.now().isoformat()
+            }
+            supabase_admin.table("profiles").insert(profile_payload).execute()
+            print(f"✅ Perfil creado en Supabase para {user_id}")
+    except Exception as e:
+        print(f"⚠️  No se pudo insertar perfil en Supabase: {e}")
+
     return {
         "success": True,
         "user_id": user_id,
         "token": token,  # Return JWT
         "message": "Usuario registrado exitosamente"
     }
+
+
+@app.post("/api/auth/save-profile")
+async def save_profile(payload: Dict[str, Any]):
+    """Persist sector_actividad and fraccion_lfpiorpi in Supabase profiles by email (upsert)."""
+    email = payload.get("email")
+    sector = payload.get("sector_actividad")
+    fraccion = payload.get("fraccion_lfpiorpi")
+
+    if not email:
+        raise HTTPException(status_code=400, detail="email required")
+
+    # Require giro/fraccion when saving profile
+    if not sector or not fraccion:
+        raise HTTPException(status_code=400, detail="sector_actividad and fraccion_lfpiorpi are required")
+
+    if not supabase_admin:
+        # Try to persist locally
+        for uid, u in USERS_DB.items():
+            if u.get("email") == email:
+                u["sector_actividad"] = sector
+                u["fraccion_lfpiorpi"] = fraccion
+                return {"success": True, "updated_local": True}
+        return {"success": False, "error": "Supabase admin client not configured"}
+
+    try:
+        profile_payload = {
+            "email": email,
+            "sector_actividad": sector,
+            "fraccion_lfpiorpi": fraccion,
+            "updated_at": datetime.now().isoformat()
+        }
+        # Use upsert to create or update by email
+        resp = supabase_admin.table("profiles").upsert(profile_payload).execute()
+        return {"success": True, "supabase": getattr(resp, 'data', None)}
+    except Exception as e:
+        print(f"⚠️ Error saving profile: {e}")
+        return {"success": False, "error": str(e)}
 
 @app.post("/api/auth/login")
 @limiter.limit("5/minute")  # Prevent brute force attacks
@@ -1716,7 +1778,7 @@ async def upload_preflight(request: Request):
         headers={
             "Access-Control-Allow-Origin": origin,
             "Access-Control-Allow-Methods": "POST, OPTIONS",
-            "Access-Control-Allow-Headers": "Authorization, Content-Type, X-User-ID",
+            "Access-Control-Allow-Headers": "Authorization, Content-Type, X-User-ID, X-Skip-No-Supervised",
             "Access-Control-Allow-Credentials": "true",
             "Access-Control-Max-Age": "3600",
         },
@@ -1728,6 +1790,8 @@ async def upload_archivo_portal(
     request: Request,
     file: UploadFile = File(...),
     user: Dict = Depends(validar_supabase_jwt)
+    ,
+    skip_no_supervised: Optional[str] = Header(None, alias="X-Skip-No-Supervised")
 ):
     """
     SMALL USER FLOW - Portal Upload (NEW: usando runner externo)
@@ -1801,21 +1865,58 @@ async def upload_archivo_portal(
         
         try:
             config_path = Path(__file__).parent.parent / "models" / "config_modelos.json"
-            
-            # ✅ CORREGIDO: Usar procesar_archivo ya importado al inicio (no re-importar)
-            # Enrich en modo inferencia (no agrega clasificacion_lfpiorpi)
-            enriched_path = procesar_archivo(
-                str(file_path),
-                sector_actividad="use_file",  # marcador semántico (usa columna del archivo si existe)
-                config_path=str(config_path),
-                training_mode=False,
-                analysis_id=analysis_id
-            )
-            
-            print(f"✅ Enriquecido guardado en: {enriched_path}")
 
-            # Verify file was actually created
-            if not Path(enriched_path).exists():
+            # Try to fetch user's saved fraccion/sector from Supabase profiles
+            user_fraccion = None
+            user_sector = None
+            try:
+                if supabase_admin:
+                    resp = supabase_admin.table("profiles").select("fraccion_lfpiorpi,sector_actividad").eq("id", user["user_id"]).limit(1).execute()
+                    if resp and getattr(resp, 'data', None):
+                        row = resp.data[0]
+                        user_fraccion = row.get("fraccion_lfpiorpi")
+                        user_sector = row.get("sector_actividad")
+                        print(f"🔎 Perfil Supabase: fraccion={user_fraccion}, sector={user_sector}")
+            except Exception as sup_err:
+                print(f"⚠️ Could not fetch profile from Supabase: {sup_err}")
+
+            # Prefer direct enriquecer_art17_file when we have a fraccion key
+            enriched_path = None
+            try:
+                enrich_file_fn = getattr(_ve, 'enriquecer_art17_file', None)
+            except Exception:
+                enrich_file_fn = None
+
+            if user_fraccion and enrich_file_fn:
+                # Use validador's file-level enricher that accepts fraccion_lfpiorpi directly
+                enriched_path = enrich_file_fn(
+                    input_path=str(file_path),
+                    cfg=cargar_config_lfpiorpi(),
+                    fraccion_lfpiorpi=user_fraccion,
+                    training_mode=False,
+                    analysis_id=analysis_id,
+                )
+                print(f"✅ Enriquecido (fraccion fija) guardado en: {enriched_path}")
+            else:
+                # Fallback: call procesar_archivo and let it infer from file or optional sector
+                sector_input = user_sector if user_sector else "use_file"
+                enriched_path = procesar_archivo(
+                    str(file_path),
+                    sector_actividad=sector_input,
+                    config_path=str(config_path),
+                    training_mode=False,
+                    analysis_id=analysis_id
+                )
+
+            # Procesar retorno: procesar_archivo/enriquecer_art17_file puede devolver either a path string
+            if isinstance(enriched_path, (tuple, list)):
+                success = enriched_path[0]
+                msg = enriched_path[1] if len(enriched_path) > 1 else None
+                if not success:
+                    raise HTTPException(status_code=400, detail={"error": "Enrichment failed", "message": msg})
+                enriched_path = msg
+
+            if not enriched_path or not Path(enriched_path).exists():
                 raise FileNotFoundError(f"Enriched file not found: {enriched_path}")
 
             # Ensure runner sees the enriched file where it expects: outputs/enriched/pending/<analysis_id>.csv
@@ -1827,7 +1928,7 @@ async def upload_archivo_portal(
                 print(f"✅ Copied enriched to pending: {pending_path}")
             except Exception as copy_err:
                 print(f"⚠️ Could not copy enriched to pending: {copy_err}")
-                
+
         except Exception as enrich_error:
             print(f"❌ Error en enriquecimiento:")
             import traceback
@@ -1839,8 +1940,18 @@ async def upload_archivo_portal(
         
         import subprocess
         runner_path = Path(__file__).parent / "ml_runner.py"
+        # Prepare environment for runner subprocess; forward SKIP flag if provided
+        env = os.environ.copy()
+        if skip_no_supervised and str(skip_no_supervised).lower() in ("1", "true", "yes"):
+            env["SKIP_NO_SUPERVISED"] = "1"
+            print("⚠️ Forwarding SKIP_NO_SUPERVISED to runner")
+        # Forward user's fraccion if available so runner can apply fraccion-specific rules
+        if user_fraccion:
+            env["FRACCION_LFPIORPI"] = str(user_fraccion)
+            print(f"⚠️ Forwarding FRACCION_LFPIORPI={user_fraccion} to runner")
         result = subprocess.run(
             [sys.executable, str(runner_path), analysis_id],
+            env=env,
             capture_output=True,
             text=True,
             timeout=300  # 5 min timeout
@@ -1872,6 +1983,30 @@ async def upload_archivo_portal(
         
         with open(actual_path, 'r', encoding='utf-8') as f:
             resultados = json.load(f)
+
+        # Normalizar estructura de resultados:
+        # - Caso V2 (esperado): dict con keys 'resumen' y 'transacciones'
+        # - Caso legacy: el JSON puede ser el diccionario 'resumen' directamente
+        if isinstance(resultados, dict):
+            if 'resumen' not in resultados:
+                # Legacy: fuiste devuelto un dict que YA ES el resumen; envolverlo en V2
+                resumen_obj = resultados
+                resultados = {
+                    'analysis_id': analysis_id,
+                    'resumen': resumen_obj,
+                    'transacciones': []
+                }
+            else:
+                # Asegurar claves mínimas
+                if 'transacciones' not in resultados:
+                    resultados['transacciones'] = []
+        else:
+            # Forma inesperada → construir estructura mínima
+            resultados = {
+                'analysis_id': analysis_id,
+                'resumen': {},
+                'transacciones': []
+            }
         
         # STEP 4: Billing - Check balance and charge user
         num_transacciones = len(df)
@@ -1934,7 +2069,7 @@ async def upload_archivo_portal(
                 "pagado": True,
                 "original_file_path": f"uploads/archived/{user_id}/{analysis_id}_original.csv",
                 "processed_file_path": f"outputs/enriched/processed/{analysis_id}.csv",
-                "json_results_path": f"outputs/enriched/processed/{analysis_id}_v2.json",
+                "json_results_path": f"outputs/enriched/processed/{actual_path.name}",
                 "xml_path": resultados.get("xml_path"),
                 "resumen": resultados["resumen"],
                 "estrategia": resultados["resumen"].get("estrategia"),

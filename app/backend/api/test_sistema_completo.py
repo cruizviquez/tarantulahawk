@@ -18,7 +18,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 from predictor_adaptive import TarantulaHawkPredictorFinal
-from explicabilidad_transactions import ExplicabilidadEnriquecida
+from app.backend.api.explicabilidad_transactions_v4 import ExplicabilidadEnriquecida
 import pandas as pd
 import numpy as np
 import json

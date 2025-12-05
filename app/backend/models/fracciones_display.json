@@ -1,0 +1,34 @@
+{
+  "version": "1.0",
+  "descripcion": "Mapeo de etiquetas amigables a claves de fracción LFPIORPI",
+  "mappings": {
+    "Venta de vehículos": {
+      "fraccion": "VIII_vehiculos",
+      "alto_riesgo": true
+    },
+    "Inmobiliaria": {
+      "fraccion": "V_inmuebles",
+      "alto_riesgo": true
+    },
+    "Casas de cambio": {
+      "fraccion": "III_cheques_viajero",
+      "alto_riesgo": true
+    },
+    "Joyeria / Metales": {
+      "fraccion": "VI_joyeria_metales",
+      "alto_riesgo": true
+    },
+    "Servicios generales": {
+      "fraccion": "servicios_generales",
+      "alto_riesgo": false
+    },
+    "Servicios profesionales": {
+      "fraccion": "XI_servicios_profesionales",
+      "alto_riesgo": true
+    },
+    "Activos virtuales / Cripto": {
+      "fraccion": "XVI_activos_virtualos",
+      "alto_riesgo": true
+    }
+  }
+}

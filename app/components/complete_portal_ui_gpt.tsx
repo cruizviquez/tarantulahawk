@@ -196,6 +196,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
   const [estimatedCost, setEstimatedCost] = useState<number>(0);
   const [insufficientFunds, setInsufficientFunds] = useState<boolean>(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [skipNoSupervised, setSkipNoSupervised] = useState<boolean>(false);
   const [fileStats, setFileStats] = useState<{rows: number, fileName: string, fileSize: number} | null>(null);
   const [processingStage, setProcessingStage] = useState<string>(''); // '', 'uploading', 'validating', 'ml_supervised', 'ml_unsupervised', 'ml_reinforcement', 'generating_report', 'complete'
   const [processingProgress, setProcessingProgress] = useState<number>(0);
@@ -673,12 +674,15 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
   	setProcessingProgress(10);
   	console.log('🤖 Iniciando análisis con IA...');
   
-    	const response = await fetch(`${API_URL}/api/portal/upload`, {
+      const headers: any = {
+        'Authorization': `Bearer ${token}`,
+        'X-User-ID': user.id,
+      };
+      if (skipNoSupervised) headers['X-Skip-No-Supervised'] = '1';
+
+      const response = await fetch(`${API_URL}/api/portal/upload`, {
     	  method: 'POST',
-    	  headers: {
-      	    'Authorization': `Bearer ${token}`,
-            'X-User-ID': user.id,
-          },
+        headers: headers,
           body: formData,
           credentials: 'include',
         });
@@ -1229,7 +1233,21 @@ return (
 
               {/* ANALYZE BUTTON */}
               {fileReadyForAnalysis && (
-                <div className="mb-4 flex justify-center">
+                <div className="mb-4 flex flex-col items-center gap-3">
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-2 text-sm text-gray-300">
+                      <input
+                        type="checkbox"
+                        checked={skipNoSupervised}
+                        onChange={(e) => setSkipNoSupervised(e.target.checked)}
+                        className="h-4 w-4 text-teal-500 rounded"
+                      />
+                      <span className="text-xs">
+                        {language === 'es' ? 'Omitir IA no supervisada (debug)' : 'Skip Unsupervised AI (debug)'}
+                      </span>
+                    </label>
+                  </div>
+                  <div className="flex justify-center">
                   <button 
                     onClick={handleAnalyzeWithAI}
                     disabled={isLoading}
@@ -1238,6 +1256,7 @@ return (
                     <Zap className="w-4 h-4" />
                     {language === 'es' ? 'Analizar con IA' : 'Analyze with AI'}
                   </button>
+                  </div>
                 </div>
               )}
 
@@ -1779,7 +1798,7 @@ return (
                         <span>{language === 'es' ? 'Se sugiere reclasificación' : 'Reclassification suggested'}</span>
                       </div>
                     )}
-                    {selectedTransaction.flags.alertas.map((alerta, idx) => (
+                    {selectedTransaction.flags.alertas.map((alerta: { tipo?: string; severidad: 'info' | 'warning' | 'error'; mensaje: string; de?: string; a?: string }, idx: number) => (
                       <div key={idx} className={`p-3 rounded-lg ${
                         alerta.severidad === 'error' ? 'bg-red-500/10 border border-red-500/30' :
                         alerta.severidad === 'warning' ? 'bg-yellow-500/10 border border-yellow-500/30' :
@@ -1820,7 +1839,7 @@ return (
                 <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5">
                   <h4 className="text-lg font-semibold text-gray-300 mb-3">{language === 'es' ? 'Razones de Clasificación' : 'Classification Reasons'}</h4>
                   <div className="flex flex-wrap gap-2">
-                    {selectedTransaction.razones.map((razon, idx) => (
+                    {selectedTransaction.razones.map((razon: string, idx: number) => (
                       <span key={idx} className="px-3 py-1 bg-teal-500/10 text-teal-400 rounded-full text-sm border border-teal-500/30">
                         {razon}
                       </span>

@@ -1,694 +1,478 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-explicabilidad_transactions.py - VERSIÓN CORREGIDA
+explicabilidad_transactions.py - VERSIÓN 5.0
 
-Genera explicaciones completas para transacciones clasificadas.
+Objetivo: explicaciones muy simples y directas de "por qué fue etiquetado así".
 
-Contenido de la explicación:
-- ICA numérico (0-1, no etiquetas)
-- Top 3 razones principales con fundamento legal
-- Fundamento LFPIORPI con artículo, fracción y UMAs
-- Acciones sugeridas según clasificación
-- Contexto regulatorio
+- PREOCUPANTE:
+    "Rebasa el umbral UMA: el máximo sin aviso es XX UMAs (~YY MXN) y el monto
+     de la operación es ZZ MXN (≈CC UMAs)."
 
-Funciones principales:
-- build_explicacion(): Construye explicación completa
-- generar_explicacion_transaccion(): Wrapper de compatibilidad
+- RELEVANTE:
+    "Sin anomalía detectada."
+
+- INUSUAL:
+    "monto redondo; efectivo muy cercano al máximo permitido; acumulado alto
+     en los últimos 6 meses; frecuencia alta en los últimos 6 meses;
+     patrón inusual detectado por el modelo no supervisado (score 0.82)."
+
+Además se incluye un desglose del índice EBR en:
+    detalles["detalle_ebr"] = {
+        "score_total": <int>,
+        "factores": [
+            {"factor": "efectivo", "descripcion": "...", "puntos": 25},
+            ...
+        ]
+    }
 """
 
 import json
 from pathlib import Path
-from datetime import datetime
-from typing import Dict, Any, List, Optional, Tuple
-
+from typing import Dict, Any, Optional, Tuple, List
 
 # ============================================================================
-# CONFIGURACIÓN LFPIORPI
+# CONFIGURACIÓN
 # ============================================================================
-_LFPI_CONFIG: Dict[str, Any] = {}
+
+_CONFIG_CACHE: Dict[str, Any] = {}
 
 
-def _cargar_config_lfpiorpi() -> Dict[str, Any]:
-    """Carga configuración LFPIORPI desde config_modelos.json"""
-    global _LFPI_CONFIG
-    
-    if _LFPI_CONFIG:
-        return _LFPI_CONFIG
-    
-    # Buscar config
+def cargar_config() -> Dict[str, Any]:
+    """Carga configuración (config_modelos.json / v4) una sola vez."""
+    global _CONFIG_CACHE
+    if _CONFIG_CACHE:
+        return _CONFIG_CACHE
+
     here = Path(__file__).resolve().parent
     candidates = [
         here.parent / "models" / "config_modelos.json",
-        here.parent / "config" / "config_modelos.json",
         here / "config_modelos.json",
-        Path.cwd() / "app" / "backend" / "models" / "config_modelos.json",
+        here / "config_modelos_v4.json",  # por compatibilidad
     ]
-    
+
     for p in candidates:
         if p.exists():
-            try:
-                with open(p, "r", encoding="utf-8") as f:
-                    config = json.load(f)
-                    _LFPI_CONFIG = config.get("lfpiorpi", {})
-                    return _LFPI_CONFIG
-            except Exception:
-                continue
-    
-    # Fallback con valores por defecto
-    _LFPI_CONFIG = {
-        "uma_mxn": 113.14,
-        "uma_diaria": 113.14,
-        "umbrales": {
-            "_general": {"aviso_UMA": 645, "efectivo_max_UMA": 8025}
-        }
-    }
-    return _LFPI_CONFIG
+            with open(p, "r", encoding="utf-8") as f:
+                _CONFIG_CACHE = json.load(f)
+                return _CONFIG_CACHE
+
+    # Fallback mínimo
+    _CONFIG_CACHE = {"lfpiorpi": {"uma_mxn": 113.14}, "ebr": {"ponderaciones": {}}}
+    return _CONFIG_CACHE
 
 
 def get_uma_mxn() -> float:
-    """Obtiene valor de UMA en MXN"""
-    cfg = _cargar_config_lfpiorpi()
-    return float(cfg.get("uma_mxn", cfg.get("uma_diaria", 113.14)))
+    cfg = cargar_config()
+    return float(cfg.get("lfpiorpi", {}).get("uma_mxn", 113.14))
+
+
+def get_umbrales_fraccion(fraccion: str) -> Tuple[float, float]:
+    """
+    Regresa (aviso_UMA, efectivo_max_UMA) para la fracción dada.
+    Si no existe, regresa valores de '_general' o 0.
+    """
+    cfg = cargar_config()
+    umbrales = cfg.get("lfpiorpi", {}).get("umbrales", {})
+    data = umbrales.get(fraccion) or umbrales.get("_general", {})
+    aviso_uma = float(data.get("aviso_UMA", 0) or 0)
+    efectivo_max_uma = float(data.get("efectivo_max_UMA", 0) or 0)
+    return aviso_uma, efectivo_max_uma
 
 
 # ============================================================================
-# MAPEO SECTOR → FRACCIÓN LFPIORPI
+# MAPEO FRACCIÓN → DESCRIPCIÓN LEGAL
+# (reutilizado de la versión anterior)
 # ============================================================================
-MAPEO_FRACCIONES = {
-    # Fracción I - Juegos y sorteos
-    "juegos_apuestas": ("I", "realización habitual de juegos con apuesta, concursos o sorteos"),
-    "casino": ("I", "realización habitual de juegos con apuesta, concursos o sorteos"),
-    
-    # Fracción II - Emisión de tarjetas
-    "tarjetas": ("II", "emisión y comercialización de tarjetas de servicios y de crédito"),
-    
-    # Fracción III - Operaciones de divisas
-    "casa_cambio": ("III", "operaciones de mutuo o de garantía, o de otorgamiento de préstamos"),
-    "cambio_divisas": ("III", "operaciones de mutuo o de garantía, o de otorgamiento de préstamos"),
-    
-    # Fracción IV - Cheques de viajero
-    "cheques_viajero": ("IV", "emisión y comercialización de cheques de viajero"),
-    
-    # Fracción V - Inmuebles
-    "inmobiliaria": ("V", "transmisión o constitución de derechos reales sobre inmuebles"),
-    "inmuebles": ("V", "transmisión o constitución de derechos reales sobre inmuebles"),
-    "bienes_raices": ("V", "transmisión o constitución de derechos reales sobre inmuebles"),
-    
-    # Fracción VI - Tarjetas prepago
-    "tarjetas_prepago": ("VI", "emisión, comercialización o distribución de tarjetas prepagadas"),
-    
-    # Fracción VII - Blindaje
-    "blindaje": ("VII", "prestación habitual de servicios de blindaje"),
-    
-    # Fracción VIII - Inmuebles como garantía
-    "garantias_inmobiliarias": ("VIII", "constitución de garantías sobre bienes inmuebles"),
-    
-    # Fracción IX - Transmisión de dinero
-    "transmision_dinero": ("IX", "prestación de servicios de traslado o custodia de dinero o valores"),
-    "envio_dinero": ("IX", "prestación de servicios de traslado o custodia de dinero o valores"),
-    
-    # Fracción X - Traslado de valores
-    "traslado_valores": ("X", "servicios de traslado o custodia de dinero o valores"),
-    
-    # Fracción XI - Joyas y metales
-    "joyeria_metales": ("XI", "comercialización de piedras preciosas, joyas, metales preciosos o relojes"),
-    "joyeria": ("XI", "comercialización de piedras preciosas, joyas, metales preciosos o relojes"),
-    "metales_preciosos": ("XI", "comercialización de piedras preciosas, joyas, metales preciosos o relojes"),
-    "piedras_preciosas": ("XI", "comercialización de piedras preciosas, joyas, metales preciosos o relojes"),
-    
-    # Fracción XII - Arte
-    "comercio_arte": ("XII", "comercialización de obras de arte"),
-    "arte_antiguedades": ("XII", "comercialización de obras de arte"),
-    
-    # Fracción XIII - Vehículos
-    "automotriz": ("XIII", "comercialización de vehículos nuevos o usados"),
-    "vehiculos": ("XIII", "comercialización de vehículos nuevos o usados"),
-    
-    # Fracción XIV - Fe pública
-    "notaria": ("XIV", "prestación de servicios de fe pública"),
-    "fedatarios": ("XIV", "prestación de servicios de fe pública"),
-    
-    # Fracción XV - Administración de inmuebles
-    "administracion_inmuebles": ("XV", "prestación de servicios de administración de inmuebles"),
-    
-    # Fracción XVI - Activos virtuales
-    "activos_virtuales": ("XVI", "servicios relacionados con activos virtuales"),
-    "criptomonedas": ("XVI", "servicios relacionados con activos virtuales"),
-    
-    # Fracción XVII - Sociedades mercantiles
-    "sociedades_mercantiles": ("XVII", "constitución de sociedades mercantiles o personas morales"),
+
+FRACCIONES_DESCRIPCION = {
+    "I_juegos": ("I", "realización habitual de juegos con apuesta, concursos o sorteos"),
+    "II_tarjetas_servicios": ("II", "emisión y comercialización de tarjetas de servicios y de crédito"),
+    "II_tarjetas_prepago": ("II", "emisión y comercialización de tarjetas prepagadas"),
+    "III_cheques_viajero": ("III", "operaciones de cambio de divisas"),
+    "IV_mutuo": ("IV", "operaciones de mutuo, préstamos y crédito"),
+    "V_inmuebles": ("V", "transmisión o constitución de derechos reales sobre inmuebles"),
+    "V_bis_desarrollo_inmobiliario": ("V bis", "recepción de recursos para desarrollo inmobiliario"),
+    "VI_joyeria_metales": ("VI", "comercialización de metales preciosos, piedras preciosas y joyería"),
+    "VII_obras_arte": ("VII", "comercialización de obras de arte"),
+    "VIII_vehiculos": ("VIII", "comercialización de vehículos nuevos o usados"),
+    "IX_blindaje": ("IX", "blindaje de vehículos"),
+    "X_traslado_valores": ("X", "traslado y custodia de valores"),
+    "XI_servicios_profesionales": ("XI", "prestación de servicios profesionales independientes"),
+    "XII_A_notarios_derechos_inmuebles": ("XII-A", "fe pública en operaciones inmobiliarias"),
+    "XII_B_corredores": ("XII-B", "fe pública en constitución de personas morales"),
+    "XV_arrendamiento_inmuebles": ("XV", "arrendamiento de inmuebles"),
+    "XVI_activos_virtuales": ("XVI", "operaciones con activos virtuales"),
 }
 
 
-def mapear_sector_a_fraccion(sector: str) -> Tuple[str, str]:
-    """
-    Mapea sector de actividad a fracción LFPIORPI.
-    
-    Returns:
-        (numero_fraccion, descripcion_actividad)
-    """
-    if not sector:
-        return "aplicable", "la actividad vulnerable correspondiente"
-    
-    sector_lower = sector.lower().strip()
-    
-    # Buscar en mapeo directo
-    if sector_lower in MAPEO_FRACCIONES:
-        return MAPEO_FRACCIONES[sector_lower]
-    
-    # Buscar por substring
-    for key, value in MAPEO_FRACCIONES.items():
-        if key in sector_lower or sector_lower in key:
-            return value
-    
-    return "aplicable", "la actividad vulnerable correspondiente"
+def obtener_descripcion_fraccion(fraccion: str) -> Tuple[str, str]:
+    """Retorna (número_fracción, descripción) para fundamento legal."""
+    if fraccion in FRACCIONES_DESCRIPCION:
+        return FRACCIONES_DESCRIPCION[fraccion]
+
+    if "_" in fraccion:
+        num = fraccion.split("_")[0]
+        return (num, fraccion.replace("_", " "))
+
+    return ("", fraccion)
 
 
 # ============================================================================
-# FORMATEO DE MONTOS
+# DESGLOSE EBR (efectivo 20, efectivo_alto 15, fin_semana 5, etc.)
 # ============================================================================
-def formatear_monto(monto: float) -> str:
-    """Formatea monto como string en pesos mexicanos"""
-    try:
-        return f"${monto:,.2f} MXN"
-    except (TypeError, ValueError):
-        return f"${monto} MXN"
+
+# Mapeo entre clave de ponderación EBR y nombre de columna en la transacción
+MAP_EBR_FLAG_COL = {
+    "efectivo": "EsEfectivo",
+    "efectivo_alto": "efectivo_alto",
+    "sector_alto_riesgo": "SectorAltoRiesgo",
+    "acumulado_alto": "acumulado_alto",
+    "internacional": "EsInternacional",
+    "ratio_alto": "ratio_alto",
+    "frecuencia_alta": "frecuencia_alta",
+    "burst": "posible_burst",
+    "nocturno": "es_nocturno",
+    "fin_semana": "fin_de_semana",
+    "monto_redondo": "es_monto_redondo",
+}
 
 
-def monto_a_umas(monto: float, uma_mxn: Optional[float] = None) -> float:
-    """Convierte monto MXN a UMAs"""
-    if uma_mxn is None:
-        uma_mxn = get_uma_mxn()
-    if uma_mxn <= 0:
-        return 0.0
-    return monto / uma_mxn
-
-
-# ============================================================================
-# GENERACIÓN DE RAZONES ESPECÍFICAS (FUNCIÓN QUE FALTABA)
-# ============================================================================
-def _generar_razones_especificas(tx: Dict[str, Any]) -> List[str]:
+def desglose_ebr(transaccion: Dict[str, Any], score_ebr: float) -> Dict[str, Any]:
     """
-    Genera razones específicas basadas en los datos de la transacción.
-    
-    Analiza los campos disponibles y genera hasta 3 razones relevantes
-    con fundamento legal cuando aplica.
-    
-    Args:
-        tx: Diccionario con datos de la transacción
-    
-    Returns:
-        Lista de hasta 3 razones específicas
-    """
-    razones = []
-    uma_mxn = get_uma_mxn()
-    
-    # Helper para obtener valores numéricos
-    def get_num(key: str, default: float = 0.0) -> float:
-        val = tx.get(key, default)
-        if val is None or (isinstance(val, float) and not (val == val)):  # NaN check
-            return default
-        try:
-            return float(val)
-        except (TypeError, ValueError):
-            return default
-    
-    def get_int(key: str, default: int = 0) -> int:
-        return int(get_num(key, float(default)))
-    
-    monto = get_num("monto")
-    umas = monto_a_umas(monto, uma_mxn)
-    score_ebr = get_num("score_ebr")
-    monto_6m = get_num("monto_6m")
-    
-    # 1. Razones por monto/UMAs
-    if umas >= 645:  # Umbral general de aviso
-        razones.append(
-            f"Operación de {umas:,.0f} UMAs rebasa umbral de aviso (Art. 17 LFPIORPI)"
-        )
-    elif umas >= 500:
-        razones.append(
-            f"Operación de {umas:,.0f} UMAs se aproxima al umbral de aviso LFPIORPI"
-        )
-    elif monto >= 100_000:
-        razones.append(
-            f"Monto significativo de {formatear_monto(monto)} ({umas:,.0f} UMAs)"
-        )
-    
-    # 2. Razones por tipo de operación
-    if get_int("EsEfectivo") == 1:
-        if monto >= 500_000:
-            razones.append(
-                "Operación en efectivo de alto monto - requiere identificación reforzada (Art. 18 LFPIORPI)"
-            )
-        else:
-            razones.append(
-                "Operación en efectivo - factor de riesgo PLD/FT incrementado"
-            )
-    
-    if get_int("EsInternacional") == 1:
-        razones.append(
-            "Transferencia internacional - sujeta a mayor escrutinio por riesgo de operaciones transfronterizas"
-        )
-    
-    # 3. Razones por sector
-    if get_int("SectorAltoRiesgo") == 1:
-        sector = tx.get("sector_actividad", "")
-        fraccion, desc = mapear_sector_a_fraccion(sector)
-        if fraccion != "aplicable":
-            razones.append(
-                f"Sector de alto riesgo: {desc} (Art. 17, Fracc. {fraccion} LFPIORPI)"
-            )
-        else:
-            razones.append(
-                "Operación en sector vulnerable según LFPIORPI"
-            )
-    
-    # 4. Razones por acumulado
-    if monto_6m >= 500_000:
-        umas_6m = monto_a_umas(monto_6m, uma_mxn)
-        razones.append(
-            f"Acumulado 6 meses de {formatear_monto(monto_6m)} ({umas_6m:,.0f} UMAs) - monitoreo reforzado"
-        )
-    
-    # 5. Razones por patrones
-    if get_int("es_nocturno") == 1 and get_int("EsEfectivo") == 1:
-        razones.append(
-            "Efectivo en horario nocturno - patrón atípico que requiere validación"
-        )
-    
-    if get_num("ratio_vs_promedio") > 3.0:
-        ratio = get_num("ratio_vs_promedio")
-        razones.append(
-            f"Monto {ratio:.1f}x superior al promedio del cliente - desviación significativa"
-        )
-    
-    if get_int("posible_burst") == 1:
-        razones.append(
-            "Operaciones consecutivas en corto tiempo - posible fraccionamiento (structuring)"
-        )
-    
-    # 6. Razones por EBR
-    if score_ebr >= 70 and len(razones) < 3:
-        razones.append(
-            f"Score de riesgo EBR alto: {score_ebr:.1f}/100 según matriz de riesgos institucional"
-        )
-    
-    # Limitar a 3 y garantizar al menos una razón
-    razones = razones[:3]
-    
-    if not razones:
-        clasificacion = tx.get("clasificacion", tx.get("clasificacion_final", "relevante"))
-        if clasificacion == "preocupante":
-            razones = [
-                "Combinación de factores de riesgo supera umbrales de alerta",
-                "Requiere revisión prioritaria por oficial de cumplimiento",
-                "Considerar reporte a UIF según Art. 18 LFPIORPI"
-            ]
-        elif clasificacion == "inusual":
-            razones = [
-                "Patrón de operación se desvía del comportamiento histórico del cliente",
-                "Requiere documentación adicional para sustento",
-                "Monitorear operaciones subsecuentes del cliente"
-            ]
-        else:
-            razones = [
-                "Operación dentro de parámetros normales del perfil del cliente",
-                "Sin indicadores significativos de riesgo PLD/FT",
-                "Registro para efectos de trazabilidad"
-            ]
-    
-    # Rellenar si faltan
-    while len(razones) < 3:
-        if len(razones) == 1:
-            razones.append("Evaluar en contexto de operaciones relacionadas del cliente")
-        else:
-            razones.append("Mantener monitoreo según políticas institucionales")
-    
-    return razones[:3]
-
-
-# ============================================================================
-# FUNDAMENTO LEGAL COMPLETO
-# ============================================================================
-def generar_fundamento_legal(
-    tx: Dict[str, Any],
-    clasificacion_final: str,
-    uma_mxn: Optional[float] = None
-) -> str:
-    """
-    Genera fundamento legal completo con artículo, fracción y UMAs.
-    
-    Args:
-        tx: Datos de la transacción
-        clasificacion_final: Clasificación asignada
-        uma_mxn: Valor de UMA (opcional)
-    
-    Returns:
-        Texto de fundamento legal estructurado
-    """
-    if uma_mxn is None:
-        uma_mxn = get_uma_mxn()
-    
-    # Obtener datos
-    monto = float(tx.get("monto", 0) or 0)
-    sector = str(tx.get("sector_actividad", "")).lower()
-    fraccion_num, actividad_desc = mapear_sector_a_fraccion(sector)
-    
-    umas_operacion = monto_a_umas(monto, uma_mxn)
-    monto_fmt = formatear_monto(monto)
-    
-    # Obtener umbrales (usar valores por defecto si no hay config específica)
-    cfg = _cargar_config_lfpiorpi()
-    umbrales = cfg.get("umbrales", {})
-    fraccion_key = tx.get("fraccion", "_general")
-    u = umbrales.get(fraccion_key, umbrales.get("_general", {}))
-    
-    umbral_aviso_umas = float(u.get("aviso_UMA", 645))
-    umbral_efectivo_umas = float(u.get("efectivo_max_UMA", 8025))
-    umbral_aviso_mxn = umbral_aviso_umas * uma_mxn
-    umbral_efectivo_mxn = umbral_efectivo_umas * uma_mxn
-    
-    # Construir fundamento
-    fundamento = f"""FUNDAMENTO LEGAL LFPIORPI
-
-Artículo 17, Fracción {fraccion_num}
-La presente operación se clasifica como actividad vulnerable conforme a la fracción {fraccion_num} del artículo 17 de la Ley Federal para la Prevención e Identificación de Operaciones con Recursos de Procedencia Ilícita (LFPIORPI), que regula: {actividad_desc}.
-
-Análisis de Umbrales (UMAs)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• Monto de la operación: {monto_fmt}
-• Equivalente en UMAs: {umas_operacion:,.1f} UMAs
-• UMA vigente: {formatear_monto(uma_mxn)}
-• Umbral de aviso: {umbral_aviso_umas:,.0f} UMAs ({formatear_monto(umbral_aviso_mxn)})
-• Límite efectivo: {umbral_efectivo_umas:,.0f} UMAs ({formatear_monto(umbral_efectivo_mxn)})
-
-Clasificación Final: {clasificacion_final.upper()}"""
-    
-    # Agregar interpretación según clasificación
-    if clasificacion_final == "preocupante":
-        fundamento += """
-
-Interpretación Normativa
-━━━━━━━━━━━━━━━━━━━━━━━━━
-Esta operación rebasa los umbrales establecidos en las Reglas de Carácter General de la LFPIORPI para actividades vulnerables, clasificándose como PREOCUPANTE.
-
-Conforme al artículo 18 de la LFPIORPI, se requiere:
-1. Presentar aviso a la Unidad de Inteligencia Financiera (UIF)
-2. Plazo máximo: 15 días hábiles siguientes a la operación
-3. Conservar documentación soporte por 5 años
-
-ACCIÓN REQUERIDA: Generar aviso a UIF conforme artículo 18 LFPIORPI."""
-    
-    elif clasificacion_final == "inusual":
-        fundamento += """
-
-Interpretación Normativa
-━━━━━━━━━━━━━━━━━━━━━━━━━
-Esta operación presenta características de monto, frecuencia o patrón que se apartan del perfil transaccional esperado del cliente, sin rebasar necesariamente los umbrales legales máximos.
-
-Bajo el Enfoque Basado en Riesgos (artículo 3, Reglas Generales LFPIORPI), se clasifica como INUSUAL.
-
-Se recomienda:
-1. Documentar análisis de la operación
-2. Solicitar información adicional al cliente de ser necesario
-3. Incluir en monitoreo reforzado
-
-ACCIÓN REQUERIDA: Revisión y documentación bajo criterio del oficial de cumplimiento."""
-    
-    else:  # relevante
-        fundamento += """
-
-Interpretación Normativa
-━━━━━━━━━━━━━━━━━━━━━━━━━
-Esta operación se encuentra dentro de los parámetros habituales del perfil transaccional del cliente y no rebasa umbrales legales significativos, clasificándose como RELEVANTE.
-
-Se mantiene registro para:
-1. Cumplimiento de obligaciones de identificación (Art. 17 LFPIORPI)
-2. Trazabilidad de operaciones
-3. Base para análisis de comportamiento futuro
-
-ACCIÓN REQUERIDA: Registro documental conforme políticas internas."""
-    
-    return fundamento
-
-
-# ============================================================================
-# ACCIONES SUGERIDAS
-# ============================================================================
-def generar_acciones_sugeridas(clasificacion: str) -> List[str]:
-    """
-    Genera lista de acciones sugeridas según clasificación.
-    
-    Args:
-        clasificacion: "relevante" | "inusual" | "preocupante"
-    
-    Returns:
-        Lista de acciones sugeridas
-    """
-    acciones = {
-        "preocupante": [
-            "Generar Reporte de Operación Preocupante (ROP) para UIF",
-            "Recopilar documentación soporte completa",
-            "Notificar al oficial de cumplimiento en máximo 24 horas",
-            "Evaluar necesidad de bloqueo preventivo de cuenta",
-            "Documentar análisis y justificación de clasificación"
-        ],
-        "inusual": [
-            "Documentar análisis detallado de la operación",
-            "Solicitar información adicional al cliente si aplica",
-            "Incluir cliente en monitoreo reforzado",
-            "Revisar operaciones relacionadas en últimos 6 meses",
-            "Actualizar perfil transaccional del cliente"
-        ],
-        "relevante": [
-            "Mantener registro para trazabilidad",
-            "Incluir en reportes periódicos de cumplimiento",
-            "Continuar monitoreo estándar del cliente"
+    Construye un desglose de EBR del tipo:
+    {
+        "score_total": 50,
+        "factores": [
+            {"factor": "efectivo", "descripcion": "...", "puntos": 25},
+            ...
         ]
     }
-    
-    return acciones.get(clasificacion.lower(), acciones["relevante"])
+    Solo se incluyen factores cuyo flag está activo en la transacción.
+    """
+    cfg = cargar_config()
+    ponder = cfg.get("ebr", {}).get("ponderaciones", {})
+
+    factores: List[Dict[str, Any]] = []
+
+    for key, meta in ponder.items():
+        col_flag = MAP_EBR_FLAG_COL.get(key)
+        if not col_flag:
+            continue
+
+        valor = transaccion.get(col_flag)
+        activo = valor in (1, True, "1", "true", "True")
+
+        if activo:
+            factores.append(
+                {
+                    "factor": key,
+                    "descripcion": meta.get("descripcion", ""),
+                    "puntos": int(meta.get("puntos", 0)),
+                }
+            )
+
+    return {
+        "score_total": round(float(score_ebr or 0), 1),
+        "factores": factores,
+    }
 
 
 # ============================================================================
-# FUNCIÓN PRINCIPAL: BUILD_EXPLICACION
+# GENERADOR DE EXPLICACIONES
 # ============================================================================
-def build_explicacion(
-    row: Dict[str, Any],
-    ml_info: Dict[str, Any],
-    ebr_info: Dict[str, Any],
-    lfpi_cfg: Dict[str, Any],
-    uma_cfg: Dict[str, Any],
-    clasificacion_final: str,
-    nivel_riesgo_final: str,
-    triggers: Optional[List[str]] = None,
+
+def generar_explicacion(
+    transaccion: Dict[str, Any],
+    clasificacion: str,
+    origen: str,
+    guardrail_razon: Optional[str] = None,
+    guardrail_fundamento: Optional[str] = None,
+    factores_ebr: Optional[List[str]] = None,
+    score_ebr: float = 0,
+    ica: float = 0,
 ) -> Dict[str, Any]:
     """
-    Construye explicación completa para una transacción.
+    Genera explicación simplificada según clasificación y origen.
     
     Args:
-        row: Datos de la transacción
-        ml_info: Info del modelo ML (clasificacion_ml, probabilidades, ica)
-        ebr_info: Info EBR (score_ebr, nivel_riesgo_ebr, factores)
-        lfpi_cfg: Config LFPIORPI
-        uma_cfg: Config UMA
-        clasificacion_final: Clasificación combinada
-        nivel_riesgo_final: "bajo" | "medio" | "alto"
-        triggers: Lista de triggers que activaron clasificación
-    
-    Returns:
-        Diccionario con explicación completa
+        transaccion: Dict con datos de la transacción
+        clasificacion: "preocupante", "inusual", "relevante"
+        origen: "regla_lfpiorpi", "ml", "elevacion_ebr", etc.
+        guardrail_razon: Razón del guardrail (si aplica)
+        guardrail_fundamento: Fundamento legal (si aplica)
+        factores_ebr: Lista de factores EBR detectados (opcional)
+        score_ebr: Score EBR (0-100)
+        ica: Índice de confianza del modelo (0-1)
     """
-    # Obtener valores
-    monto = float(row.get("monto", 0) or 0)
-    tipo_op = row.get("tipo_operacion", "operación")
-    sector = row.get("sector_actividad", "no especificado")
-    
-    score_ebr = float(ebr_info.get("score_ebr", 0) or 0)
-    clasif_ml = ml_info.get("clasificacion_ml", "relevante")
-    ica = float(ml_info.get("ica", 0) or 0)
-    probs = ml_info.get("probabilidades", {})
-    factores = ebr_info.get("factores", [])
-    
-    uma_mxn = float(uma_cfg.get("uma_mxn", get_uma_mxn()))
-    
-    # Generar razones específicas
-    tx_completo = {**row, "score_ebr": score_ebr, "clasificacion": clasificacion_final}
-    razones_principales = _generar_razones_especificas(tx_completo)
-    
-    # Generar fundamento legal
-    fundamento_legal = generar_fundamento_legal(tx_completo, clasificacion_final, uma_mxn)
-    
-    # Resumen ejecutivo
-    resumen_ejecutivo = (
-        f"Operación de {formatear_monto(monto)} clasificada como '{clasificacion_final.upper()}' "
-        f"(Nivel de riesgo: {nivel_riesgo_final.upper()}). "
-        f"Tipo: {tipo_op} | Sector: {sector}"
-    )
-    
-    # Explicación del modelo
-    explicacion_modelo = (
-        f"El modelo de machine learning asignó la clasificación '{clasif_ml}' "
-        f"con un Índice de Confianza Algorítmica (ICA) de {ica:.2%}. "
-        f"Este valor representa la certeza del modelo en su predicción."
-    )
-    
-    # Explicación EBR
-    nivel_ebr = ebr_info.get("nivel_riesgo_ebr", "bajo")
-    clasif_ebr = ebr_info.get("clasificacion_ebr", "relevante")
-    explicacion_ebr = (
-        f"El Enfoque Basado en Riesgos (EBR) asignó un puntaje de {score_ebr:.1f}/100, "
-        f"correspondiente a un nivel de riesgo '{nivel_ebr}' "
-        f"(clasificación EBR: '{clasif_ebr}')."
-    )
-    
-    # Nota de guardrails si aplica
-    nota_guardrails = None
-    if triggers and any(t.startswith("guardrail_") for t in triggers):
-        nota_guardrails = (
-            "⚠️ Esta transacción fue clasificada como 'preocupante' por guardrails normativos LFPIORPI, "
-            "ya que rebasa umbrales legales establecidos en UMAs."
+    clasificacion = (clasificacion or "").lower()
+
+    # ------------------------------------------------------------------
+    # CASO 1: PREOCUPANTE (regla LFPIORPI)
+    # ------------------------------------------------------------------
+    if clasificacion == "preocupante":
+        fraccion = transaccion.get("fraccion", "")
+        monto = float(transaccion.get("monto", 0) or 0.0)
+        uma = get_uma_mxn()
+        aviso_uma, efectivo_uma = get_umbrales_fraccion(fraccion)
+
+        # Decidir cuál umbral mencionar (aviso o efectivo)
+        es_efectivo = transaccion.get("EsEfectivo") in (1, True, "1")
+        umbral_uma = efectivo_uma if es_efectivo and efectivo_uma > 0 else aviso_uma
+        umbral_mxn = umbral_uma * uma if umbral_uma > 0 else 0
+        monto_umas = monto / uma if uma > 0 else 0
+
+        num_fracc, desc_fracc = obtener_descripcion_fraccion(fraccion)
+
+        razon_texto = (
+            guardrail_razon
+            or "La operación rebasa el umbral legal establecido en UMAs."
         )
-    
-    # Acciones sugeridas
-    acciones_sugeridas = generar_acciones_sugeridas(clasificacion_final)
-    
-    return {
-        # Para UI
-        "resumen_ejecutivo": resumen_ejecutivo,
-        "razones_principales": razones_principales,
-        "fundamento_legal": fundamento_legal,
-        
-        # Métricas numéricas
-        "ica_numerico": ica,
-        "score_ebr": score_ebr,
-        
-        # Explicaciones técnicas
-        "explicacion_modelo": explicacion_modelo,
-        "explicacion_ebr": explicacion_ebr,
-        "nota_guardrails": nota_guardrails,
-        
-        # Acciones
-        "acciones_sugeridas": acciones_sugeridas,
-        
-        # Detalles técnicos completos
-        "detalles_tecnicos": {
-            "ml": {
-                "clasificacion_ml": clasif_ml,
-                "probabilidades": probs,
-                "ica": ica,
+
+        detalle_umbral = (
+            f"Rebasa el umbral UMA: el máximo sin aviso es {umbral_uma:,.0f} UMAs "
+            f"(~{umbral_mxn:,.0f} MXN) y el monto de la operación es {monto:,.0f} MXN, "
+            f"equivalente a {monto_umas:,.0f} UMAs."
+        )
+
+        fundamento = guardrail_fundamento or (
+            f"Artículo 17, Fracción {num_fracc} de la LFPIORPI: {desc_fracc}."
+        )
+
+        return {
+            "tipo": "obligacion_legal",
+            "clasificacion": "preocupante",
+            "motivo": razon_texto,
+            "detalle": detalle_umbral,
+            "fundamento_legal": fundamento,
+            "accion": (
+                "Aviso obligatorio a la UIF dentro del plazo legal y conservación "
+                "de la documentación de respaldo."
+            ),
+            "requiere_revision": False,
+            "detalles": {
+                "fraccion": fraccion,
+                "monto_mxn": round(monto, 2),
+                "monto_umas": round(monto_umas, 2),
+                "umbral_uma": round(umbral_uma, 2),
+                "umbral_mxn": round(umbral_mxn, 2),
+                "detalle_ebr": desglose_ebr(transaccion, score_ebr),
             },
-            "ebr": {
-                "score_ebr": score_ebr,
-                "nivel_riesgo_ebr": nivel_ebr,
-                "clasificacion_ebr": clasif_ebr,
-                "factores_completos": factores,
+        }
+
+    # ------------------------------------------------------------------
+    # CASO 2: RELEVANTE (sin anomalía)
+    # ------------------------------------------------------------------
+    elif clasificacion == "relevante":
+        texto = "Sin anomalía detectada. No se observaron indicadores de riesgo relevantes."
+        return {
+            "tipo": "sin_riesgo",
+            "clasificacion": "relevante",
+            "motivo": texto,
+            "accion": "Solo registro y conservación para trazabilidad.",
+            "requiere_revision": False,
+            "detalles": {
+                "score_ebr": round(float(score_ebr or 0), 1),
+                "ica": round(float(ica or 0), 2),
+                "detalle_ebr": desglose_ebr(transaccion, score_ebr),
             },
-            "clasificacion_final": clasificacion_final,
-            "nivel_riesgo_final": nivel_riesgo_final,
-            "triggers": triggers or [],
-            "uma_mxn": uma_mxn,
-            "timestamp_explicacion": datetime.now().isoformat(),
-        },
-    }
+        }
+
+    # ------------------------------------------------------------------
+    # CASO 3: INUSUAL (requiere análisis)
+    # ------------------------------------------------------------------
+    else:  # inusual
+        motivo, lista_motivos = _motivos_inusual(transaccion, origen, score_ebr)
+        return {
+            "tipo": "requiere_analisis",
+            "clasificacion": "inusual",
+            "motivo": motivo,
+            "motivos_detallados": lista_motivos,
+            "accion": (
+                "Revisión por Oficial de Cumplimiento. Documentar el análisis y, "
+                "en su caso, determinar si procede reporte de operación inusual."
+            ),
+            "requiere_revision": True,
+            "detalles": {
+                "score_ebr": round(float(score_ebr or 0), 1),
+                "ica": round(float(ica or 0), 2),
+                "detalle_ebr": desglose_ebr(transaccion, score_ebr),
+                "origen_clasificacion": origen,
+            },
+        }
 
 
 # ============================================================================
-# WRAPPER DE COMPATIBILIDAD
+# MOTIVOS PARA INUSUAL
 # ============================================================================
-def generar_explicacion_transaccion(tx: Dict[str, Any]) -> Dict[str, Any]:
+
+def _motivos_inusual(
+    tx: Dict[str, Any],
+    origen: str,
+    score_ebr: float,
+) -> Tuple[str, List[str]]:
     """
-    Wrapper de compatibilidad para llamadas desde código existente.
-    
-    Extrae ml_info, ebr_info de los campos disponibles en tx.
+    Construye una lista de motivos en lenguaje muy simple para INUSUAL.
+    Ejemplo:
+      [
+        "monto redondo",
+        "efectivo muy cercano al máximo permitido",
+        "acumulado alto en los últimos 6 meses",
+        "frecuencia alta en los últimos 6 meses",
+        "patrón inusual detectado por el modelo no supervisado (score 0.82)"
+      ]
     """
-    # Normalizar tx a dict
-    if not isinstance(tx, dict):
-        try:
-            tx = dict(tx)
-        except Exception:
-            tx = {}
-    
-    # Extraer ml_info
-    ml_info = {
-        "clasificacion_ml": tx.get("clasificacion_ml", tx.get("clasificacion")),
-        "probabilidades": tx.get("probabilidades", {}),
-        "ica": tx.get("ica", tx.get("ica_score", 0)),
-    }
-    
-    # Extraer ebr_info
-    ebr_info = {
-        "score_ebr": tx.get("score_ebr", 0),
-        "nivel_riesgo_ebr": tx.get("nivel_riesgo_ebr", "bajo"),
-        "clasificacion_ebr": tx.get("clasificacion_ebr", "relevante"),
-        "factores": tx.get("factores_ebr", []),
-    }
-    
-    # Config por defecto
-    lfpi_cfg = _cargar_config_lfpiorpi()
-    uma_cfg = {"uma_mxn": get_uma_mxn()}
-    
-    # Clasificación final
-    clasificacion_final = tx.get("clasificacion_final", tx.get("clasificacion", "relevante"))
-    
-    # Nivel de riesgo
-    nivel_map = {"relevante": "bajo", "inusual": "medio", "preocupante": "alto"}
-    nivel_riesgo_final = nivel_map.get(
-        str(clasificacion_final).lower(),
-        tx.get("nivel_riesgo_final", "bajo")
-    )
-    
-    triggers = tx.get("triggers", [])
-    
-    # Construir explicación
-    explicacion = build_explicacion(
-        row=tx,
-        ml_info=ml_info,
-        ebr_info=ebr_info,
-        lfpi_cfg=lfpi_cfg,
-        uma_cfg=uma_cfg,
-        clasificacion_final=clasificacion_final,
-        nivel_riesgo_final=nivel_riesgo_final,
-        triggers=triggers,
-    )
-    
-    return explicacion
+    motivos: List[str] = []
+
+    # 1. Contexto por EBR (si la elevación fue por score)
+    if origen == "elevacion_ebr" and score_ebr > 0:
+        motivos.append(f"índice de riesgo EBR elevado ({score_ebr:.0f}/100)")
+
+    # 2. Flags específicos
+    if tx.get("es_monto_redondo") in (1, True, "1"):
+        motivos.append("monto redondo")
+
+    if tx.get("efectivo_alto") in (1, True, "1"):
+        motivos.append("efectivo muy cercano al máximo permitido por ley")
+
+    if tx.get("acumulado_alto") in (1, True, "1"):
+        motivos.append("acumulado alto en los últimos 6 meses")
+
+    ops_6m = int(tx.get("ops_6m", 0) or 0)
+    if tx.get("frecuencia_alta") in (1, True, "1") or ops_6m > 5:
+        motivos.append(f"frecuencia alta en los últimos 6 meses ({ops_6m} operaciones)")
+
+    ratio = float(tx.get("ratio_vs_promedio", 0) or 0)
+    if ratio > 3:
+        motivos.append(f"monto {ratio:.1f} veces mayor al promedio del cliente")
+
+    es_nocturno = tx.get("es_nocturno") in (1, True, "1")
+    fin_semana = tx.get("fin_de_semana") in (1, True, "1")
+    if es_nocturno and fin_semana:
+        motivos.append("operación en horario nocturno y fin de semana")
+    elif es_nocturno:
+        motivos.append("operación en horario nocturno")
+    elif fin_semana:
+        motivos.append("operación en fin de semana")
+
+    if tx.get("posible_burst") in (1, True, "1"):
+        motivos.append("posible fraccionamiento de operaciones")
+
+    if tx.get("is_outlier_iso") in (1, True, "1"):
+        score_anom = float(tx.get("anomaly_score_composite", 0) or 0)
+        motivos.append(
+            f"patrón inusual detectado por el modelo no supervisado (anomalía {score_anom:.2f})"
+        )
+
+    # Si no encontramos nada específico, usar un texto genérico
+    if not motivos:
+        motivos.append("patrón de comportamiento atípico detectado por análisis ML")
+
+    # La razón principal será la primera de la lista
+    razon_principal = "; ".join(motivos)
+    return razon_principal, motivos
 
 
 # ============================================================================
-# CLI para pruebas
+# FUNCIONES DE COMPATIBILIDAD (con ml_runner)
 # ============================================================================
+
+def build_explicacion(
+    row: Dict[str, Any],
+    fusion: Optional[Dict[str, Any]] = None,
+    cfg: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    Wrapper de compatibilidad con ml_runner anterior.
+
+    row: Fila del DataFrame como dict (debe contener:
+         clasificacion_final, origen, score_ebr, ica, etc.)
+    """
+    clasificacion = row.get("clasificacion_final", row.get("clasificacion", "relevante"))
+    origen = row.get("origen", fusion.get("origen") if fusion else "ml")
+
+    return generar_explicacion(
+        transaccion=row,
+        clasificacion=clasificacion,
+        origen=origen,
+        guardrail_razon=row.get("guardrail_razon"),
+        guardrail_fundamento=row.get("guardrail_fundamento"),
+        factores_ebr=row.get("factores_ebr", []),
+        score_ebr=float(row.get("score_ebr", 0) or 0),
+        ica=float(row.get("ica", 0) or 0),
+    )
+
+
+def generar_explicacion_transaccion(
+    row: Dict[str, Any],
+    cfg: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Alias de compatibilidad."""
+    return build_explicacion(row, cfg=cfg)
+
+
+# ============================================================================
+# TEST RÁPIDO
+# ============================================================================
+
 if __name__ == "__main__":
-    # Ejemplo
-    tx_ejemplo = {
-        "cliente_id": "CLI-001",
-        "monto": 150_000,
-        "fecha": "2025-01-15",
-        "tipo_operacion": "efectivo",
-        "sector_actividad": "inmobiliaria",
-        "EsEfectivo": 1,
-        "SectorAltoRiesgo": 0,
-        "monto_6m": 450_000,
-        "score_ebr": 72.5,
-        "clasificacion": "inusual",
-        "ica": 0.85,
-    }
-    
-    explicacion = generar_explicacion_transaccion(tx_ejemplo)
-    
     print("\n" + "=" * 70)
-    print("📋 EXPLICACIÓN GENERADA")
+    print("🧪 TEST RÁPIDO EXPLICABILIDAD v5")
     print("=" * 70)
-    print(f"\n{explicacion['resumen_ejecutivo']}\n")
-    print("Razones principales:")
-    for i, r in enumerate(explicacion['razones_principales'], 1):
-        print(f"  {i}. {r}")
-    print(f"\nICA: {explicacion['ica_numerico']:.2%}")
-    print(f"Score EBR: {explicacion['score_ebr']:.1f}/100")
-    print(f"\n{explicacion['fundamento_legal']}")
-    print("\nAcciones sugeridas:")
-    for a in explicacion['acciones_sugeridas']:
-        print(f"  • {a}")
-    print("=" * 70)
+
+    # PREOCUPANTE
+    tx_preocupante = {
+        "monto": 2_000_000,
+        "fraccion": "V_inmuebles",
+        "clasificacion_final": "preocupante",
+        "origen": "regla_lfpiorpi",
+        "guardrail_razon": "Monto rebasa el umbral de aviso",
+        "EsEfectivo": 0,
+    }
+    exp_p = build_explicacion(tx_preocupante)
+    print("\n🔴 PREOCUPANTE:")
+    print("  Motivo:", exp_p["motivo"])
+    print("  Detalle:", exp_p["detalle"])
+
+    # RELEVANTE
+    tx_rel = {
+        "monto": 15_000,
+        "fraccion": "servicios_generales",
+        "clasificacion_final": "relevante",
+        "origen": "ml",
+        "score_ebr": 10,
+        "ica": 0.95,
+    }
+    exp_r = build_explicacion(tx_rel)
+    print("\n🟢 RELEVANTE:")
+    print("  Motivo:", exp_r["motivo"])
+    print("  Detalle EBR:", exp_r["detalles"]["detalle_ebr"])
+
+    # INUSUAL
+    tx_inu = {
+        "monto": 800_000,
+        "fraccion": "V_inmuebles",
+        "clasificacion_final": "inusual",
+        "origen": "elevacion_ebr",
+        "efectivo_alto": 1,
+        "acumulado_alto": 1,
+        "frecuencia_alta": 1,
+        "ops_6m": 12,
+        "es_monto_redondo": 1,
+        "es_nocturno": 1,
+        "fin_de_semana": 0,
+        "posible_burst": 1,
+        "is_outlier_iso": 1,
+        "anomaly_score_composite": 0.82,
+        "score_ebr": 55,
+        "ica": 0.8,
+    }
+    exp_i = build_explicacion(tx_inu)
+    print("\n🟡 INUSUAL:")
+    print("  Motivo:", exp_i["motivo"])
+    print("  Motivos detallados:", exp_i["motivos_detallados"])
+    print("  Detalle EBR:", exp_i["detalles"]["detalle_ebr"])
+
+    print("\n" + "=" * 70)
+    print("✅ Test de explicabilidad v5 completado")
+    print("=" * 70 + "\n")

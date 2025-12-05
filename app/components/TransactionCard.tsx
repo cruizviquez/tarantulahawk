@@ -7,7 +7,7 @@
 
 import React, { useState } from 'react';
 import { AlertTriangle, CheckCircle, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
-import type { TransaccionEnriquecida } from './types_portal';
+import type { TransaccionEnriquecida, Alerta } from './types_portal';
 
 interface TransactionCardProps {
   transaction: TransaccionEnriquecida;
@@ -119,7 +119,7 @@ const TransactionCard: React.FC<TransactionCardProps> = ({ transaction, index })
             <span className="text-sm text-yellow-400 font-medium">{numAlertas} Alerta{numAlertas > 1 ? 's' : ''}</span>
           </div>
           <div className="space-y-2">
-            {alertasArray.map((alerta, idx) => (
+            {alertasArray.map((alerta: Alerta, idx: number) => (
               <div key={idx} className="bg-yellow-500/5 border border-yellow-500/20 rounded p-2">
                 <p className="text-xs font-medium text-yellow-300">{alerta.titulo}</p>
                 <p className="text-xs text-gray-400 mt-1">{alerta.mensaje}</p>

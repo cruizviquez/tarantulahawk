@@ -6,6 +6,8 @@ import { TransaccionAnalizada, NivelRiesgo, EtiquetaML } from "./ml_types";
 export interface TransaccionRow {
   id: string | number;
   cliente: string | number | null;
+  cliente_id?: string | number | null;
+  id_transaccion?: string | number;
   fecha: string;
   monto: number;
   moneda: string;
@@ -56,6 +58,8 @@ export function mapApiResponseToRows(
     return {
       id: t.id_transaccion,
       cliente: t.cliente_id ?? null,
+      // keep original backend field in the mapped row so the modal can access it
+      cliente_id: t.cliente_id ?? null,
       fecha: t.fecha_operacion,
       monto: t.monto,
       moneda: t.moneda,

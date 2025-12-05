@@ -1,119 +1,521 @@
 {
-    "data": {
-        "dataset_enriched_path": "uploads/enriched/dataset_pld_lfpiorpi_100000_enriched_v2.csv"
+  "version": "3.0.0",
+  "descripcion": "Configuración TarantulaHawk - LFPIORPI (Reforma 16-jul-2025) - Actualizado 2025-11-26",
+  "ultima_actualizacion": "2025-11-26",
+  "data": {
+    "dataset_enriched_path": "uploads/enriched/dataset_enriched_with_anomalies.csv"
+  },
+  "lfpiorpi": {
+    "uma_diaria": 113.14,
+    "uma_mxn": 113.14,
+    "vigencia_uma": "2025-02-01",
+    "umbrales": {
+      "_general": {
+        "aviso_UMA": 645,
+        "efectivo_max_UMA": 645,
+        "descripcion": "Umbral general para actividades no especificadas"
+      },
+      "I_juegos": {
+        "identificacion_UMA": 325,
+        "aviso_UMA": 645,
+        "efectivo_max_UMA": 0,
+        "descripcion": "Juegos con apuesta, concursos o sorteos"
+      },
+      "II_tarjetas_servicios": {
+        "identificacion_UMA": 805,
+        "aviso_UMA": 1285,
+        "efectivo_max_UMA": 0,
+        "descripcion": "Tarjetas: servicios y de crédito (emisión y comercialización)"
+      },
+      "II_tarjetas_prepago": {
+        "identificacion_UMA": 645,
+        "aviso_UMA": 645,
+        "efectivo_max_UMA": 0,
+        "descripcion": "Tarjetas prepagadas"
+      },
+      "III_cheques_viajero": {
+        "identificacion_UMA": 0,
+        "aviso_UMA": 645,
+        "efectivo_max_UMA": 0,
+        "descripcion": "Cheques de viajero"
+      },
+      "IV_mutuo": {
+        "identificacion_UMA": 0,
+        "aviso_UMA": 1605,
+        "efectivo_max_UMA": 0,
+        "descripcion": "Mutuo / préstamos / crédito"
+      },
+      "V_inmuebles": {
+        "identificacion_UMA": 0,
+        "aviso_UMA": 8025,
+        "efectivo_max_UMA": 8025,
+        "descripcion": "Inmuebles (construcción / intermediación)"
+      },
+      "V_bis_desarrollo_inmobiliario": {
+        "identificacion_UMA": 0,
+        "aviso_UMA": 8025,
+        "efectivo_max_UMA": 8025,
+        "descripcion": "Desarrollo inmobiliario (recepción de recursos)"
+      },
+      "VI_joyeria_metales": {
+        "identificacion_UMA": 805,
+        "aviso_UMA": 1605,
+        "efectivo_max_UMA": 0,
+        "descripcion": "Metales preciosos, joyas, relojes"
+      },
+      "VII_obras_arte": {
+        "identificacion_UMA": 2410,
+        "aviso_UMA": 4815,
+        "efectivo_max_UMA": 0,
+        "descripcion": "Obras de arte"
+      },
+      "VIII_vehiculos": {
+        "identificacion_UMA": 210,
+        "aviso_UMA": 3210,
+        "efectivo_max_UMA": 3210,
+        "descripcion": "Comercialización de vehículos"
+      },
+      "IX_blindaje": {
+        "identificacion_UMA": 2410,
+        "aviso_UMA": 4815,
+        "efectivo_max_UMA": 0,
+        "descripcion": "Blindaje de vehículos o inmuebles"
+      },
+      "X_traslado_valores": {
+        "identificacion_siempre": true,
+        "aviso_UMA": 3210,
+        "efectivo_max_UMA": 3210,
+        "descripcion": "Traslado o custodia de dinero o valores (identificación siempre requerida)"
+      },
+      "XI_servicios_profesionales": {
+        "identificacion_siempre": true,
+        "aviso_UMA": 0,
+        "efectivo_max_UMA": 0,
+        "descripcion": "Servicios profesionales independientes - identificación siempre requerida"
+      },
+      "XII_A_notarios_derechos_inmuebles": {
+        "identificacion_siempre": true,
+        "aviso_UMA": 8000,
+        "efectivo_max_UMA": 8025,
+        "descripcion": "Notarios - Derechos reales sobre inmuebles"
+      },
+      "XII_A_notarios_fideicomisos": {
+        "identificacion_siempre": true,
+        "aviso_UMA": 4000,
+        "efectivo_max_UMA": 0,
+        "descripcion": "Notarios - Fideicomisos"
+      },
+      "XII_A_notarios_constitucion_personas": {
+        "identificacion_siempre": true,
+        "aviso_UMA": 0,
+        "efectivo_max_UMA": 0,
+        "descripcion": "Notarios - Constitución de personas morales"
+      },
+      "XII_B_corredores_avaluos": {
+        "identificacion_UMA": 8025,
+        "aviso_UMA": 0,
+        "efectivo_max_UMA": 0,
+        "descripcion": "Corredores - Avalúos"
+      },
+      "XII_arte": {
+        "identificacion_UMA": 210,
+        "aviso_UMA": 3210,
+        "efectivo_max_UMA": 3210,
+        "descripcion": "Comercialización de obras de arte"
+      },
+      "VI_bienes_muebles": {
+        "identificacion_UMA": 210,
+        "aviso_UMA": 8025,
+        "efectivo_max_UMA": 8025,
+        "descripcion": "Compraventa de vehículos, barcos, aviones, bienes muebles de alto valor"
+      },
+      "VII_arrendamiento": {
+        "identificacion_UMA": 210,
+        "aviso_UMA": 3210,
+        "efectivo_max_UMA": 3210,
+        "descripcion": "Arrendamiento financiero y administración de inmuebles"
+      },
+      "XI_activos_financieros": {
+        "identificacion_UMA": 210,
+        "aviso_UMA": 3210,
+        "efectivo_max_UMA": 3210,
+        "descripcion": "Compra/venta de acciones, partes sociales o derechos"
+      },
+      "XV_arrendamiento_inmuebles": {
+        "identificacion_UMA": 1605,
+        "aviso_UMA": 3210,
+        "efectivo_max_UMA": 0,
+        "descripcion": "Arrendamiento de inmuebles (mensual)"
+      },
+      "XVI_activos_virtuales": {
+        "identificacion_UMA": 0,
+        "aviso_UMA": 210,
+        "efectivo_max_UMA": 210,
+        "descripcion": "Activos virtuales (criptomonedas)"
+      },
+      "XVI_activos_virtuales_comision": {
+        "identificacion_UMA": 0,
+        "aviso_UMA": 4,
+        "efectivo_max_UMA": 4,
+        "descripcion": "Comisiones por intermediación en activos virtuales"
+      }
     },
-    "lfpiorpi": {
-        "uma_diaria": 113.14,
-        "vigencia_uma": "2025-02-01",
-        "umbrales": {
-            "V_inmuebles": {
-                "aviso_UMA": 8025,
-                "efectivo_max_UMA": 8025
-            },
-            "VIII_vehiculos": {
-                "aviso_UMA": 6420,
-                "efectivo_max_UMA": 3210
-            },
-            "XI_joyeria": {
-                "aviso_UMA": 3210,
-                "efectivo_max_UMA": 3210
-            },
-            "X_traslado_valores": {
-                "aviso_UMA": 3210,
-                "efectivo_max_UMA": 3210
-            },
-            "XVI_activos_virtuales": {
-                "aviso_UMA": 210
-            },
-            "metales": {
-                "aviso_UMA": 3210,
-                "efectivo_max_UMA": 3210
-            }
-        },
-        "actividad_a_fraccion": {
-            "inmobiliaria": "V_inmuebles",
-            "automotriz": "VIII_vehiculos",
-            "joyeria_metales": "XI_joyeria",
-            "metales": "XI_joyeria",
-            "traslado_valores": "X_traslado_valores",
-            "activos_virtuales": "XVI_activos_virtuales"
-        },
-        "actividad_alto_riesgo": [
-            "activos_virtuales",
-            "traslado_valores",
-            "casa_cambio"
-        ]
+    "actividad_a_fraccion": {
+      "juegos_apuestas": "I_juegos",
+      "casino": "I_juegos",
+      "tarjetas": "II_tarjetas_servicios",
+      "tarjetas_prepago": "II_tarjetas_prepago",
+      "casa_cambio": "III_cheques_viajero",
+      "cambio_divisas": "III_cheques_viajero",
+      "prestamos": "IV_mutuo",
+      "inmobiliaria": "V_inmuebles",
+      "inmuebles": "V_inmuebles",
+      "bienes_raices": "V_inmuebles",
+      "desarrollo_inmobiliario": "V_bis_desarrollo_inmobiliario",
+      "automotriz": "VIII_vehiculos",
+      "vehiculos": "VIII_vehiculos",
+      "compra_venta_activos": "XI_activos_financieros",
+      "arrendamiento_financiero": "VII_arrendamiento",
+      "transmision_dinero": "X_traslado_valores",
+      "envio_dinero": "X_traslado_valores",
+      "traslado_valores": "X_traslado_valores",
+      "custodia_valores": "X_traslado_valores",
+      "joyeria_metales": "VI_joyeria_metales",
+      "joyeria": "VI_joyeria_metales",
+      "metales_preciosos": "VI_joyeria_metales",
+      "piedras_preciosas": "VI_joyeria_metales",
+      "relojes": "VI_joyeria_metales",
+      "comercio_arte": "VII_obras_arte",
+      "arte_antiguedades": "VII_obras_arte",
+      "notaria": "XII_A_notarios_derechos_inmuebles",
+      "fedatarios": "XII_A_notarios_derechos_inmuebles",
+      "activos_virtuales": "XVI_activos_virtuales",
+      "criptomonedas": "XVI_activos_virtuales",
+      "arrendamiento_inmuebles": "XV_arrendamiento_inmuebles",
+      "servicios_financieros": "_general",
+      "servicios_generales": "_general",
+      "otro": "_general"
     },
-    "modelos": {
-        "version": "2.0",
-        "ensemble": {
-            "use_stacking": true,
-            "use_calibration": true,
-            "calibration_method": "isotonic",
-            "temporal_split": {
-                "enabled": true,
-                "months_test": 2,
-                "months_val": 2
-            },
-            "test_size": 0.2,
-            "cv_folds": 3,
-            "threshold_preocupante": 0.58,
-            "threshold_inusual": 0.35,
-            "enable_shap": true
-        },
-        "no_supervisado": {
-            "version": "2.0",
-            "k_min": 6,
-            "k_max": 14,
-            "target_outlier_ratio": 0.04,
-            "top_n": 100,
-            "iforest_n_estimators": 300,
-            "analyze_all_classes": true,
-            "export_anomaly_features": true,
-            "enable_dbscan": true,
-            "enable_pca_anomaly": true
-        },
-        "refuerzo": {
-            "version": "2.0",
-            "grid_size": 17,
-            "grid_min": 0.1,
-            "grid_max": 0.9,
-            "val_months": 2,
-            "cost_weights": {
-                "FN_preocupante": 50000.0,
-                "FP_preocupante": 200.0,
-                "FN_inusual": 5000.0,
-                "FP_inusual": 50.0,
-                "penalty_norma": 100000.0
-            }
-        },
-        "drift_detection": {
-            "enabled": true,
-            "chi_square_threshold": 0.05,
-            "alert_on_significant_drift": true
-        },
-        "explainability": {
-            "shap_enabled": true,
-            "shap_sample_size": 100,
-            "top_n_features": 10
-        }
+    "actividad_alto_riesgo": [
+      "XVI_activos_virtuales",
+      "X_traslado_valores",
+      "VI_joyeria_metales",
+      "III_cheques_viajero",
+      "X_traslado_valores",
+      "activos_virtuales",
+      "criptomonedas",
+      "traslado_valores",
+      "cambio_divisas",
+      "joyeria_metales",
+      "V_inmuebles",
+      "V_bis_desarrollo_inmobiliario"
+    ]
+  },
+  "ebr": {
+    "descripcion": "Enfoque Basado en Riesgos con ponderaciones específicas para PLD/FT",
+    "version": "2.0",
+    "umbrales_clasificacion": {
+      "bajo_max": 50,
+      "medio_max": 65,
+      "descripcion": "0-50=bajo/relevante, 51-65=medio/inusual, 66-100=alto/preocupante"
     },
-    "normativa": {
-        "uma_mxn": 113.14,
-        "fracciones_umbral_aviso_mxn": {
-            "V_inmuebles": 8025,
-            "VIII_vehiculos": 6420,
-            "XI_joyeria": 3210,
-            "X_traslado_valores": 3210,
-            "XVI_activos_virtuales": 210,
-            "metales": 3210
-        },
-        "fracciones_limite_efectivo_mxn": {
-            "V_inmuebles": 8025,
-            "VIII_vehiculos": 3210,
-            "XI_joyeria": 3210,
-            "X_traslado_valores": 3210,
-            "metales": 3210
-        }
+    "ponderaciones": {
+      "efectivo": {
+        "nombre": "Pago en Efectivo",
+        "descripcion": "Operación realizada en efectivo (alto riesgo PLD)",
+        "puntos": 25,
+        "condicion": "EsEfectivo == 1",
+        "categoria": "tipo_operacion"
+      },
+      "efectivo_alto": {
+        "nombre": "Efectivo cercano al umbral",
+        "descripcion": "Operación en efectivo que supera el 75% del umbral de efectivo por fracción",
+        "puntos": 15,
+        "condicion": "EsEfectivo == 1 and monto >= 0.75 * umbral_efectivo",
+        "categoria": "tipo_operacion"
+      },
+      "sector_alto_riesgo": {
+        "nombre": "Sector de Alto Riesgo",
+        "descripcion": "Actividad en sector vulnerable LFPIORPI",
+        "puntos": 20,
+        "condicion": "SectorAltoRiesgo == 1",
+        "categoria": "perfil_cliente"
+      },
+      "acumulado_alto": {
+        "nombre": "Acumulado 6M Elevado",
+        "descripcion": "Monto acumulado en 6 meses supera umbral de monitoreo",
+        "puntos": 15,
+        "umbral_mxn": 500000,
+        "condicion": "monto_6m >= 500000",
+        "categoria": "comportamiento"
+      },
+      "internacional": {
+        "nombre": "Operación Internacional",
+        "descripcion": "Transferencia internacional (mayor escrutinio por riesgo transfronterizo)",
+        "puntos": 10,
+        "condicion": "EsInternacional == 1",
+        "categoria": "tipo_operacion"
+      },
+      "ratio_alto": {
+        "nombre": "Monto Atípico vs Perfil",
+        "descripcion": "Monto significativamente superior al promedio histórico del cliente",
+        "puntos": 10,
+        "umbral_ratio": 3,
+        "condicion": "ratio_vs_promedio > 3.0",
+        "categoria": "comportamiento"
+      },
+      "frecuencia_alta": {
+        "nombre": "Alta Frecuencia Operativa",
+        "descripcion": "Cantidad de operaciones superior al patrón normal en 6 meses",
+        "puntos": 10,
+        "umbral_ops": 5,
+        "condicion": "ops_6m > 5",
+        "categoria": "comportamiento"
+      },
+      "nocturno": {
+        "nombre": "Horario Nocturno",
+        "descripcion": "Operación realizada entre 10PM y 6AM",
+        "puntos": 5,
+        "condicion": "es_nocturno == 1",
+        "categoria": "patron_temporal"
+      },
+      "fin_semana": {
+        "nombre": "Fin de Semana",
+        "descripcion": "Operación en sábado o domingo",
+        "puntos": 5,
+        "condicion": "fin_de_semana == 1",
+        "categoria": "patron_temporal"
+      },
+      "monto_redondo": {
+        "nombre": "Monto Redondo Sospechoso",
+        "descripcion": "Monto exactamente divisible por $10,000 (posible structuring)",
+        "puntos": 5,
+        "condicion": "es_monto_redondo == 1",
+        "categoria": "comportamiento"
+      },
+      "burst": {
+        "nombre": "Operaciones en Ráfaga",
+        "descripcion": "Múltiples operaciones en menos de 1 hora (posible fraccionamiento)",
+        "puntos": 5,
+        "condicion": "posible_burst == 1",
+        "categoria": "comportamiento"
+      }
+    },
+    "efectivo_proximidad_pct": 0.75,
+    "elevacion_inusual_threshold": 60,
+    "categorias_peso": {
+      "tipo_operacion": "Características de la operación",
+      "perfil_cliente": "Perfil y sector del cliente",
+      "comportamiento": "Patrones de comportamiento",
+      "patron_temporal": "Patrones temporales"
     }
+  },
+  "no_supervisado": {
+    "weights": {
+      "iso": 0.6,
+      "dbscan": 0.2,
+      "kmeans": 0.1,
+      "pca": 0.1
+    }
+  },
+  "validacion": {
+    "campos_obligatorios": [
+      "cliente_id",
+      "monto",
+      "fecha",
+      "tipo_operacion"
+    ],
+    "campos_opcionales": [
+      "sector_actividad",
+      "hora",
+      "id_transaccion"
+    ],
+    "tipos_operacion_validos": [
+      "efectivo",
+      "tarjeta",
+      "transferencia_nacional",
+      "transferencia_internacional",
+      "cheque",
+      "deposito",
+      "retiro"
+    ],
+    "sector_default": "servicios_generales",
+    "monto_minimo": 0.01,
+    "monto_maximo": 999999999.99
+  },
+  "modelos": {
+    "version": "2.0",
+    "supervisado": {
+      "archivo": "modelo_ensemble_stack.pkl",
+      "tipo": "ensemble_stacking",
+      "clases": [
+        "relevante",
+        "inusual",
+        "preocupante"
+      ]
+    },
+    "ensemble": {
+      "use_stacking": true,
+      "use_calibration": true,
+      "calibration_method": "isotonic",
+      "temporal_split": {
+        "enabled": true,
+        "months_test": 2,
+        "months_val": 2
+      },
+      "test_size": 0.2,
+      "cv_folds": 3,
+      "threshold_preocupante": 0.51,
+      "threshold_inusual": 0.45,
+      "enable_shap": true
+    },
+    "no_supervisado": {
+      "archivo": "no_supervisado_bundle.pkl",
+      "tipo": "isolation_forest_dbscan",
+      "version": "2.0",
+      "k_min": 6,
+      "k_max": 14,
+      "target_outlier_ratio": 0.04,
+      "top_n": 100,
+      "iforest_n_estimators": 300,
+      "analyze_all_classes": true,
+      "export_anomaly_features": true,
+      "enable_dbscan": true,
+      "enable_pca_anomaly": true,
+      "weights": {
+        "iso": 0.6,
+        "dbscan": 0.2,
+        "kmeans": 0.1,
+        "pca": 0.1
+      }
+    },
+    "refuerzo": {
+      "archivo": "modelo_refuerzo_th.pkl",
+      "tipo": "q_learning",
+      "version": "2.0",
+      "grid_size": 17,
+      "grid_min": 0.1,
+      "grid_max": 0.9,
+      "val_months": 2,
+      "output_thresholds_json": true,
+      "cost_weights": {
+        "FN_preocupante": 50000,
+        "FP_preocupante": 200,
+        "FN_inusual": 5000,
+        "FP_inusual": 50,
+        "penalty_norma": 100000
+      }
+    },
+    "drift_detection": {
+      "enabled": true,
+      "chi_square_threshold": 0.05,
+      "alert_on_significant_drift": true
+    },
+    "explainability": {
+      "shap_enabled": true,
+      "shap_sample_size": 100,
+      "top_n_features": 10
+    }
+  },
+  "thresholds": {
+    "ica_alta_confianza": 0.85,
+    "ica_media_confianza": 0.6,
+    "ica_baja_confianza": 0.4,
+    "anomaly_score_alto": 0.7,
+    "anomaly_score_medio": 0.5
+  },
+  "fusion": {
+    "descripcion": "Reglas para fusionar ML + EBR + Guardrails",
+    "reglas": {
+      "guardrail_override": true,
+      "ebr_puede_elevar": true,
+      "ebr_puede_bajar": false,
+      "requiere_revision_si_discrepancia": true
+    },
+    "elevacion_ebr": {
+      "de_relevante_a_inusual_si_ebr_alto": true,
+      "de_relevante_a_inusual_si_ebr_medio": true,
+      "de_inusual_a_preocupante_si_ebr_alto": false
+    }
+  },
+  "explicabilidad": {
+    "max_razones": 3,
+    "incluir_fundamento_legal": true,
+    "incluir_articulo_fraccion": true,
+    "incluir_umas": true,
+    "generar_acciones_sugeridas": true,
+    "plantillas_accion": {
+      "preocupante": [
+        "Generar Reporte de Operación Preocupante (ROP) para UIF",
+        "Recopilar documentación soporte completa",
+        "Notificar al oficial de cumplimiento en máximo 24 horas",
+        "Evaluar necesidad de bloqueo preventivo de cuenta",
+        "Documentar análisis y justificación de clasificación"
+      ],
+      "inusual": [
+        "Documentar análisis detallado de la operación",
+        "Solicitar información adicional al cliente si aplica",
+        "Incluir cliente en monitoreo reforzado",
+        "Revisar operaciones relacionadas en últimos 6 meses",
+        "Actualizar perfil transaccional del cliente"
+      ],
+      "relevante": [
+        "Mantener registro para trazabilidad",
+        "Incluir en reportes periódicos de cumplimiento",
+        "Continuar monitoreo estándar del cliente"
+      ]
+    }
+  },
+  "normativa": {
+    "uma_mxn": 113.14,
+    "ley_aplicable": "LFPIORPI",
+    "articulo_actividades_vulnerables": 17,
+    "articulo_avisos": 18,
+    "plazo_aviso_dias_habiles": 15,
+    "conservacion_documentos_años": 5,
+    "fracciones_umbral_aviso_mxn": {
+      "_general": 72975.3,
+      "I_juegos": 72975.3,
+      "II_tarjetas_servicios": 145384.9,
+      "II_tarjetas_prepago": 72975.3,
+      "III_cheques_viajero": 72975.3,
+      "IV_mutuo": 181589.7,
+      "V_inmuebles": 907948.5,
+      "V_bis_desarrollo_inmobiliario": 907948.5,
+      "VI_joyeria_metales": 181589.7,
+      "VII_obras_arte": 544769.1,
+      "VIII_vehiculos": 363179.4,
+      "IX_blindaje": 544769.1,
+      "X_traslado_valores": 363179.4,
+      "XII_A_notarios_derechos_inmuebles": 905120.0,
+      "XII_A_notarios_fideicomisos": 452560.0,
+      "XII_arte": 363179.4,
+      "VI_bienes_muebles": 907948.5,
+      "VII_arrendamiento": 363179.4,
+      "XI_activos_financieros": 363179.4,
+      "XV_arrendamiento_inmuebles": 363179.4,
+      "XVI_activos_virtuales": 23759.4,
+      "XVI_activos_virtuales_comision": 452.6
+    },
+    "fracciones_limite_efectivo_mxn": {
+      "_general": 72975.3,
+      "V_inmuebles": 907948.5,
+      "V_bis_desarrollo_inmobiliario": 907948.5,
+      "VIII_vehiculos": 363179.4,
+      "X_traslado_valores": 363179.4,
+      "XII_A_notarios_derechos_inmuebles": 907948.5,
+      "XII_arte": 363179.4,
+      "VI_bienes_muebles": 907948.5,
+      "VII_arrendamiento": 363179.4,
+      "XI_activos_financieros": 363179.4,
+      "XVI_activos_virtuales": 23759.4,
+      "XVI_activos_virtuales_comision": 452.6
+    }
+  },
+  "api": {
+    "rate_limit_requests_per_minute": 60,
+    "max_file_size_mb": 50,
+    "max_transactions_per_file": 100000,
+    "timeout_ml_seconds": 300
+  }
 }

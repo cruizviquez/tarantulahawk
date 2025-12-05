@@ -62,7 +62,7 @@ export interface NivelRiesgoConsolidado {
 
 export interface Alerta {
   existe: boolean;
-  severidad: 'baja' | 'media' | 'alta' | 'critica';
+  severidad: 'baja' | 'media' | 'alta' | 'critica' | 'info' | 'warning' | 'error';
   titulo: string;
   mensaje: string;
   razon: string;
@@ -131,6 +131,32 @@ export interface TransaccionEnriquecida {
     importancia_ml: number;
     fundamento: string;
   }>;
+  // Explicabilidad y otros campos usados en UI
+  razones?: string[];
+  razones_principales?: string[];
+  explicacion_principal?: string;
+  explicacion_detallada?: string;
+  probabilidades?: {
+    [clase: string]: number;
+  };
+  factores?: string[]; // legacy field name used in some payloads
+  factores_ebr?: string[];
+  banderas_ebr?: string[];
+  acciones_sugeridas?: string[];
+  fundamento_legal?: string | FundamentoJuridico;
+  contexto_regulatorio?: string;
+  flags?: {
+    requiere_revision_manual?: boolean;
+    sugerir_reclasificacion?: boolean;
+    alertas?: Array<{
+      tipo?: string;
+      severidad?: 'baja' | 'media' | 'alta' | 'critica' | 'info' | 'warning' | 'error';
+      mensaje: string;
+      de?: string;
+      a?: string;
+    }>;
+  };
+  umas?: number;
   timestamp: string;
 }
 

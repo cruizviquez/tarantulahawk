@@ -5,7 +5,7 @@ import pandas as pd
 import joblib
 from api.utils.validador_cumplimiento import validar_lfpiorpi_datos
 from api.utils.generar_xml import generar_xml_avisos
-from explicabilidad_transactions import TransactionExplainer
+from app.backend.api.explicabilidad_transactions_v4 import TransactionExplainer
 
 router = APIRouter()
 BASE_DIR = Path(__file__).resolve().parent.parent

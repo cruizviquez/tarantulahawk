@@ -43,6 +43,7 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [company, setCompany] = useState('');
+  const [giro, setGiro] = useState('');
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -123,9 +124,14 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
       return;
     }
 
-    // Validate company name for SIGNUP only
+    // Validate company name and giro for SIGNUP only
     if (currentMode === 'signup' && !company.trim()) {
       setError('El campo empresa es obligatorio.');
+      setLoading(false);
+      return;
+    }
+    if (currentMode === 'signup' && !giro) {
+      setError('El campo Giro de Negocio es obligatorio.');
       setLoading(false);
       return;
     }
@@ -237,6 +243,19 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
           data: currentMode === 'signup' ? {
             name,
             company,
+            giro_negocio: giro,
+            fraccion_lfpiorpi: (() => {
+              const map: Record<string,string> = {
+                'Venta de vehículos': 'VIII_vehiculos',
+                'Inmobiliaria': 'V_inmuebles',
+                'Casas de cambio': 'III_cheques_viajero',
+                'Joyeria / Metales': 'VI_joyeria_metales',
+                'Servicios generales': 'servicios_generales',
+                'Servicios profesionales': 'XI_servicios_profesionales',
+                'Activos virtuales / Cripto': 'XVI_activos_virtualos'
+              };
+              return map[giro] || 'servicios_generales';
+            })(),
             balance: 500.0,
           } : undefined,
         },
@@ -255,6 +274,34 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
       setIsNewSignup(currentMode === 'signup' && !emailExiste);
       setSuccess(true);
       setLoading(false);
+
+      // Persist profile metadata via backend service (so we have sector/fraccion)
+      if (currentMode === 'signup') {
+        try {
+          await fetch(`${computeBackendUrl()}/api/auth/save-profile`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              email: normalizedEmail,
+              sector_actividad: giro,
+              fraccion_lfpiorpi: (() => {
+                const map: Record<string,string> = {
+                  'Venta de vehículos': 'VIII_vehiculos',
+                  'Inmobiliaria': 'V_inmuebles',
+                  'Casas de cambio': 'III_cheques_viajero',
+                  'Joyeria / Metales': 'VI_joyeria_metales',
+                  'Servicios generales': 'servicios_generales',
+                  'Servicios profesionales': 'XI_servicios_profesionales',
+                  'Activos virtuales / Cripto': 'XVI_activos_virtualos'
+                };
+                return map[giro] || 'servicios_generales';
+              })(),
+            }),
+          });
+        } catch (err) {
+          console.warn('[ONBOARDING] No se pudo persistir perfil en backend:', err);
+        }
+      }
     } catch (error: any) {
       setError(error.message || 'Error al procesar tu solicitud. Por favor intenta de nuevo.');
       setLoading(false);
@@ -397,6 +444,28 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
                 </p>
               )}
             </div>
+
+            {currentMode === 'signup' && (
+              <div>
+                <label className="text-gray-400 text-sm">Giro de Negocio</label>
+                <select
+                  value={giro}
+                  onChange={e => setGiro(e.target.value)}
+                  required
+                  className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-emerald-500 outline-none"
+                >
+                  <option value="">Selecciona el giro de negocio</option>
+                  <option>Venta de vehículos</option>
+                  <option>Inmobiliaria</option>
+                  <option>Casas de cambio</option>
+                  <option>Joyeria / Metales</option>
+                  <option>Servicios generales</option>
+                  <option>Servicios profesionales</option>
+                  <option>Activos virtuales / Cripto</option>
+                </select>
+                <p className="text-gray-500 text-xs mt-1">Selecciona el giro que mejor describa tu negocio. Este dato es obligatorio.</p>
+              </div>
+            )}
             
             {/* CAPTCHA */}
             <div className="flex justify-center">

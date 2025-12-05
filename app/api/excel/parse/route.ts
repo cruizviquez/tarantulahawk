@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     const headerLine = lines[0];
     const rawHeaders = headerLine.split(',').map(h => h.trim());
     const headersLower = rawHeaders.map(h => h.toLowerCase());
-    const requiredColumns = ['cliente_id', 'monto', 'fecha', 'tipo_operacion', 'sector_actividad'];
+    const requiredColumns = ['cliente_id', 'monto', 'fecha', 'tipo_operacion'];
     const missingColumns = requiredColumns.filter(c => !headersLower.includes(c));
     if (missingColumns.length > 0) {
       return NextResponse.json(

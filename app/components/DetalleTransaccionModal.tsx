@@ -20,15 +20,22 @@ import {
 // TIPOS
 // ============================================================================
 export interface TransaccionDetalle {
-  // Identificación
-  id?: string;
+  // Identificación (acepta tanto el objeto completo del backend como la fila simplificada)
+  id?: string | number;
+  cliente?: string | number | null;
   cliente_id?: string;
+  clienteId?: string | number | null;
   id_transaccion?: string;
+  txn_id?: string;
   
   // Datos básicos
   monto: number;
   fecha: string;
   hora?: string;
+  fecha_operacion?: string;
+  fechaOperacion?: string;
+  hora_operacion?: string;
+  horaOperacion?: string;
   tipo_operacion: string;
   sector_actividad?: string;
   
@@ -48,6 +55,8 @@ export interface TransaccionDetalle {
   nivel_riesgo_ebr?: string;
   clasificacion_ebr?: string;
   factores_ebr?: string[];
+  banderas_ebr?: string[];
+  factores?: string[];
   
   // Explicabilidad
   razones?: string[];
@@ -84,6 +93,10 @@ export interface TransaccionDetalle {
   // UMAs
   umas?: number;
   uma_mxn?: number;
+  umbral_aviso_umas?: number;
+  umbral_aviso_mxn?: number;
+  fraccion_key?: string;
+  fraccion_desc?: string;
 }
 
 interface DetalleTransaccionModalProps {
@@ -98,10 +111,25 @@ interface DetalleTransaccionModalProps {
 // ============================================================================
 const formatMonto = (monto: number): string => {
   try {
-    return `$${monto.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`;
+    // Return number formatted without currency symbol
+    return `${monto.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} MXN`;
   } catch {
-    return `$${monto} MXN`;
+    return `${monto} MXN`;
   }
+};
+
+const getNivelRiesgoColor = (nivel: string): string => {
+  const c = nivel?.toLowerCase() || '';
+  if (c === 'alto') return 'text-red-400';
+  if (c === 'medio') return 'text-yellow-400';
+  return 'text-emerald-400';
+};
+
+const getNivelRiesgoBg = (nivel: string): string => {
+  const c = nivel?.toLowerCase() || '';
+  if (c === 'alto') return 'bg-red-500/10 border-red-500/30';
+  if (c === 'medio') return 'bg-yellow-500/10 border-yellow-500/30';
+  return 'bg-emerald-500/10 border-emerald-500/30';
 };
 
 const getClasificacionColor = (clasificacion: string): string => {
@@ -145,8 +173,12 @@ export const DetalleTransaccionModal: React.FC<DetalleTransaccionModalProps> = (
 }) => {
   if (!open || !transaccion) return null;
 
-  // Normalizar datos
-  const tx = transaccion;
+  // Normalizar datos (aceptamos tanto el objeto completo del backend como la fila simplificada de la tabla)
+  const tx = transaccion as TransaccionDetalle;
+  const clienteId = tx.cliente_id ?? tx.cliente ?? tx.clienteId ?? 'N/A';
+  const txId = tx.id_transaccion ?? tx.id ?? tx.txn_id ?? 'N/A';
+  const fechaOp = tx.fecha ?? tx.fecha_operacion ?? tx.fechaOperacion ?? '-';
+  const horaVal = tx.hora ?? tx.hora_operacion ?? tx.horaOperacion ?? 'N/A';
   const clasificacion = tx.clasificacion_final || tx.clasificacion || 'relevante';
   const nivelRiesgo = tx.nivel_riesgo || 
     (clasificacion === 'preocupante' ? 'alto' : clasificacion === 'inusual' ? 'medio' : 'bajo');
@@ -160,6 +192,7 @@ export const DetalleTransaccionModal: React.FC<DetalleTransaccionModalProps> = (
   
   // Razones (top 3)
   const razones = tx.razones_principales || tx.razones || [];
+  const factoresEbr = tx.factores_ebr || tx.banderas_ebr || tx.factores || [];
   
   // Probabilidades ML
   const probabilidades = tx.probabilidades || {};
@@ -247,8 +280,8 @@ export const DetalleTransaccionModal: React.FC<DetalleTransaccionModalProps> = (
             <div>
               <h2 className="text-xl font-bold text-white">{t.title}</h2>
               <p className="text-sm text-gray-400">
-                {tx.cliente_id && `${t.clientId}: ${tx.cliente_id}`}
-                {tx.id_transaccion && ` · ${t.transactionId}: ${tx.id_transaccion}`}
+                {clienteId && `${t.clientId}: ${clienteId}`}
+                {txId && ` · ${t.transactionId}: ${txId}`}
               </p>
             </div>
           </div>
@@ -274,13 +307,13 @@ export const DetalleTransaccionModal: React.FC<DetalleTransaccionModalProps> = (
               </p>
             </div>
             
-            {/* Nivel de Riesgo */}
-            <div className="p-4 rounded-xl border border-gray-700 bg-gray-800/50">
-              <p className="text-xs text-gray-400 mb-1">{t.riskLevel}</p>
-              <p className="text-lg font-bold text-white">
-                {getNivelRiesgoLabel(nivelRiesgo)}
-              </p>
-            </div>
+              {/* Nivel de Riesgo */}
+              <div className={`p-4 rounded-xl border ${getNivelRiesgoBg(nivelRiesgo)}`}>
+                <p className="text-xs text-gray-400 mb-1">{t.riskLevel}</p>
+                <p className={`text-lg font-bold ${getNivelRiesgoColor(nivelRiesgo)}`}>
+                  {getNivelRiesgoLabel(nivelRiesgo)}
+                </p>
+              </div>
             
             {/* ICA */}
             <div className="p-4 rounded-xl border border-blue-500/30 bg-blue-500/10">
@@ -307,6 +340,10 @@ export const DetalleTransaccionModal: React.FC<DetalleTransaccionModalProps> = (
             </h3>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
               <div>
+                <span className="text-gray-500">{t.clientId}:</span>
+                <span className="ml-2 text-gray-300">{clienteId ?? 'N/A'}</span>
+              </div>
+              <div>
                 <span className="text-gray-500">{t.amount}:</span>
                 <span className="ml-2 font-mono text-teal-400 font-semibold">
                   {formatMonto(tx.monto)}
@@ -320,16 +357,26 @@ export const DetalleTransaccionModal: React.FC<DetalleTransaccionModalProps> = (
                   </span>
                 </div>
               )}
-              <div>
-                <span className="text-gray-500">{t.date}:</span>
-                <span className="ml-2 text-gray-300">{tx.fecha}</span>
-              </div>
-              {tx.hora && (
+              {tx.fraccion_key && (
                 <div>
-                  <span className="text-gray-500">{t.time}:</span>
-                  <span className="ml-2 text-gray-300">{tx.hora}</span>
+                  <span className="text-gray-500">Fracción:</span>
+                  <span className="ml-2 text-gray-300">{tx.fraccion_key}{tx.fraccion_desc ? ` · ${tx.fraccion_desc}` : ''}</span>
                 </div>
               )}
+              {tx.umbral_aviso_umas !== undefined && (
+                <div>
+                  <span className="text-gray-500">Umbral Aviso:</span>
+                  <span className="ml-2 text-gray-300">{tx.umbral_aviso_umas.toFixed(0)} UMAs ({tx.umbral_aviso_mxn?.toFixed(0)} MXN)</span>
+                </div>
+              )}
+              <div>
+                <span className="text-gray-500">{t.date}:</span>
+                <span className="ml-2 text-gray-300">{fechaOp}</span>
+              </div>
+              <div>
+                <span className="text-gray-500">{t.time}:</span>
+                <span className="ml-2 text-gray-300">{horaVal}</span>
+              </div>
               <div>
                 <span className="text-gray-500">{t.type}:</span>
                 <span className="ml-2 text-gray-300">{tx.tipo_operacion}</span>
@@ -370,7 +417,7 @@ export const DetalleTransaccionModal: React.FC<DetalleTransaccionModalProps> = (
                 {t.mainReasons}
               </h3>
               <div className="space-y-2">
-                {razones.slice(0, 3).map((razon, idx) => (
+                {razones.slice(0, 3).map((razon: string, idx: number) => (
                   <div
                     key={idx}
                     className="flex items-start gap-3 p-3 bg-gray-900/50 rounded-lg"
@@ -380,6 +427,23 @@ export const DetalleTransaccionModal: React.FC<DetalleTransaccionModalProps> = (
                     </span>
                     <span className="text-gray-300 text-sm">{razon}</span>
                   </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Factores EBR (si existen) */}
+          {factoresEbr.length > 0 && (
+            <div className="bg-gray-800/50 border border-gray-700 rounded-xl p-5">
+              <h3 className="text-sm font-semibold text-gray-300 mb-4 flex items-center gap-2">
+                <Shield className="w-4 h-4" />
+                Factores EBR
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {factoresEbr.map((f: any, idx: number) => (
+                  <span key={idx} className="px-2 py-1 bg-gray-900/50 text-gray-300 rounded-full text-xs">
+                    {String(f)}
+                  </span>
                 ))}
               </div>
             </div>
@@ -488,7 +552,7 @@ export const DetalleTransaccionModal: React.FC<DetalleTransaccionModalProps> = (
                     <span>{t.suggestReclassification}</span>
                   </div>
                 )}
-                {tx.flags.alertas?.map((alerta, idx) => (
+                {tx.flags.alertas?.map((alerta: { tipo: string; severidad: 'info' | 'warning' | 'error'; mensaje: string }, idx: number) => (
                   <div
                     key={idx}
                     className={`p-2 rounded text-sm ${

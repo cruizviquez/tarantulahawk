@@ -9,12 +9,6 @@
     "servicios_generales pasa directo al ML sin guardrails"
   ],
   
-  "modelos": {
-    "no_supervisado": "app/backend/outputs/no_supervisado_bundle.pkl",
-    "supervisado": "app/backend/outputs/modelo_ensemble_stack.pkl",
-    "refuerzo": "app/backend/outputs/refuerzo_bundle.pkl"
-    },
-
   "lfpiorpi": {
     "uma_diaria": 113.14,
     "uma_mxn": 113.14,
@@ -235,6 +229,12 @@
         "puntos": 5,
         "descripcion": "Monto redondo (múltiplo de 10,000)"
       }
+    },
+    "fx": {
+      "usd_to_mxn": 18
+    },
+    "umbrales_adicionales": {
+      "umbral_servicios_generales_usd": 10000
     },
     
     "umbrales_clasificacion": {
