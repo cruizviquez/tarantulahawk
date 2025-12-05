@@ -1,1378 +1,1327 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-ml_runner.py - VERSIÓN 4.1 CORREGIDA
+ml_runner.py - Versión 6.0
 
-CORRECCIONES vs v4.0:
-1. Calcula efectivo_alto correctamente (>=75% del umbral de efectivo)
-2. Alinea fracciones entre validador y modelo
-3. EBR incluye efectivo_alto con peso alto (+20 pts)
-4. Threshold de elevación EBR→inusual = 50 pts
-5. Si EBR >= 50 y ML dice relevante → elevar a inusual
+Orquesta la aplicación de:
+  - Reglas LFPIORPI (legales)
+  - Índice EBR
+  - Modelo no supervisado (Isolation Forest u otro)
+  - Modelo supervisado
+  - Lógica de fusión para clasificar operaciones en:
+        relevante / inusual / preocupante
 
-Pipeline:
-1. PASO 0: Reglas LFPIORPI → PREOCUPANTE (100% certeza)
-2. PASO 1: No supervisado → anomaly scores (opcional)
-3. PASO 2: Supervisado (2 clases) → relevante/inusual
-4. PASO 3: EBR → score de riesgo
-5. PASO 4: Fusión → si EBR>=50 eleva a inusual
-6. PASO 5: Unir resultados
-7. PASO 6: Explicaciones
+Este runner espera un CSV ENRIQUECIDO (salida de validador_enriquecedor v6).
+
+MODOS DE USO
+============
+
+1) Modo "portal" (compatible con enhanced_main_api):
+
+   python ml_runner.py <analysis_id>
+
+   Busca:
+     app/backend/outputs/enriched/pending/<analysis_id>.csv
+   Escribe:
+     app/backend/outputs/enriched/processed/<analysis_id>.csv
+     app/backend/outputs/enriched/processed/<analysis_id>.json
+
+2) Modo CLI directo:
+
+   python ml_runner.py \
+       --input data/historico_enriquecido_vehiculos.csv \
+       --output data/historico_clasificado_vehiculos.csv \
+       --config app/backend/models/config_modelos.json
+
+   El JSON se guarda junto al CSV, con la misma base de nombre.
 """
 
-import os
-import sys
+from __future__ import annotations
+
+import argparse
 import json
-import shutil
-import traceback
+import sys
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
+
 from datetime import datetime
-from collections import Counter
-from typing import Dict, Any, List, Tuple, Optional
 
 import numpy as np
 import pandas as pd
 import joblib
 
-# ============================================================================
-# CONFIGURACIÓN DE RUTAS
-# ============================================================================
-BASE_DIR = Path(__file__).resolve().parent.parent
-PENDING_DIR = BASE_DIR / "outputs" / "enriched" / "pending"
-PROCESSED_DIR = BASE_DIR / "outputs" / "enriched" / "processed"
-FAILED_DIR = BASE_DIR / "outputs" / "enriched" / "failed"
-MODELS_DIR = BASE_DIR / "outputs"
-CONFIG_PATH = BASE_DIR / "models" / "config_modelos.json"
 
-for d in (PENDING_DIR, PROCESSED_DIR, FAILED_DIR):
-    d.mkdir(parents=True, exist_ok=True)
 
+# =============================================================================
+# LOGGING
+# =============================================================================
 
 def log(msg: str) -> None:
     ts = datetime.now().strftime("%H:%M:%S")
     print(f"[{ts}] {msg}", flush=True)
 
 
-# ============================================================================
-# CONFIGURACIÓN
-# ============================================================================
+# =============================================================================
+# CONFIG
+# =============================================================================
+
 _CONFIG_CACHE: Dict[str, Any] = {}
 
 
-def cargar_config() -> Dict[str, Any]:
+def _find_default_config() -> Path:
+    here = Path(__file__).resolve().parent
+    candidates = [
+        here.parent / "models" / "config_modelos_v2.json",
+        here.parent / "models" / "config_modelos.json",
+        here.parent / "config" / "config_modelos_v4.json",
+        Path.cwd() / "app" / "backend" / "models" / "config_modelos.json",
+        Path.cwd() / "config_modelos.json",
+    ]
+    for p in candidates:
+        if p.exists():
+            return p
+    raise FileNotFoundError("No se encontró config_modelos.json en rutas conocidas")
+
+
+def load_config(config_path: Optional[str] = None) -> Dict[str, Any]:
     global _CONFIG_CACHE
-    if _CONFIG_CACHE:
-        return _CONFIG_CACHE
-    if not CONFIG_PATH.exists():
-        raise FileNotFoundError(f"Config no encontrado: {CONFIG_PATH}")
-    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-        _CONFIG_CACHE = json.load(f)
-    return _CONFIG_CACHE
+    p = Path(config_path) if config_path else _find_default_config()
+    key = str(p.resolve())
+    if key in _CONFIG_CACHE:
+        return _CONFIG_CACHE[key]
+    log(f"📁 Cargando config: {p}")
+    with p.open("r", encoding="utf-8") as f:
+        cfg = json.load(f)
+    _CONFIG_CACHE[key] = cfg
+    return cfg
 
 
-def get_uma_mxn() -> float:
-    cfg = cargar_config()
+def get_uma_mxn(cfg: Dict[str, Any]) -> float:
     lfpi = cfg.get("lfpiorpi", {})
-    return float(lfpi.get("uma_diaria", lfpi.get("uma_mxn", 113.14)))
+    return float(lfpi.get("uma_mxn", lfpi.get("uma_diaria", 113.14)))
 
 
-def mxn_a_umas(monto: float) -> float:
-    uma = get_uma_mxn()
-    return monto / uma if uma > 0 else 0.0
-
-
-# ============================================================================
-# MAPEO DE FRACCIONES (normalizar nombres)
-# ============================================================================
-FRACCION_NORMALIZE = {
-    # Mapeo de config → modelo
-    "VI_joyeria_metales": "VI_joyeria",
-    "VIII_vehiculos": "VIII_vehiculos",
-    "V_inmuebles": "V_inmuebles",
-    "V_bis_desarrollo_inmobiliario": "V_inmuebles",
-    "XVI_activos_virtuales": "XVI_cripto",
-    "XV_arrendamiento_inmuebles": "XV_arrendamiento",
-    "X_traslado_valores": "X_traslado",
-    "VII_obras_arte": "VII_arte",
-    "I_juegos": "I_juegos",
-    "II_tarjetas_servicios": "II_tarjetas",
-    "II_tarjetas_prepago": "II_tarjetas",
-    "IV_mutuo": "IV_mutuo",
-    "servicios_generales": "servicios_generales",
-    "_general": "servicios_generales",
-}
-
-
-def normalizar_fraccion_para_modelo(fraccion: str) -> str:
-    """Normaliza nombre de fracción para que coincida con el modelo"""
-    if fraccion in FRACCION_NORMALIZE:
-        return FRACCION_NORMALIZE[fraccion]
-    # Si ya está en formato corto, devolverlo
-    if fraccion.startswith("fraccion_"):
-        return fraccion.replace("fraccion_", "")
-    return fraccion
-
-
-# ============================================================================
-# CARGA DE MODELOS
-# ============================================================================
-def cargar_modelo_supervisado() -> Tuple[Any, Any, List[str], List[str]]:
-    """Carga modelo supervisado (2 clases: relevante, inusual)"""
-    bundle_path = MODELS_DIR / "modelo_ensemble_stack.pkl"
-    if not bundle_path.exists():
-        raise FileNotFoundError(f"Modelo supervisado no encontrado: {bundle_path}")
-    
-    bundle = joblib.load(bundle_path)
-    model = bundle.get("model")
-    scaler = bundle.get("scaler")
-    feature_cols = bundle.get("feature_columns") or bundle.get("columns") or []
-    classes = list(bundle.get("classes", ["inusual", "relevante"]))
-    
-    if model is None:
-        raise ValueError("Bundle no contiene 'model'")
-    
-    log(f"  📋 Supervisado: {len(feature_cols)} features, clases={classes}")
-    return model, scaler, feature_cols, classes
-
-
-def cargar_modelo_no_supervisado() -> Optional[Dict[str, Any]]:
-    """Carga modelo no supervisado (Isolation Forest, KMeans, etc.)"""
-    # Intentar varios nombres posibles
-    possible_names = [
-        "no_supervisado_bundle.pkl",
-        "modelo_no_supervisado_th.pkl",
-        "modelo_no_supervisado.pkl",
-        "refuerzo_bundle.pkl"
-    ]
-    
-    for name in possible_names:
-        bundle_path = MODELS_DIR / name
-        if bundle_path.exists():
-            try:
-                bundle = joblib.load(bundle_path)
-                log(f"  ✅ No supervisado cargado: {name}")
-                return bundle
-            except Exception as e:
-                log(f"  ⚠️ Error cargando {name}: {e}")
-                continue
-    
-    log(f"  ⚠️ Modelo no supervisado no encontrado (continuando sin él)")
-    return None
-
-
-def cargar_modelo_refuerzo() -> Optional[Dict[str, Any]]:
-    """Carga modelo de refuerzo (Q-Learning para optimización de thresholds)"""
-    possible_names = [
-        "modelo_refuerzo.pkl",
-        "refuerzo_bundle.pkl"
-    ]
-    
-    for name in possible_names:
-        bundle_path = MODELS_DIR / name
-        if bundle_path.exists():
-            try:
-                bundle = joblib.load(bundle_path)
-                log(f"  ✅ Refuerzo cargado: {name}")
-                return bundle
-            except Exception as e:
-                log(f"  ⚠️ Error cargando {name}: {e}")
-                continue
-    
-    log(f"  ⚠️ Modelo refuerzo no encontrado (usando thresholds por defecto)")
-    return None
-
-
-# ============================================================================
-# PASO 0: REGLAS LFPIORPI
-# ============================================================================
-def es_actividad_vulnerable(fraccion: str, cfg: Dict[str, Any]) -> bool:
-    """Determina si una fracción es actividad vulnerable"""
-    if not fraccion or fraccion.startswith("_"):
-        return False
-    NO_VULNERABLES = ["servicios_generales", "_general", "_no_vulnerable", "otro"]
-    if fraccion.lower() in NO_VULNERABLES:
-        return False
-    
+def obtener_umbrales_fraccion(fraccion: Optional[str], cfg: Dict[str, Any]) -> Dict[str, Any]:
     lfpi = cfg.get("lfpiorpi", {})
     umbrales = lfpi.get("umbrales", {})
-    
-    if fraccion in umbrales:
-        u = umbrales[fraccion]
-        if "es_actividad_vulnerable" in u:
-            return bool(u["es_actividad_vulnerable"])
-        aviso = float(u.get("aviso_UMA", 0))
-        return aviso > 0 and aviso < 999999
-    return False
+
+    def _fallback() -> Dict[str, Any]:
+        if "servicios_generales" in umbrales:
+            return umbrales["servicios_generales"]
+        return {
+            "identificacion_UMA": 0,
+            "aviso_UMA": 0,
+            "efectivo_max_UMA": 0,
+            "es_actividad_vulnerable": False,
+            "descripcion": f"Fracción desconocida: {fraccion}",
+        }
+
+    if not fraccion:
+        return _fallback()
+
+    fr_strip = str(fraccion).strip()
+    if fr_strip in umbrales:
+        return umbrales[fr_strip]
+
+    fr_upper = fr_strip.upper()
+    # match case-insensitive
+    for key in umbrales.keys():
+        if key.upper() == fr_upper:
+            return umbrales[key]
+    # solo número romano ("VIII")?
+    if "_" not in fr_upper:
+        for key in umbrales.keys():
+            if key.upper().startswith(fr_upper + "_"):
+                return umbrales[key]
+
+    return _fallback()
 
 
-def obtener_umbrales_fraccion(fraccion: str, cfg: Dict[str, Any]) -> Dict[str, float]:
-    """Obtiene umbrales de aviso y efectivo para una fracción"""
-    uma = get_uma_mxn()
-    lfpi = cfg.get("lfpiorpi", {})
-    umbrales = lfpi.get("umbrales", {})
-    
-    u = umbrales.get(fraccion, umbrales.get("_general", {}))
-    
-    aviso_umas = float(u.get("aviso_UMA", 645))
-    
-    # CORRECCIÓN: Si efectivo_max_UMA es 0, usar aviso_UMA
-    efectivo_umas = float(u.get("efectivo_max_UMA", 0))
-    if efectivo_umas == 0:
-        efectivo_umas = aviso_umas  # Usar mismo umbral que aviso
-    
-    return {
-        "aviso_umas": aviso_umas,
-        "aviso_mxn": aviso_umas * uma,
-        "efectivo_umas": efectivo_umas,
-        "efectivo_mxn": efectivo_umas * uma,
-    }
+# =============================================================================
+# RUTAS POR DEFECTO (modo portal)
+# =============================================================================
+
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+OUTPUTS_DIR = BACKEND_DIR / "outputs"
+PENDING_DIR = OUTPUTS_DIR / "enriched" / "pending"
+PROCESSED_DIR = OUTPUTS_DIR / "enriched" / "processed"
+MODELS_DIR = BACKEND_DIR / "outputs"
 
 
-def evaluar_reglas_lfpiorpi(row: Dict[str, Any], cfg: Dict[str, Any]) -> Dict[str, Any]:
-    """Evalúa si una transacción activa guardrails LFPIORPI"""
-    uma = get_uma_mxn()
-    fraccion = str(row.get("fraccion", "servicios_generales"))
-    monto = float(row.get("monto", 0) or 0)
-    monto_6m = float(row.get("monto_6m", 0) or 0)
-    es_efectivo = row.get("EsEfectivo") in (1, True, "1", "true")
-    
-    resultado = {
-        "activa_guardrail": False,
-        "clasificacion": None,
-        "razon": None,
-        "fundamento_legal": None,
-        "es_actividad_vulnerable": False,
-    }
-    
-    if not es_actividad_vulnerable(fraccion, cfg):
-        return resultado
-    
-    resultado["es_actividad_vulnerable"] = True
-    umbrales = obtener_umbrales_fraccion(fraccion, cfg)
-    umbral_aviso_mxn = umbrales["aviso_mxn"]
-    umbral_efectivo_mxn = umbrales["efectivo_mxn"]
-    
-    # Extraer número de fracción
-    fraccion_num = fraccion.split("_")[0] if "_" in fraccion else fraccion
-    
-    # REGLA 1: Monto >= umbral de aviso
-    if monto >= umbral_aviso_mxn:
-        monto_umas = monto / uma
-        resultado["activa_guardrail"] = True
-        resultado["clasificacion"] = "preocupante"
-        resultado["razon"] = f"Monto {monto:,.0f} MXN ({monto_umas:,.0f} UMAs) rebasa umbral de aviso {umbrales['aviso_umas']:,.0f} UMAs"
-        resultado["fundamento_legal"] = f"Artículo 17, Fracción {fraccion_num} LFPIORPI. Umbral: {umbrales['aviso_umas']:,.0f} UMAs ({umbral_aviso_mxn:,.0f} MXN)."
-        return resultado
-    
-    # REGLA 2: Efectivo >= límite
-    if es_efectivo and umbral_efectivo_mxn > 0 and monto >= umbral_efectivo_mxn:
-        monto_umas = monto / uma
-        resultado["activa_guardrail"] = True
-        resultado["clasificacion"] = "preocupante"
-        resultado["razon"] = f"Efectivo {monto:,.0f} MXN rebasa límite {umbrales['efectivo_umas']:,.0f} UMAs"
-        resultado["fundamento_legal"] = f"Artículo 17 y 18 LFPIORPI. Límite efectivo: {umbrales['efectivo_umas']:,.0f} UMAs."
-        return resultado
-    
-    # REGLA 3: Acumulado 6m >= umbral
-    if monto_6m >= umbral_aviso_mxn:
-        monto_6m_umas = monto_6m / uma
-        resultado["activa_guardrail"] = True
-        resultado["clasificacion"] = "preocupante"
-        resultado["razon"] = f"Acumulado 6 meses {monto_6m:,.0f} MXN ({monto_6m_umas:,.0f} UMAs) rebasa umbral {umbrales['aviso_umas']:,.0f} UMAs"
-        resultado["fundamento_legal"] = f"Artículo 17, Fracción {fraccion_num} LFPIORPI. Operaciones acumuladas rebasan umbral."
-        return resultado
-    
-    return resultado
+# =============================================================================
+# EBR
+# =============================================================================
+
+@dataclass
+class EBRFactor:
+    flag_col: str        # nombre de columna booleana en df
+    config_key: str      # clave en cfg["ebr"]["ponderaciones"]
+    default_points: int  # puntaje por defecto
+    descripcion: str     # texto corto para explicación
 
 
-def aplicar_reglas_lfpiorpi(df: pd.DataFrame, cfg: Dict[str, Any]) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """PASO 0: Separa preocupantes por reglas LFPIORPI"""
-    log("\n  ⚖️ Paso 0: Aplicando reglas LFPIORPI...")
-    
-    resultados = []
-    for _, row in df.iterrows():
-        res = evaluar_reglas_lfpiorpi(row.to_dict(), cfg)
-        resultados.append(res)
-    
-    df = df.copy()
-    df["guardrail_activo"] = [r["activa_guardrail"] for r in resultados]
-    df["guardrail_razon"] = [r["razon"] for r in resultados]
-    df["guardrail_fundamento"] = [r["fundamento_legal"] for r in resultados]
-    df["es_actividad_vulnerable"] = [r["es_actividad_vulnerable"] for r in resultados]
-    
-    mask_guardrail = df["guardrail_activo"] == True
-    df_preocupantes = df[mask_guardrail].copy()
-    df_para_ml = df[~mask_guardrail].copy()
-    
-    if len(df_preocupantes) > 0:
-        df_preocupantes["clasificacion_final"] = "preocupante"
-        df_preocupantes["nivel_riesgo_final"] = "alto"
-        df_preocupantes["origen"] = "regla_lfpiorpi"
-        df_preocupantes["clasificacion_ml"] = None
-        df_preocupantes["ica"] = 1.0
-        df_preocupantes["score_ebr"] = 100.0
-    
-    log(f"  🔴 PREOCUPANTES (regla LFPIORPI): {len(df_preocupantes)}")
-    log(f"  ➡️ Pasan a ML: {len(df_para_ml)}")
-    
-    return df_preocupantes, df_para_ml
+EBR_FACTORS: List[EBRFactor] = [
+    EBRFactor("EsEfectivo",       "efectivo",           20, "monto en efectivo"),
+    EBRFactor("efectivo_alto",    "efectivo_alto",      15, "efectivo cercano al límite"),
+    EBRFactor("SectorAltoRiesgo", "sector_alto_riesgo", 10, "sector de alta vulnerabilidad"),
+    EBRFactor("acumulado_alto",   "acumulado_alto",     15, "acumulado alto en 6 meses"),
+    EBRFactor("EsInternacional",  "internacional",      10, "operación internacional"),
+    EBRFactor("ratio_alto",       "ratio_alto",         10, "monto muy superior a su promedio"),
+    EBRFactor("frecuencia_alta",  "frecuencia_alta",    10, "frecuencia alta de operaciones"),
+    EBRFactor("posible_burst",    "burst",              10, "múltiples ops el mismo día"),
+    EBRFactor("es_nocturno",      "nocturno",            5, "operación en horario inusual"),
+    EBRFactor("fin_de_semana",    "fin_de_semana",       5, "operación en fin de semana"),
+    EBRFactor("es_monto_redondo", "monto_redondo",       5, "monto redondo"),
+]
 
 
-# ============================================================================
-# PASO 1: CALCULAR/RECALCULAR efectivo_alto
-# ============================================================================
-def calcular_efectivo_alto(df: pd.DataFrame, cfg: Dict[str, Any]) -> pd.DataFrame:
-    """
-    Calcula/recalcula efectivo_alto para cada transacción.
-    
-    efectivo_alto = 1 si:
-    - Es operación en efectivo (EsEfectivo=1)
-    - Monto >= 65% del umbral de efectivo de la fracción (actividades vulnerables)
-    - O si el acumulado 6 meses en efectivo >= 65% del umbral
-    
-    NOTA: Si efectivo_max_UMA = 0, usa aviso_UMA como referencia
-    NOTA: 65% para actividades vulnerables (más sensible para análisis)
-    """
-    df = df.copy()
-    uma = get_uma_mxn()
-    lfpi = cfg.get("lfpiorpi", {})
-    umbrales_cfg = lfpi.get("umbrales", {})
-    
-    # Threshold: 65% para actividades vulnerables
-    THRESHOLD_VULNERABLE = 0.65
-    THRESHOLD_GENERAL = 0.75  # servicios_generales usa 75%
-    
-    efectivo_alto_values = []
-    debug_info = []  # Para logging
-    
-    for _, row in df.iterrows():
-        es_efectivo = row.get("EsEfectivo") in (1, True, "1")
-        
-        if not es_efectivo:
-            efectivo_alto_values.append(0)
-            continue
-        
-        fraccion = str(row.get("fraccion", "servicios_generales"))
-        monto = float(row.get("monto", 0) or 0)
-        monto_6m = float(row.get("monto_6m", 0) or 0)
-        es_vulnerable = row.get("es_actividad_vulnerable") in (1, True, "1", True)
-        
-        # Obtener umbral de efectivo
-        u = umbrales_cfg.get(fraccion, umbrales_cfg.get("_general", {}))
-        
-        # CORRECCIÓN: Si efectivo_max_UMA es 0 o no existe, usar aviso_UMA
-        umbral_ef_umas = float(u.get("efectivo_max_UMA", 0))
-        if umbral_ef_umas == 0:
-            umbral_ef_umas = float(u.get("aviso_UMA", 645))
-        
-        umbral_ef_mxn = umbral_ef_umas * uma
-        
-        # Si es servicios_generales, usar umbral estándar de 8025 UMAs
-        if fraccion in ["servicios_generales", "_general"]:
-            umbral_ef_mxn = 8025 * uma  # ~908k MXN
-            threshold = THRESHOLD_GENERAL
+def _ebr_points_from_config(cfg: Dict[str, Any]) -> Dict[str, int]:
+    ebr_cfg = cfg.get("ebr", {}).get("ponderaciones", {})
+    puntos: Dict[str, int] = {}
+    for f in EBR_FACTORS:
+        if f.config_key in ebr_cfg:
+            try:
+                puntos[f.config_key] = int(ebr_cfg[f.config_key].get("puntos", f.default_points))
+            except Exception:
+                puntos[f.config_key] = f.default_points
         else:
-            # Actividades vulnerables usan 65%
-            threshold = THRESHOLD_VULNERABLE if es_vulnerable else THRESHOLD_GENERAL
-        
-        # ¿Es efectivo alto?
-        # Verificar monto individual O acumulado 6 meses
-        umbral_efectivo_alto = threshold * umbral_ef_mxn
-        
-        es_alto_por_monto = monto >= umbral_efectivo_alto
-        es_alto_por_acumulado = monto_6m >= umbral_efectivo_alto
-        
-        if umbral_ef_mxn > 0 and (es_alto_por_monto or es_alto_por_acumulado):
-            efectivo_alto_values.append(1)
-            pct_monto = (monto / umbral_ef_mxn * 100)
-            pct_acum = (monto_6m / umbral_ef_mxn * 100)
-            razon = "monto" if es_alto_por_monto else "acumulado 6m"
-            debug_info.append(f"{fraccion}: ${monto:,.0f} ({pct_monto:.0f}%), acum=${monto_6m:,.0f} ({pct_acum:.0f}%) - {razon}")
-        else:
-            efectivo_alto_values.append(0)
-    
-    df["efectivo_alto"] = efectivo_alto_values
-    
-    n_efectivo_alto = sum(efectivo_alto_values)
-    log(f"  📊 efectivo_alto recalculado: {n_efectivo_alto}/{len(df)} (threshold={THRESHOLD_VULNERABLE*100:.0f}% vulnerables)")
-    
-    # Mostrar algunos ejemplos si hay efectivo_alto
-    if debug_info and len(debug_info) <= 5:
-        for info in debug_info:
-            log(f"     💰 {info}")
-    elif debug_info:
-        log(f"     💰 Ejemplos: {debug_info[0]}, ... (+{len(debug_info)-1} más)")
-    
+            puntos[f.config_key] = f.default_points
+    return puntos
+
+
+def calcular_ebr(df: pd.DataFrame, cfg: Dict[str, Any]) -> pd.DataFrame:
+    puntos_cfg = _ebr_points_from_config(cfg)
+
+    scores: List[float] = []
+    detalles: List[str] = []
+
+    for _, row in df.iterrows():
+        total = 0
+        razones: List[str] = []
+
+        for factor in EBR_FACTORS:
+            flag_val = row.get(factor.flag_col, 0)
+            try:
+                flag_int = int(flag_val)
+            except Exception:
+                flag_int = 0
+            if flag_int > 0:
+                pts = puntos_cfg.get(factor.config_key, factor.default_points)
+                total += pts
+                razones.append(f"{factor.descripcion}: +{pts}")
+
+        scores.append(float(total))
+        detalles.append("; ".join(razones) if razones else "")
+
+    df = df.copy()
+    df["score_ebr"] = scores
+
+    # Clasificación EBR simple: relevante / inusual
+    # (PREOCUPANTE se reserva a reglas legales en este runner)
+    umbral_relevante_max = (
+        cfg.get("ebr", {})
+        .get("umbrales_clasificacion", {})
+        .get("relevante_max", 39)
+    )
+    clasif = np.where(
+        df["score_ebr"] <= umbral_relevante_max,
+        "relevante",
+        "inusual",
+    )
+    df["clasificacion_ebr"] = clasif
+    df["detalles_ebr"] = detalles
+
     return df
 
 
-# ============================================================================
-# PASO 1.5: MODELO NO SUPERVISADO (Anomaly Detection)
-# ============================================================================
-def aplicar_no_supervisado(df: pd.DataFrame, bundle: Optional[Dict[str, Any]]) -> pd.DataFrame:
-    """
-    Aplica modelo no supervisado para detectar anomalías.
-    
-    Si no hay modelo cargado, usa un IsolationForest por defecto.
-    
-    Agrega columnas:
-    - anomaly_score_iso: Score de Isolation Forest (0-1, más alto = más anómalo)
-    - is_outlier_iso: 1 si es outlier según Isolation Forest
-    - kmeans_dist: Distancia al centroide del cluster
-    - anomaly_score_composite: Score compuesto ponderado
-    """
-    if df.empty:
-        df["anomaly_score_iso"] = 0.0
-        df["is_outlier_iso"] = 0
-        df["kmeans_dist"] = 0.0
-        df["anomaly_score_composite"] = 0.0
-        return df
-    
-    df = df.copy()
-    
-    # Features numéricas para anomalía
-    numeric_features = [
-        "monto", "monto_umas", "monto_6m", "pct_umbral_aviso",
-        "EsEfectivo", "efectivo_alto", "EsInternacional", "SectorAltoRiesgo",
-        "es_nocturno", "fin_de_semana", "ratio_vs_promedio", "ops_6m",
-        "posible_burst", "es_monto_redondo", "acumulado_alto"
-    ]
-    
-    # Seleccionar features disponibles
-    available_features = [f for f in numeric_features if f in df.columns]
-    
-    if len(available_features) < 3:
-        log(f"  ⚠️ No supervisado: pocas features disponibles ({len(available_features)})")
-        df["anomaly_score_iso"] = 0.0
-        df["is_outlier_iso"] = 0
-        df["kmeans_dist"] = 0.0
-        df["anomaly_score_composite"] = 0.0
-        return df
-    
-    X = df[available_features].copy()
-    X = X.replace([np.inf, -np.inf], np.nan).fillna(0.0)
-    
-    try:
-        # Intentar usar el modelo cargado
-        if bundle is not None:
-            iso_forest = bundle.get("isolation_forest") or bundle.get("iso_forest")
-            scaler = bundle.get("scaler")
-            # Intentar alinear X a las columnas del bundle si están presentes
-            columns = bundle.get("columns") or bundle.get("feature_columns") or []
+def get_ebr_elevacion_threshold(cfg: Dict[str, Any]) -> float:
+    return float(
+        cfg.get("ebr", {}).get("elevacion_inusual_threshold", 50.0)
+    )
 
-            if columns:
-                log(f"  🔧 No supervisado: bundle espera {len(columns)} features")
-                # Preparar X para matching con bundle.columns (one-hot si aplica)
-                X_prep = df.copy()
-                drop_cols = ["clasificacion_lfpiorpi", "clasificacion_ml", "clasificacion",
-                             "clasificacion_final", "cliente_id", "fecha", "id_transaccion",
-                             "guardrail_activo", "guardrail_razon", "guardrail_fundamento"]
-                X_prep = X_prep.drop(columns=[c for c in drop_cols if c in X_prep.columns], errors="ignore")
 
-                # Si el bundle incluye one-hot (fraccion_ o tipo_operacion_), crear dummies
-                has_onehot = any("fraccion_" in c or "tipo_operacion_" in c for c in columns)
-                if has_onehot:
-                    cat_cols = [c for c in ["tipo_operacion", "sector_actividad", "fraccion"] if c in X_prep.columns]
-                    if cat_cols:
-                        X_prep = pd.get_dummies(X_prep, columns=cat_cols, drop_first=False, dtype=float)
-                        # Remove duplicate columns (keep first occurrence) which can break reindex
-                        if X_prep.columns.duplicated().any():
-                            dup_list = [c for c in X_prep.columns[X_prep.columns.duplicated()]]
-                            log(f"  ⚠️ Duplicated columns detected in X_prep, dropping duplicates: {dup_list[:10]}")
-                            X_prep = X_prep.loc[:, ~X_prep.columns.duplicated()]
+# =============================================================================
+# CARGA MODELOS
+# =============================================================================
 
-                # Alinear columnas
-                for col in columns:
-                    if col not in X_prep.columns:
-                        X_prep[col] = 0.0
-                X_aligned = X_prep[columns].copy()
-                X_aligned = X_aligned.replace([np.inf, -np.inf], np.nan).fillna(0.0)
-                # Ensure columns order/existence strictly matches bundle columns
-                X_aligned = X_aligned.reindex(columns=columns, fill_value=0.0)
-                X = X_aligned
-                # DEBUG: report any missing columns (after alignment, all should exist)
-                missing_cols = [c for c in columns if c not in X_prep.columns]
-                if missing_cols:
-                    log(f"  ⚠️ No supervisado: columnas esperadas faltantes en CSV: {len(missing_cols)} -> {missing_cols[:10]}")
-            else:
-                # No hay columnas en bundle: seguir usando numeric_features seleccionadas
-                pass
+@dataclass
+class ModeloNoSupervisado:
+    modelo: Any
+    feature_cols: List[str]
 
-            # Escalar y predecir si hay modelo no supervisado
-            if iso_forest is not None:
-                # Escalar si hay scaler
-                try:
-                    if scaler and hasattr(scaler, "n_features_in_"):
-                        expected = int(getattr(scaler, "n_features_in_"))
-                        actual = X.shape[1]
-                        if expected != actual:
-                                log(f"  ⚠️ Scaler mismatch: scaler espera {expected} features, X tiene {actual} features")
-                                log(f"     → Bundle columns: {columns}")
-                                log(f"     → X.columns: {list(X.columns)}")
-                                # Reindex X to feature order if possible
-                                X = X.reindex(columns=columns, fill_value=0.0)
-                                actual = X.shape[1]
-                                log(f"     → After reindex: X tiene {actual} features")
-                    X_scaled = scaler.transform(X.values) if scaler else X.values
-                except Exception as e:
-                    # Log con detalle y re-raise para fallback
-                    log(f"  ⚠️ Error aplicando scaler del bundle: {e}")
-                    raise
 
-                iso_scores = iso_forest.decision_function(X_scaled)
-                iso_predictions = iso_forest.predict(X_scaled)
-                
-                # Normalizar scores a 0-1 (1 = más anómalo)
-                iso_scores_norm = 1 - (iso_scores - iso_scores.min()) / (iso_scores.max() - iso_scores.min() + 1e-10)
-                
-                df["anomaly_score_iso"] = iso_scores_norm
-                df["is_outlier_iso"] = (iso_predictions == -1).astype(int)
-                
-                n_outliers = df["is_outlier_iso"].sum()
-                if n_outliers > 0:
-                    log(f"  ✅ No supervisado (modelo): {n_outliers} outliers ({n_outliers/len(df)*100:.1f}%)")
-                    df["kmeans_dist"] = 0.0
-                    df["anomaly_score_composite"] = df["anomaly_score_iso"]
-                    return df
-                else:
-                    log(f"  ⚠️ Modelo no supervisado no detectó outliers, usando fallback...")
-        
-        # FALLBACK: Crear IsolationForest más agresivo
-        from sklearn.ensemble import IsolationForest
-        from sklearn.preprocessing import StandardScaler
-        
-        log(f"  🔄 Usando IsolationForest fallback con {len(available_features)} features...")
-        
-        # Escalar datos
-        scaler_fallback = StandardScaler()
-        X_scaled = scaler_fallback.fit_transform(X.values)
-        
-        # IsolationForest con contamination más alto (esperamos ~10-15% de anomalías)
-        iso_fallback = IsolationForest(
-            n_estimators=100,
-            contamination=0.15,  # Esperar 15% de anomalías
-            random_state=42,
-            n_jobs=-1
+@dataclass
+class ModeloSupervisado:
+    modelo: Any
+    feature_cols: List[str]
+    clases_: List[Any]
+    scaler: Any = None
+
+
+def _load_no_supervisado(cfg: Dict[str, Any]) -> Optional[ModeloNoSupervisado]:
+    rutas = cfg.get("modelos", {})
+    ruta = rutas.get("no_supervisado") or str(MODELS_DIR / "no_supervisado_bundle_v2.pkl")
+    p = Path(ruta)
+    # Resolver rutas relativas con varias heurísticas
+    if not p.exists():
+        # Intentar como nombre de archivo dentro de MODELS_DIR
+        candidate = MODELS_DIR / p.name
+        if candidate.exists():
+            p = candidate
+        else:
+            # Intentar relativo a BACKEND_DIR
+            candidate2 = BACKEND_DIR / ruta
+            if candidate2.exists():
+                p = candidate2
+    if not p.exists():
+        log(f"⚠️  No se encontró modelo no supervisado en {p}, se omitirá.")
+        return None
+    log(f"  ✅ No supervisado cargado: {p.name}")
+    bundle = joblib.load(p)
+
+    # Esperamos un dict {"modelo": ..., "feature_cols": [...]}
+    if isinstance(bundle, dict):
+        modelo = bundle.get("modelo") or bundle.get("model")
+        if modelo is None:
+            log("  ⚠️  Bundle no_sup es dict pero no tiene 'modelo' ni 'model'.")
+            return None
+        feature_cols = bundle.get("feature_cols", [])
+        return ModeloNoSupervisado(modelo=modelo, feature_cols=feature_cols)
+
+    # Fallback: el bundle ES el modelo, y usamos todas las columnas numéricas+onehot
+    log("  ⚠️  Bundle no tiene 'modelo'/'feature_cols'; se usará como pipeline directo.")
+    return ModeloNoSupervisado(
+        modelo=bundle,
+        feature_cols=[],  # se rellenará dinámicamente más adelante
+    )
+
+
+def _load_supervisado(cfg: Dict[str, Any]) -> Optional[ModeloSupervisado]:
+    rutas = cfg.get("modelos", {})
+    ruta = rutas.get("supervisado") or str(MODELS_DIR / "modelo_supervisado_v2.pkl")
+    p = Path(ruta)
+    # Resolver rutas relativas con varias heurísticas
+    if not p.exists():
+        candidate = MODELS_DIR / p.name
+        if candidate.exists():
+            p = candidate
+        else:
+            candidate2 = BACKEND_DIR / ruta
+            if candidate2.exists():
+                p = candidate2
+    if not p.exists():
+        log(f"⚠️  No se encontró modelo supervisado en {p}, se omitirá.")
+        return None
+    log(f"  ✅ Supervisado cargado: {p.name}")
+    bundle = joblib.load(p)
+
+    # Caso bundle dict como el tuyo
+    if isinstance(bundle, dict):
+        modelo = bundle.get("modelo") or bundle.get("model")
+        if modelo is None:
+            log("  ⚠️  Bundle supervisado es dict pero no tiene 'modelo' ni 'model'.")
+            return None
+
+        feature_cols = bundle.get("feature_cols") or bundle.get("columns") or []
+        clases_ = list(bundle.get("classes_", getattr(modelo, "classes_", [])))
+        scaler = bundle.get("scaler")
+
+        log(f"     Clases supervisado: {clases_}")
+        log(f"     N columnas modelo: {len(feature_cols)}")
+
+        return ModeloSupervisado(
+            modelo=modelo,
+            feature_cols=list(feature_cols),
+            clases_=clases_,
+            scaler=scaler,
         )
-        
-        iso_fallback.fit(X_scaled)
-        
-        iso_scores = iso_fallback.decision_function(X_scaled)
-        iso_predictions = iso_fallback.predict(X_scaled)
-        
-        # Normalizar scores
-        iso_scores_norm = 1 - (iso_scores - iso_scores.min()) / (iso_scores.max() - iso_scores.min() + 1e-10)
-        
-        df["anomaly_score_iso"] = iso_scores_norm
-        df["is_outlier_iso"] = (iso_predictions == -1).astype(int)
-        df["kmeans_dist"] = 0.0
-        df["anomaly_score_composite"] = iso_scores_norm
-        
-        n_outliers = df["is_outlier_iso"].sum()
-        log(f"  ✅ No supervisado (fallback): {n_outliers} outliers ({n_outliers/len(df)*100:.1f}%)")
-        
-        # Mostrar las transacciones más anómalas
-        if n_outliers > 0:
-            top_anomalies = df.nlargest(3, "anomaly_score_iso")[["monto", "anomaly_score_iso"]]
-            for _, row in top_anomalies.iterrows():
-                log(f"     🔴 Anomalía: ${row['monto']:,.0f} (score={row['anomaly_score_iso']:.3f})")
-        
-    except Exception as e:
-        log(f"  ⚠️ Error en no supervisado: {e}")
-        import traceback
-        traceback.print_exc()
-        df["anomaly_score_iso"] = 0.0
-        df["is_outlier_iso"] = 0
-        df["kmeans_dist"] = 0.0
-        df["anomaly_score_composite"] = 0.0
-    
+
+    # Fallback: el bundle ES el modelo directo
+    modelo = bundle
+    clases_ = list(getattr(modelo, "classes_", []))
+    log(f"     Clases supervisado: {clases_}")
+    return ModeloSupervisado(
+        modelo=modelo,
+        feature_cols=[],
+        clases_=clases_,
+        scaler=None,
+    )
+
+
+
+
+# =============================================================================
+# FEATURES PARA LOS MODELOS
+# =============================================================================
+
+NUM_COLS_BASE = [
+    "monto",
+    "monto_umas",
+    "monto_6m",
+    "ops_6m",
+    "monto_max_6m",
+    "monto_std_6m",
+    "monto_promedio_cliente",
+    "ratio_vs_promedio",
+    "pct_umbral_aviso",
+    "anio",
+    "mes",
+    "dia_semana",
+    "EsEfectivo",
+    "EsInternacional",
+    "SectorAltoRiesgo",
+    "fin_de_semana",
+    "es_nocturno",
+    "es_monto_redondo",
+    "posible_burst",
+    "acumulado_alto",
+    "efectivo_alto",
+    "frecuencia_mensual",
+    "ratio_alto",
+    "frecuencia_alta",
+]
+
+CAT_COLS_BASE = [
+    "tipo_operacion",
+    "sector_actividad",  # 👈 volver a agregarla
+    "fraccion",
+]
+
+
+def build_feature_matrix(
+    df: pd.DataFrame,
+    feature_cols: Optional[List[str]] = None,
+) -> Tuple[pd.DataFrame, List[str]]:
+    """
+    Construye la matriz de features X a partir de df y la lista de columnas
+    que espera el modelo (feature_cols).
+
+    - Si feature_cols se provee: se reindexa df a esas columnas (faltantes = 0).
+    - Si no se provee: se infiere un set de columnas numéricas razonable.
+    """
+    if feature_cols is not None and len(feature_cols) > 0:
+        # Usamos exactamente las columnas del bundle
+        model_cols = list(feature_cols)
+    else:
+        # Fallback: inferir columnas numéricas automáticamente
+        excl = {
+            "cliente_id",
+            "fecha",
+            "fraccion",
+            "sector_actividad",
+            "clasificacion_ebr",
+            "clasificacion_final",
+            "clasificacion_reglas",
+            "clasificacion_ml",
+            "motivo_preocupante",
+            "explicacion_final",
+        }
+        model_cols = [
+            c
+            for c in df.columns
+            if c not in excl and pd.api.types.is_numeric_dtype(df[c])
+        ]
+        model_cols = sorted(model_cols)
+
+    # 👇 Aquí estaba el bug: antes ponía `model_cols` sin estar definido
+    X = df.reindex(columns=model_cols, fill_value=0)
+
+    return X, model_cols
+
+
+
+# =============================================================================
+# REGLAS LFPIORPI (LEGALES)
+# =============================================================================
+
+def aplicar_reglas_lfpiorpi(df: pd.DataFrame, cfg: Dict[str, Any]) -> pd.DataFrame:
+    """
+    Calcula banderas legales:
+      - flag_aviso_lfpiorpi: monto_umas >= aviso_UMA
+      - flag_limite_efectivo: EsEfectivo == 1 y monto_umas > efectivo_max_UMA
+      - legal_red_flag: igual que flag_limite_efectivo
+      - clasificacion_legal: 'preocupante' si cualquiera es True
+
+    PREOCUPANTE en este runner significa SIEMPRE fundamento legal.
+    """
+    df = df.copy()
+    uma_mxn = get_uma_mxn(cfg)
+
+    flag_aviso = []
+    flag_limite = []
+    legal_red = []
+    motivo_legal = []
+    aviso_UMA_list = []
+    efectivo_max_UMA_list = []
+    monto_umas_list = []
+    fraccion_desc_list = []
+
+    for _, row in df.iterrows():
+        fr = row.get("fraccion")
+        um = obtener_umbrales_fraccion(fr, cfg)
+        aviso_UMA = float(um.get("aviso_UMA", 0) or 0)
+        efectivo_max_UMA = float(um.get("efectivo_max_UMA", 0) or 0)
+        fr_desc = str(um.get("descripcion", "") or "")
+
+        monto_mxn = float(row.get("monto", 0.0) or 0.0)
+        monto_umas = float(row.get("monto_umas", monto_mxn / uma_mxn))
+
+        es_efectivo = int(row.get("EsEfectivo", 0) or 0) == 1
+
+        cond_aviso = aviso_UMA > 0 and monto_umas >= aviso_UMA
+        cond_limite = efectivo_max_UMA > 0 and es_efectivo and monto_umas > efectivo_max_UMA
+
+        flag_aviso.append(int(cond_aviso))
+        flag_limite.append(int(cond_limite))
+        legal_red.append(int(cond_limite))
+        aviso_UMA_list.append(aviso_UMA)
+        efectivo_max_UMA_list.append(efectivo_max_UMA)
+        monto_umas_list.append(monto_umas)
+        fraccion_desc_list.append(fr_desc)
+
+        m = ""
+        if cond_aviso:
+            m = (
+                f"Monto = {monto_mxn:,.2f} MXN (~{monto_umas:.1f} UMA) "
+                f"supera umbral de AVISO ({aviso_UMA:.1f} UMA) para la fracción {fr}."
+            )
+        if cond_limite:
+            if m:
+                m += " "
+            m += (
+                f"Monto en EFECTIVO supera el límite legal de efectivo "
+                f"({efectivo_max_UMA:.1f} UMA) para la fracción {fr}."
+            )
+        motivo_legal.append(m)
+
+    df["flag_aviso_lfpiorpi"] = flag_aviso
+    df["flag_limite_efectivo"] = flag_limite
+    df["legal_red_flag"] = legal_red
+    df["motivo_preocupante_legal"] = motivo_legal
+
+    # Exponer valores UMA útiles para la explicación detallada
+    df["aviso_UMA"] = aviso_UMA_list
+    df["efectivo_max_UMA"] = efectivo_max_UMA_list
+    df["monto_umas"] = monto_umas_list
+    df["fraccion_descripcion"] = fraccion_desc_list
+
+    df["clasificacion_legal"] = np.where(
+        (df["flag_aviso_lfpiorpi"] == 1) | (df["flag_limite_efectivo"] == 1),
+        "preocupante",
+        "ninguna",
+    )
+
     return df
 
 
-def obtener_threshold_refuerzo(bundle_rl: Optional[Dict[str, Any]], cfg: Dict[str, Any]) -> int:
-    """
-    Obtiene el threshold óptimo de EBR desde el modelo de refuerzo.
-    
-    Si no hay modelo de refuerzo, usa el valor por defecto del config.
-    """
-    default_threshold = cfg.get("ebr", {}).get("elevacion_inusual_threshold", 50)
-    
-    if bundle_rl is None:
-        return default_threshold
-    
+# =============================================================================
+# APLICACIÓN DE MODELOS
+# =============================================================================
+
+def aplicar_no_supervisado(
+    df: pd.DataFrame,
+    modelo_ns: Optional[ModeloNoSupervisado],
+) -> pd.DataFrame:
+    df = df.copy()
+    if modelo_ns is None:
+        df["anomalía_no_sup"] = 0
+        df["score_no_sup"] = 0.0
+        return df
+
+    X, cols = build_feature_matrix(df, modelo_ns.feature_cols)
+    modelo = modelo_ns.modelo
+
+    # Intentamos usar predict (-1 / 1) y decision_function si está disponible
     try:
-        # El modelo de refuerzo puede tener diferentes estructuras
-        if "optimal_threshold" in bundle_rl:
-            return int(bundle_rl["optimal_threshold"])
-        
-        if "q_table" in bundle_rl:
-            # Q-Learning: encontrar la acción con mayor Q-value
-            q_table = bundle_rl["q_table"]
-            if isinstance(q_table, dict) and q_table:
-                # Promediar sobre estados y encontrar mejor acción
-                best_action = max(q_table.values()) if q_table else default_threshold
-                return int(best_action)
-        
-        if "threshold" in bundle_rl:
-            return int(bundle_rl["threshold"])
-        
+        # Usamos arrays (sin nombres) para ser consistentes con el entrenamiento
+        X_values = X.values
+        y_pred = modelo.predict(X)
+        df["anomalía_no_sup"] = (y_pred == -1).astype(int)
     except Exception as e:
-        log(f"  ⚠️ Error leyendo threshold de refuerzo: {e}")
-    
-    return default_threshold
+        log(f"  ⚠️  Error en no supervisado.predict: {e}")
+        # fallback a todo 0
+        df["anomalía_no_sup"] = 0
+
+    try:
+        score = modelo.decision_function(X_values)
+        df["score_no_sup"] = score
+    except Exception as e:
+        log(f"  ⚠️  Error en no supervisado.decision_function: {e}")
+        df["score_no_sup"] = 0.0
+
+    return df
 
 
-# ============================================================================
-# PASO 2: MODELO SUPERVISADO (2 CLASES)
-# ============================================================================
 def aplicar_supervisado(
     df: pd.DataFrame,
-    model: Any,
-    scaler: Any,
-    feature_cols: List[str],
-    classes: List[str]
+    modelo_sup: Optional[ModeloSupervisado],
 ) -> pd.DataFrame:
-    """Aplica modelo supervisado para clasificar RELEVANTE vs INUSUAL"""
-    if df.empty:
-        return df
-    
     df = df.copy()
-    
-    # Preparar features
-    X = df.copy()
-    
-    # Normalizar fracciones para que coincidan con el modelo
-    if "fraccion" in X.columns:
-        X["fraccion_norm"] = X["fraccion"].apply(normalizar_fraccion_para_modelo)
+    if modelo_sup is None:
+        df["clasificacion_sup"] = "sin_modelo"
+        df["prob_inusual_sup"] = 0.0
+        return df
+
+    # 1) Construir una matriz base con todas las numéricas + dummies de categóricas
+    #    (usa tu build_feature_matrix, pero sin pasar columnas del modelo)
+    X_full, cols_full = build_feature_matrix(df, None)
+
+    # 2) Reindexar EXACTAMENTE a las columnas que se usaron en entrenamiento
+    cols_model = modelo_sup.feature_cols or cols_full
+    X = X_full.reindex(columns=cols_model, fill_value=0)
+
+    # 3) Aplicar scaler si existe en el bundle
+    if modelo_sup.scaler is not None:
+        try:
+            X_scaled = modelo_sup.scaler.transform(X)
+        except Exception as e:
+            log(f"  ⚠️  Error aplicando scaler supervisado: {e}")
+            X_scaled = X
     else:
-        X["fraccion_norm"] = "servicios_generales"
-    
-    # Eliminar columnas que no son features
-    drop_cols = ["clasificacion_lfpiorpi", "clasificacion_ml", "clasificacion",
-                 "clasificacion_final", "cliente_id", "fecha", "id_transaccion",
-                 "guardrail_activo", "guardrail_razon", "guardrail_fundamento",
-                 "sector_actividad", "fraccion", "hora", "anomaly_score_iso",
-                 "is_outlier_iso", "kmeans_dist", "anomaly_score_composite"]
-    X = X.drop(columns=[c for c in drop_cols if c in X.columns], errors="ignore")
-    
-    # One-hot encode
-    cat_cols_to_encode = []
-    if "tipo_operacion" in X.columns:
-        cat_cols_to_encode.append("tipo_operacion")
-    if "fraccion_norm" in X.columns:
-        cat_cols_to_encode.append("fraccion_norm")
-    
-    if cat_cols_to_encode:
-        X = pd.get_dummies(X, columns=cat_cols_to_encode, drop_first=False, dtype=float, prefix={
-            "tipo_operacion": "tipo_operacion",
-            "fraccion_norm": "fraccion"
-        })
+        X_scaled = X
 
-    # Eliminar columnas duplicadas que puedan existir (mantener la primera aparición)
-    if X.columns.duplicated().any():
-        dup_list = [c for c in X.columns[X.columns.duplicated()]]
-        log(f"  ⚠️ Duplicated columns detected in supervised features, dropping duplicates: {dup_list[:10]}")
-        X = X.loc[:, ~X.columns.duplicated()]
-    
-    # Alinear columnas con el modelo
-    for col in feature_cols:
-        if col not in X.columns:
-            X[col] = 0.0
-    
-    # Seleccionar solo columnas del modelo
-    X = X[[c for c in feature_cols if c in X.columns]].copy()
-    
-    # Agregar columnas faltantes y reindexar estrictamente al orden del modelo
-    for col in feature_cols:
-        if col not in X.columns:
-            X[col] = 0.0
+    modelo = modelo_sup.modelo
+    clases = modelo_sup.clases_ or getattr(modelo, "classes_", [])
 
-    X = X.reindex(columns=feature_cols, fill_value=0.0).copy()
-    X = X.replace([np.inf, -np.inf], np.nan).fillna(0.0)
-    
-    log(f"  📊 Features para supervisado: {X.shape[1]}")
-    if hasattr(scaler, 'n_features_in_'):
-        expected = int(getattr(scaler, 'n_features_in_'))
-        actual = X.shape[1]
-        if expected != actual:
-            log(f"  ⚠️ Scaler mismatch (supervisado): scaler espera {expected} features, X tiene {actual} features")
-            log(f"     → Feature cols (bundle): {feature_cols}")
-            log(f"     → X.columns: {list(X.columns)}")
-            # Try enforcing strict reindexing to match the model columns
-            X = X.reindex(columns=feature_cols, fill_value=0.0)
-            log(f"     → After reindex: X tiene {X.shape[1]} features")
-    
-    # Escalar y predecir
-    X_scaled = scaler.transform(X.values) if scaler else X.values
-    predictions_raw = model.predict(X_scaled)
-    probabilities = model.predict_proba(X_scaled)
-    
-    # CORRECCIÓN: Convertir índices a etiquetas
-    # El modelo puede devolver índices (0, 1) o etiquetas ("inusual", "relevante")
-    if len(predictions_raw) > 0:
-        # Verificar si son índices numéricos
-        if isinstance(predictions_raw[0], (int, np.integer)):
-            # Convertir índices a etiquetas
-            predictions = [classes[int(p)] for p in predictions_raw]
-        else:
-            predictions = list(predictions_raw)
-    else:
-        predictions = []
-    
-    df["clasificacion_ml"] = predictions
-    
-    for i, cls in enumerate(classes):
-        df[f"prob_{cls}"] = probabilities[:, i]
-    
-    df["ica"] = probabilities.max(axis=1)
-    
-    log(f"  ✅ Supervisado: {Counter(predictions)}")
-    
-    return df
+    proba_inusual = np.zeros(len(df), dtype=float)
+    label_pred = np.array(["relevante"] * len(df), dtype=object)
 
-
-# ============================================================================
-# PASO 3: CALCULAR EBR (con efectivo_alto)
-# ============================================================================
-def calcular_ebr(row: Dict[str, Any], cfg: Dict[str, Any]) -> Tuple[float, List[str], str]:
-    """
-    Calcula score EBR con efectivo_alto y anomaly_score incluidos.
-    
-    Ponderaciones:
-    - Efectivo: +25 pts
-    - Efectivo alto (>=65% umbral): +20 pts
-    - Sector alto riesgo: +20 pts
-    - Acumulado alto (>500k): +15 pts
-    - Anomalía detectada (no supervisado): +15 pts  ← NUEVO
-    - Internacional: +10 pts
-    - Ratio > 3x: +10 pts
-    - Frecuencia alta: +10 pts
-    - Burst: +10 pts
-    - Nocturno: +5 pts
-    - Fin semana: +5 pts
-    - Monto redondo: +5 pts
-    """
-    score = 0.0
-    factores = []
-    
-    # Efectivo base
-    if row.get("EsEfectivo") in (1, True, "1"):
-        score += 25
-        factores.append("Operación en efectivo (+25 pts)")
-    
-    # EFECTIVO ALTO (65% para vulnerables)
-    if row.get("efectivo_alto") in (1, True, "1"):
-        score += 20
-        factores.append("Efectivo alto (>=65% umbral) (+20 pts)")
-    
-    # Sector alto riesgo
-    if row.get("SectorAltoRiesgo") in (1, True, "1"):
-        score += 20
-        factores.append("Sector de alto riesgo (+20 pts)")
-    
-    # Acumulado alto
-    if row.get("acumulado_alto") in (1, True, "1"):
-        score += 15
-        factores.append("Acumulado 6m alto (+15 pts)")
-    
-    # ANOMALÍA DETECTADA (no supervisado)
-    anomaly_score = float(row.get("anomaly_score_composite", 0) or 0)
-    is_outlier = row.get("is_outlier_iso") in (1, True, "1")
-    if is_outlier or anomaly_score >= 0.7:
-        score += 15
-        factores.append(f"Anomalía estadística detectada (+15 pts)")
-    elif anomaly_score >= 0.5:
-        score += 8
-        factores.append(f"Comportamiento atípico (+8 pts)")
-    
-    # Internacional
-    if row.get("EsInternacional") in (1, True, "1"):
-        score += 10
-        factores.append("Transferencia internacional (+10 pts)")
-    
-    # Ratio alto
-    ratio = float(row.get("ratio_vs_promedio", 0) or 0)
-    if ratio > 3:
-        score += 10
-        factores.append(f"Ratio vs promedio > 3x ({ratio:.1f}x) (+10 pts)")
-    
-    # Frecuencia alta
-    ops = int(row.get("ops_6m", 0) or 0)
-    if ops > 5:
-        score += 10
-        factores.append(f"Frecuencia alta ({ops} ops/6m) (+10 pts)")
-    
-    # Burst
-    if row.get("posible_burst") in (1, True, "1"):
-        score += 10
-        factores.append("Posible fraccionamiento (+10 pts)")
-    
-    # Nocturno
-    if row.get("es_nocturno") in (1, True, "1"):
-        score += 5
-        factores.append("Horario nocturno (+5 pts)")
-    
-    # Fin semana
-    if row.get("fin_de_semana") in (1, True, "1"):
-        score += 5
-        factores.append("Fin de semana (+5 pts)")
-    
-    # Monto redondo
-    if row.get("es_monto_redondo") in (1, True, "1"):
-        score += 5
-        factores.append("Monto redondo (+5 pts)")
-    
-    score = min(100, score)
-
-    # Regla especial: servicios_generales con monto > umbral USD -> forzar inusual
     try:
-        umbral_usd = float(cfg.get("ebr", {}).get("umbral_servicios_generales_usd", cfg.get('umbrales_adicionales', {}).get('umbral_servicios_generales_usd', 10000)))
-        usd_to_mxn = float(cfg.get("fx", {}).get("usd_to_mxn", cfg.get("fx", {}).get("usd_mxn", 18)))
-    except Exception:
-        umbral_usd = 10000
-        usd_to_mxn = 18.0
-    threshold_mxn = umbral_usd * usd_to_mxn
-    if str(row.get("fraccion", "")).lower() == "servicios_generales" and float(row.get("monto", 0) or 0) >= threshold_mxn:
-        score = 100.0
-        nivel = "alto"
-        factores.append(f"Servicios generales > {umbral_usd} USD (umbral {threshold_mxn:.2f} MXN)")
-    
-    # Nivel
-    if score <= 40:
-        nivel = "bajo"
-    elif score <= 65:
-        nivel = "medio"
-    else:
-        nivel = "alto"
-    
-    return score, factores, nivel
-
-
-def aplicar_ebr(df: pd.DataFrame, cfg: Dict[str, Any]) -> pd.DataFrame:
-    """Aplica cálculo EBR"""
-    if df.empty:
-        return df
-    
-    df = df.copy()
-    
-    # CORRECCIÓN: Asegurar que actividades vulnerables tengan SectorAltoRiesgo=1
-    # Las fracciones LFPIORPI son por definición de alto riesgo
-    fracciones_alto_riesgo = [
-        "VI_joyeria_metales", "VI_joyeria", 
-        "V_inmuebles", "V_bis_desarrollo_inmobiliario",
-        "XVI_activos_virtuales", "XVI_cripto",
-        "I_juegos", "VII_obras_arte", "VII_arte",
-        "X_traslado_valores", "X_traslado"
-    ]
-    
-    if "fraccion" in df.columns:
-        df["SectorAltoRiesgo"] = df.apply(
-            lambda row: 1 if (
-                row.get("SectorAltoRiesgo") in (1, True, "1") or
-                str(row.get("fraccion", "")).lower() in [f.lower() for f in fracciones_alto_riesgo] or
-                row.get("es_actividad_vulnerable") in (1, True, "1")
-            ) else 0,
-            axis=1
-        )
-    
-    scores = []
-    niveles = []
-    factores_list = []
-    
-    # Debug: contar cuántos tienen cada factor
-    debug_counts = {
-        "efectivo": 0, "efectivo_alto": 0, "sector_riesgo": 0,
-        "acumulado_alto": 0, "anomalia": 0, "internacional": 0
-    }
-    
-    for _, row in df.iterrows():
-        score, factores, nivel = calcular_ebr(row.to_dict(), cfg)
-        scores.append(score)
-        niveles.append(nivel)
-        factores_list.append(factores)
-        
-        # Debug counts
-        if row.get("EsEfectivo") in (1, True, "1"):
-            debug_counts["efectivo"] += 1
-        if row.get("efectivo_alto") in (1, True, "1"):
-            debug_counts["efectivo_alto"] += 1
-        if row.get("SectorAltoRiesgo") in (1, True, "1"):
-            debug_counts["sector_riesgo"] += 1
-        if row.get("acumulado_alto") in (1, True, "1"):
-            debug_counts["acumulado_alto"] += 1
-        if row.get("is_outlier_iso") in (1, True, "1"):
-            debug_counts["anomalia"] += 1
-        if row.get("EsInternacional") in (1, True, "1"):
-            debug_counts["internacional"] += 1
-    
-    df["score_ebr"] = scores
-    df["nivel_riesgo_ebr"] = niveles
-    df["factores_ebr"] = factores_list
-    
-    # Estadísticas
-    alto_count = sum(1 for n in niveles if n == "alto")
-    medio_count = sum(1 for n in niveles if n == "medio")
-    ebr_50_plus = sum(1 for s in scores if s >= 50)
-    
-    log(f"  ✅ EBR: mean={np.mean(scores):.1f}, alto={alto_count}, medio={medio_count}, >=50pts={ebr_50_plus}")
-    log(f"     Factores: efectivo={debug_counts['efectivo']}, ef_alto={debug_counts['efectivo_alto']}, "
-        f"sector={debug_counts['sector_riesgo']}, anomalía={debug_counts['anomalia']}, intl={debug_counts['internacional']}")
-    
-    return df
-
-
-# ============================================================================
-# PASO 4: FUSIÓN ML + EBR
-# ============================================================================
-def fusionar_ml_ebr(df: pd.DataFrame, cfg: Dict[str, Any], umbral_elevacion: int = 50) -> pd.DataFrame:
-    """
-    Fusiona ML + EBR.
-    
-    REGLA CLAVE: Si EBR >= umbral y ML dice relevante → elevar a INUSUAL
-    
-    Args:
-        df: DataFrame con clasificaciones ML y scores EBR
-        cfg: Configuración
-        umbral_elevacion: Threshold de EBR para elevar (puede venir del modelo RL)
-    """
-    if df.empty:
-        return df
-    
-    df = df.copy()
-    
-    clasificaciones = []
-    niveles = []
-    origenes = []
-    motivos = []
-    
-    for _, row in df.iterrows():
-        clasif_ml = row.get("clasificacion_ml", "relevante")
-        score_ebr = float(row.get("score_ebr", 0) or 0)
-        is_outlier = row.get("is_outlier_iso") in (1, True, "1")
-        
-        # Si ML dice inusual, respetar
-        if clasif_ml == "inusual":
-            clasificaciones.append("inusual")
-            niveles.append("medio")
-            origenes.append("ml")
-            motivos.append(f"ML clasificó como inusual (score EBR: {score_ebr:.0f})")
-            continue
-        
-        # Si ML dice relevante pero EBR >= umbral, elevar
-        if clasif_ml == "relevante" and score_ebr >= umbral_elevacion:
-            clasificaciones.append("inusual")
-            niveles.append("medio")
-            origenes.append("elevacion_ebr")
-            motivos.append(f"EBR alto ({score_ebr:.0f}) eleva de relevante a inusual")
-            continue
-        
-        # Si es outlier del no supervisado pero ML y EBR dicen relevante
-        # → Elevar a inusual (el no supervisado detectó algo)
-        if is_outlier and clasif_ml == "relevante":
-            clasificaciones.append("inusual")
-            niveles.append("medio")
-            origenes.append("anomalia_no_supervisado")
-            motivos.append("Anomalía estadística detectada por modelo no supervisado")
-            continue
-        
-        # ML dice relevante y EBR < umbral y no es outlier
-        clasificaciones.append("relevante")
-        niveles.append("bajo")
-        origenes.append("ml_ebr_coinciden")
-        motivos.append(None)
-    
-    df["clasificacion_final"] = clasificaciones
-    df["nivel_riesgo_final"] = niveles
-    df["origen"] = origenes
-    df["motivo_fusion"] = motivos
-    
-    # Estadísticas
-    dist = Counter(clasificaciones)
-    elevados_ebr = sum(1 for o in origenes if o == "elevacion_ebr")
-    elevados_anomalia = sum(1 for o in origenes if o == "anomalia_no_supervisado")
-    log(f"  ✅ Fusión: {dict(dist)}")
-    log(f"     Elevados por EBR: {elevados_ebr}")
-    log(f"     Elevados por anomalía: {elevados_anomalia}")
-    log(f"     Threshold usado: {umbral_elevacion}")
-    
-    return df
-
-
-# ============================================================================
-# PASO 5: EXPLICACIONES
-# ============================================================================
-def generar_explicacion_simple(row: Dict[str, Any]) -> Dict[str, Any]:
-    """Genera explicación según clasificación"""
-    clasificacion = row.get("clasificacion_final", "relevante")
-    origen = row.get("origen", "ml")
-    
-    if clasificacion == "preocupante":
-        return {
-            "tipo": "legal",
-            "razon_principal": row.get("guardrail_razon", "Rebasa umbral LFPIORPI"),
-            "fundamento_legal": row.get("guardrail_fundamento"),
-            "accion_requerida": "Presentar aviso a la UIF dentro de 15 días hábiles.",
-            "certeza": "100%",
-            "requiere_revision": False,
-        }
-    
-    elif clasificacion == "relevante":
-        return {
-            "tipo": "limpio",
-            "razon_principal": "No se detectaron indicadores de riesgo PLD/FT",
-            "fundamento_legal": None,
-            "accion_requerida": "Registro para trazabilidad. Sin acción adicional requerida.",
-            "certeza": f"{row.get('ica', 0.9):.0%}",
-            "requiere_revision": False,
-        }
-    
-    else:  # inusual
-        factores = row.get("factores_ebr", [])
-        score_ebr = row.get("score_ebr", 0)
-        
-        if origen == "elevacion_ebr":
-            razon = f"Score de riesgo EBR elevado ({score_ebr:.0f}/100)"
-        elif factores:
-            razon = factores[0].split("(+")[0].strip() if "(+" in str(factores[0]) else str(factores[0])
+        if hasattr(modelo, "predict_proba") and len(clases) > 0:
+            proba = modelo.predict_proba(X_scaled)
+            clases_arr = np.array(clases)
+            # tus clases son [0,1], asumimos que 1 = inusual
+            if 1 in clases_arr:
+                idx = np.where(clases_arr == 1)[0][0]
+                proba_inusual = proba[:, idx]
+            y_pred = modelo.predict(X_scaled)
+            # Mapeamos 0/1 → relevante/inusual
+            y_pred = np.where(y_pred == 1, "inusual", "relevante")
+            label_pred = y_pred
         else:
-            razon = "Patrón de comportamiento atípico detectado"
-        
-        return {
-            "tipo": "sospecha",
-            "razon_principal": razon,
-            "fundamento_legal": None,
-            "accion_requerida": "Revisión por oficial de cumplimiento.",
-            "certeza": f"{row.get('ica', 0.7):.0%}",
-            "requiere_revision": True,
-            "factores": factores[:3] if factores else [],
-        }
-
-
-# ============================================================================
-# PROCESO PRINCIPAL
-# ============================================================================
-def process_file(csv_path: Path) -> bool:
-    """Procesa un archivo CSV enriquecido usando todos los modelos"""
-    analysis_id = csv_path.stem
-    
-    log(f"\n{'='*70}")
-    log(f"📄 Procesando: {csv_path.name}")
-    log(f"{'='*70}")
-    
-    try:
-        df = pd.read_csv(csv_path)
-        cfg = cargar_config()
-        log(f"  📊 Cargado: {len(df)} transacciones")
-        
-        # Cargar todos los modelos al inicio
-        log("\n  📦 Cargando modelos...")
-        model_sup, scaler_sup, feature_cols_sup, classes = cargar_modelo_supervisado()
-        bundle_no_sup = cargar_modelo_no_supervisado()
-        bundle_rl = cargar_modelo_refuerzo()
-        
-        # Obtener threshold del modelo de refuerzo
-        umbral_elevacion = obtener_threshold_refuerzo(bundle_rl, cfg)
-        log(f"  📈 Threshold EBR (refuerzo): {umbral_elevacion}")
-        
-        # PASO 0: Reglas LFPIORPI
-        df_preocupantes, df_para_ml = aplicar_reglas_lfpiorpi(df, cfg)
-        
-        if len(df_para_ml) > 0:
-            # PASO 1: Recalcular efectivo_alto
-            log("\n  💰 Paso 1: Recalculando efectivo_alto...")
-            df_para_ml = calcular_efectivo_alto(df_para_ml, cfg)
-            
-            # PASO 1.5: No supervisado (detección de anomalías)
-            log("\n  🔍 Paso 1.5: Modelo no supervisado...")
-            # If bundle has expected columns, log any difference to aid debugging
-            if bundle_no_sup is not None:
-                expected_cols = bundle_no_sup.get("columns") or bundle_no_sup.get("feature_columns") or []
-                if expected_cols:
-                    missing = [c for c in expected_cols if c not in df_para_ml.columns]
-                    if missing:
-                        log(f"  ⚠️ Enriquecedor: faltan {len(missing)} columnas esperadas por bundle_no_sup: {missing[:10]}")
-            df_para_ml = aplicar_no_supervisado(df_para_ml, bundle_no_sup)
-            
-            # PASO 2: Supervisado
-            log("\n  🤖 Paso 2: Modelo supervisado...")
-            df_para_ml = aplicar_supervisado(df_para_ml, model_sup, scaler_sup, feature_cols_sup, classes)
-            # CORRECCIÓN: Remapear etiqueta 'preocupante' que pueda venir del modelo a 'inusual'
-            if "clasificacion_ml" in df_para_ml.columns:
-                n_preocupante = int((df_para_ml["clasificacion_ml"] == "preocupante").sum())
-                if n_preocupante > 0:
-                    log(f"  🔁 Remapeando {n_preocupante} 'preocupante' → 'inusual' en clasificacion_ml")
-                    df_para_ml.loc[df_para_ml["clasificacion_ml"] == "preocupante", "clasificacion_ml"] = "inusual"
-            
-            # PASO 3: EBR (ahora incluye anomaly_score)
-            log("\n  📊 Paso 3: Cálculo EBR...")
-            df_para_ml = aplicar_ebr(df_para_ml, cfg)
-            
-            # PASO 4: Fusión (usa threshold del modelo RL)
-            log("\n  🔀 Paso 4: Fusión ML + EBR + No supervisado...")
-            df_para_ml = fusionar_ml_ebr(df_para_ml, cfg, umbral_elevacion)
-        
-        # PASO 5: Unir
-        log("\n  📦 Paso 5: Uniendo resultados...")
-        
-        all_cols = set(df_preocupantes.columns) | (set(df_para_ml.columns) if len(df_para_ml) > 0 else set())
-        for col in all_cols:
-            if col not in df_preocupantes.columns:
-                df_preocupantes[col] = None
-            if len(df_para_ml) > 0 and col not in df_para_ml.columns:
-                df_para_ml[col] = None
-        
-        df_final = pd.concat([df_preocupantes, df_para_ml], ignore_index=True)
-        
-        # PASO 6: Explicaciones
-        log("\n  📝 Paso 6: Generando explicaciones...")
-        explicaciones = []
-        for _, row in df_final.iterrows():
-            exp = generar_explicacion_simple(row.to_dict())
-            explicaciones.append(exp)
-        
-        df_final["explicacion"] = [json.dumps(e, ensure_ascii=False) for e in explicaciones]
-        
-        # Distribución final
-        dist_final = Counter(df_final["clasificacion_final"])
-        total = len(df_final)
-        
-        log(f"\n  📊 DISTRIBUCIÓN FINAL:")
-        log(f"     🔴 Preocupante: {dist_final.get('preocupante', 0)} ({dist_final.get('preocupante', 0)/total*100:.1f}%)")
-        log(f"     🟡 Inusual: {dist_final.get('inusual', 0)} ({dist_final.get('inusual', 0)/total*100:.1f}%)")
-        log(f"     🟢 Relevante: {dist_final.get('relevante', 0)} ({dist_final.get('relevante', 0)/total*100:.1f}%)")
-        
-        # Guardar CSV
-        csv_out_path = PROCESSED_DIR / csv_path.name
-        df_final.to_csv(csv_out_path, index=False, encoding="utf-8")
-        log(f"\n  ✅ CSV: {csv_out_path.name}")
-        
-        # Guardar JSON
-        transacciones = []
-        for i, row in df_final.iterrows():
-            # Probabilidades del modelo
-            probabilidades = {}
-            if "prob_inusual" in row:
-                probabilidades["inusual"] = round(float(row.get("prob_inusual", 0) or 0), 4)
-            if "prob_relevante" in row:
-                probabilidades["relevante"] = round(float(row.get("prob_relevante", 0) or 0), 4)
-            
-            # Factores EBR (limpiar formato para frontend)
-            factores_ebr = row.get("factores_ebr", [])
-            if isinstance(factores_ebr, str):
-                try:
-                    factores_ebr = eval(factores_ebr)
-                except:
-                    factores_ebr = []
-            
-            tx = {
-                "id": str(row.get("cliente_id", f"TXN-{i+1:05d}")),
-                "monto": float(row.get("monto", 0) or 0),
-                "monto_umas": round(mxn_a_umas(float(row.get("monto", 0) or 0)), 2),
-                "fecha": str(row.get("fecha", "")),
-                "tipo_operacion": str(row.get("tipo_operacion", "")),
-                "sector_actividad": str(row.get("sector_actividad", "")),
-                "fraccion": str(row.get("fraccion", "")),
-                "clasificacion": row.get("clasificacion_final"),
-                "nivel_riesgo": row.get("nivel_riesgo_final"),
-                "origen": row.get("origen"),
-                "ica": round(float(row.get("ica", 0) or 0), 4),
-                "score_ebr": round(float(row.get("score_ebr", 0) or 0), 1),
-                "probabilidades": probabilidades,
-                "factores_ebr": factores_ebr if isinstance(factores_ebr, list) else [],
-                "motivo_fusion": row.get("motivo_fusion"),
-                # Scores de anomalía (no supervisado)
-                "anomaly": {
-                    "score_iso": round(float(row.get("anomaly_score_iso", 0) or 0), 4),
-                    "is_outlier": int(row.get("is_outlier_iso", 0) or 0),
-                    "kmeans_dist": round(float(row.get("kmeans_dist", 0) or 0), 4),
-                    "score_composite": round(float(row.get("anomaly_score_composite", 0) or 0), 4),
-                },
-                # Features clave para el modal
-                "features": {
-                    "EsEfectivo": int(row.get("EsEfectivo", 0) or 0),
-                    "efectivo_alto": int(row.get("efectivo_alto", 0) or 0),
-                    "EsInternacional": int(row.get("EsInternacional", 0) or 0),
-                    "SectorAltoRiesgo": int(row.get("SectorAltoRiesgo", 0) or 0),
-                    "es_actividad_vulnerable": int(row.get("es_actividad_vulnerable", 0) or 0),
-                    "monto_6m": round(float(row.get("monto_6m", 0) or 0), 2),
-                    "ops_6m": int(row.get("ops_6m", 0) or 0),
-                    "ratio_vs_promedio": round(float(row.get("ratio_vs_promedio", 0) or 0), 2),
-                    "pct_umbral_aviso": round(float(row.get("pct_umbral_aviso", 0) or 0), 2),
-                    "es_nocturno": int(row.get("es_nocturno", 0) or 0),
-                    "fin_de_semana": int(row.get("fin_de_semana", 0) or 0),
-                    "posible_burst": int(row.get("posible_burst", 0) or 0),
-                },
-                # Guardrail info (si aplica)
-                "guardrail": {
-                    "activo": bool(row.get("guardrail_activo", False)),
-                    "razon": row.get("guardrail_razon"),
-                    "fundamento_legal": row.get("guardrail_fundamento"),
-                } if row.get("guardrail_activo") else None,
-                # Umbrales de la fracción (para mostrar en modal)
-                "umbrales": obtener_umbrales_fraccion(str(row.get("fraccion", "servicios_generales")), cfg),
-                "explicacion": explicaciones[i] if i < len(explicaciones) else {},
-            }
-            transacciones.append(tx)
-        
-        resultados = {
-            "success": True,
-            "analysis_id": analysis_id,
-            "timestamp": datetime.now().isoformat(),
-            "version": "4.2.0",  # Actualizado por incluir no supervisado y refuerzo
-            "resumen": {
-                "total_transacciones": total,
-                "preocupante": int(dist_final.get("preocupante", 0)),
-                "inusual": int(dist_final.get("inusual", 0)),
-                "relevante": int(dist_final.get("relevante", 0)),
-                "guardrails_aplicados": int(len(df_preocupantes)),
-                "elevados_por_ebr": int(sum(1 for o in df_final.get("origen", []) if o == "elevacion_ebr")),
-                "elevados_por_anomalia": int(sum(1 for o in df_final.get("origen", []) if o == "anomalia_no_supervisado")),
-            },
-            "transacciones": transacciones,
-        }
-        
-        # Generar metadata para modal de detalle del frontend
-        metadata = {
-            "analysis_id": analysis_id,
-            "timestamp": datetime.now().isoformat(),
-            "version": "4.2.0",
-            "config": {
-                "uma_mxn": get_uma_mxn(),
-                "umbral_elevacion_ebr": umbral_elevacion,
-                "threshold_efectivo_alto_vulnerable": 0.65,
-                "threshold_efectivo_alto_general": 0.75,
-                "clases_modelo": classes if 'classes' in dir() else ["inusual", "relevante"],
-                "modelo_no_supervisado": bundle_no_sup is not None,
-                "modelo_refuerzo": bundle_rl is not None,
-            },
-            "resumen": {
-                "total_transacciones": total,
-                "distribucion": {
-                    "preocupante": {
-                        "count": int(dist_final.get("preocupante", 0)),
-                        "porcentaje": round(dist_final.get("preocupante", 0) / total * 100, 2) if total > 0 else 0,
-                    },
-                    "inusual": {
-                        "count": int(dist_final.get("inusual", 0)),
-                        "porcentaje": round(dist_final.get("inusual", 0) / total * 100, 2) if total > 0 else 0,
-                    },
-                    "relevante": {
-                        "count": int(dist_final.get("relevante", 0)),
-                        "porcentaje": round(dist_final.get("relevante", 0) / total * 100, 2) if total > 0 else 0,
-                    },
-                },
-                "guardrails_aplicados": int(len(df_preocupantes)),
-                "elevados_por_ebr": int(sum(1 for o in df_final["origen"] if o == "elevacion_ebr")) if "origen" in df_final else 0,
-            },
-            "metricas": {
-                "ebr": {
-                    "promedio": round(float(df_final["score_ebr"].mean()), 2) if "score_ebr" in df_final else 0,
-                    "min": round(float(df_final["score_ebr"].min()), 2) if "score_ebr" in df_final else 0,
-                    "max": round(float(df_final["score_ebr"].max()), 2) if "score_ebr" in df_final else 0,
-                    "mediana": round(float(df_final["score_ebr"].median()), 2) if "score_ebr" in df_final else 0,
-                },
-                "ica": {
-                    "promedio": round(float(df_final["ica"].mean()), 4) if "ica" in df_final else 0,
-                    "min": round(float(df_final["ica"].min()), 4) if "ica" in df_final else 0,
-                    "max": round(float(df_final["ica"].max()), 4) if "ica" in df_final else 0,
-                },
-                "montos": {
-                    "total_mxn": round(float(df_final["monto"].sum()), 2) if "monto" in df_final else 0,
-                    "promedio_mxn": round(float(df_final["monto"].mean()), 2) if "monto" in df_final else 0,
-                    "max_mxn": round(float(df_final["monto"].max()), 2) if "monto" in df_final else 0,
-                    "min_mxn": round(float(df_final["monto"].min()), 2) if "monto" in df_final else 0,
-                },
-            },
-            "origen_clasificacion": dict(Counter(df_final["origen"])) if "origen" in df_final else {},
-            "fracciones": dict(Counter(df_final["fraccion"])) if "fraccion" in df_final else {},
-            "tipos_operacion": dict(Counter(df_final["tipo_operacion"])) if "tipo_operacion" in df_final else {},
-            "umbrales_aplicados": {
-                fraccion: obtener_umbrales_fraccion(fraccion, cfg)
-                for fraccion in df_final["fraccion"].unique() if "fraccion" in df_final
-            },
-        }
-        
-        metadata_path = PROCESSED_DIR / f"{analysis_id}_metadata.json"
-        with open(metadata_path, "w", encoding="utf-8") as f:
-            json.dump(metadata, f, indent=2, ensure_ascii=False)
-        log(f"  ✅ Metadata: {metadata_path.name}")
-        
-        json_path = PROCESSED_DIR / f"{analysis_id}.json"
-        with open(json_path, "w", encoding="utf-8") as f:
-            json.dump(resultados, f, indent=2, ensure_ascii=False)
-        log(f"  ✅ JSON: {json_path.name}")
-        
-        # Guardar métricas RL
-        metrics = {
-            "analysis_id": analysis_id,
-            "timestamp": datetime.now().isoformat(),
-            "distribucion": {k: v/total for k, v in dist_final.items()},
-            "ebr_promedio": float(df_final["score_ebr"].mean()) if "score_ebr" in df_final else 0,
-            "ica_promedio": float(df_final["ica"].mean()) if "ica" in df_final else 0,
-            "total_transacciones": total,
-        }
-        
-        metrics_path = PROCESSED_DIR / f"{analysis_id}_rl_metrics.json"
-        with open(metrics_path, "w", encoding="utf-8") as f:
-            json.dump(metrics, f, indent=2, ensure_ascii=False)
-        
-        # Eliminar archivo pending
-        csv_path.unlink()
-        
-        log(f"\n{'='*70}")
-        log(f"✅ COMPLETADO: {analysis_id}")
-        log(f"{'='*70}\n")
-        
-        return True
-        
+            y_pred = modelo.predict(X_scaled)
+            y_pred = np.where(y_pred == 1, "inusual", "relevante")
+            label_pred = y_pred
     except Exception as e:
-        log(f"\n❌ ERROR: {e}")
-        traceback.print_exc()
-        
-        failed_path = FAILED_DIR / csv_path.name
-        shutil.move(str(csv_path), str(failed_path))
-        
-        error_json = FAILED_DIR / f"{analysis_id}_error.json"
-        with open(error_json, "w", encoding="utf-8") as f:
-            json.dump({
-                "success": False,
-                "error": str(e),
-                "traceback": traceback.format_exc(),
-            }, f, indent=2)
-        
-        return False
+        log(f"  ⚠️  Error aplicando modelo supervisado: {e}")
+        label_pred = np.array(["relevante"] * len(df), dtype=object)
+        proba_inusual = np.zeros(len(df), dtype=float)
+
+    df["clasificacion_sup"] = label_pred
+    df["prob_inusual_sup"] = proba_inusual
+
+    return df
 
 
-def main():
-    log(f"\n{'='*70}")
-    log("🚀 ML RUNNER v4.1 - Con efectivo_alto y elevación EBR")
-    log(f"{'='*70}")
-    
-    if len(sys.argv) > 1:
-        analysis_id = sys.argv[1]
-        csv_file = PENDING_DIR / f"{analysis_id}.csv"
-        if not csv_file.exists():
-            log(f"❌ Archivo no encontrado: {csv_file}")
-            return 1
-        files = [csv_file]
+# =============================================================================
+# FUSIÓN
+# =============================================================================
+
+def fusionar_resultados(
+    df: pd.DataFrame,
+    cfg: Dict[str, Any],
+) -> pd.DataFrame:
+    """
+    Fusión simple:
+      1) Si clasificacion_legal == 'preocupante' → clasificacion_final = 'preocupante'
+      2) Para el resto:
+         - base = 'relevante'
+         - si clasificacion_sup == 'inusual' → 'inusual'
+         - si anomalía_no_sup == 1 eleva 'relevante' → 'inusual'
+         - si score_ebr >= threshold eleva 'relevante' → 'inusual'
+    """
+    df = df.copy()
+    thr_ebr = get_ebr_elevacion_threshold(cfg)
+
+    final = []
+    elev_por_ebr = 0
+    elev_por_ana = 0
+    elev_por_sup = 0
+
+    for _, row in df.iterrows():
+        if row.get("clasificacion_legal") == "preocupante":
+            final.append("preocupante")
+            continue
+
+        lab = "relevante"
+
+        # modelo supervisado
+        if row.get("clasificacion_sup") == "inusual":
+            lab = "inusual"
+            elev_por_sup += 1
+
+        # no supervisado
+        if lab == "relevante" and int(row.get("anomalía_no_sup", 0) or 0) == 1:
+            lab = "inusual"
+            elev_por_ana += 1
+
+        # EBR alto
+        if lab == "relevante" and float(row.get("score_ebr", 0.0) or 0.0) >= thr_ebr:
+            lab = "inusual"
+            elev_por_ebr += 1
+
+        final.append(lab)
+
+    df["clasificacion_final"] = final
+    df.attrs["elev_por_sup"] = elev_por_sup
+    df.attrs["elev_por_ana"] = elev_por_ana
+    df.attrs["elev_por_ebr"] = elev_por_ebr
+
+    return df
+
+
+# =============================================================================
+# EXPLICACIONES
+# =============================================================================
+
+
+def construir_explicacion_simple(row: pd.Series) -> str:
+    """
+    Explicación corta y amigable para el usuario final.
+    Responde básicamente: ¿por qué es preocupante / inusual / relevante?
+    """
+    clasif = (row.get("clasificacion_final") or "relevante").lower()
+    fraccion = (row.get("fraccion") or "").strip()
+    explic_legal = (row.get("motivo_preocupante_legal") or "").strip()
+
+    score_ebr = float(row.get("score_ebr", 0.0) or 0.0)
+    es_efectivo = bool(row.get("EsEfectivo", 0))
+    efectivo_alto = bool(row.get("efectivo_alto", 0))
+    acumulado_alto = bool(row.get("acumulado_alto", 0))
+
+    # 1) PREOCUPANTE → manda la LEY
+    if clasif == "preocupante":
+        # Si el validador legal ya escribió un texto, lo usamos, pero corto
+        if explic_legal:
+            if fraccion:
+                return f"Rebasa umbrales legales de la fracción {fraccion}. {explic_legal}"
+            return f"Rebasa umbrales legales establecidos por LFPIORPI. {explic_legal}"
+        return "Rebasa umbrales legales o internos de riesgo establecidos por LFPIORPI."
+
+    # 2) INUSUAL → efectivo / acumulado / patrón raro, pero sin violar la ley
+    if clasif == "inusual":
+        # Caso típico: efectivo alto o acumulado alto
+        if es_efectivo and (efectivo_alto or acumulado_alto):
+            return (
+                "El uso de efectivo o su acumulación es alto para el perfil del cliente; "
+                "aunque no rebasa los límites legales, recomendamos observar su comportamiento."
+            )
+
+        # Si no tenemos flags de efectivo pero el EBR salió alto
+        if score_ebr > 0:
+            return (
+                "Presenta un patrón poco habitual de monto o frecuencia; "
+                "recomendamos revisión del perfil del cliente."
+            )
+
+        # Fallback
+        return "Comportamiento poco habitual para el cliente; recomendamos monitoreo."
+
+    # 3) RELEVANTE → nada raro
+    return "No se detectó nada anormal en esta operación."
+
+
+
+
+
+def agregar_explicaciones(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df["explicacion"] = df.apply(construir_explicacion_simple, axis=1)
+    return df
+
+
+
+# =============================================================================
+# JSON PARA PORTAL (compatible con complete_portal)
+# =============================================================================
+
+def _nivel_riesgo_from_clasif(clasif: str) -> str:
+    """
+    Mapea la etiqueta final a nivel de riesgo semántico
+    (bajo / medio / alto) para el portal.
+    """
+    c = (clasif or "").strip().lower()
+    if c == "preocupante":
+        return "alto"
+    if c == "inusual":
+        return "medio"
+    return "bajo"
+
+
+def _build_tx_json_portal(row: pd.Series, idx: int) -> Dict[str, Any]:
+    """
+    Construye el dict de UNA operación en el formato que el portal
+    espera en result.transacciones[*].
+
+    Campos usados en el frontend (complete_portal_ui_ult.tsx):
+      - id
+      - monto
+      - fecha
+      - tipo_operacion
+      - sector_actividad
+      - clasificacion_final / clasificacion
+      - score_ebr
+      - explicacion_principal
+      - explicacion_detallada
+      - razones[]
+      - nivel_riesgo
+      - nivel_confianza
+      - flags
+      - contexto_regulatorio
+      - acciones_sugeridas
+      - probabilidades
+      - origen
+      - hora
+    """
+    # ------------------------------
+    # Campos base de la operación
+    # ------------------------------
+    clasif_final = str(row.get("clasificacion_final", "relevante") or "relevante")
+    clasif_sup = str(row.get("clasificacion_sup", "relevante") or "relevante")
+    clasif_ebr = str(row.get("clasificacion_ebr", "relevante") or "relevante")
+
+    nivel_riesgo = _nivel_riesgo_from_clasif(clasif_final)
+
+    # IDs: `cliente_id` es la única fuente de identidad del cliente.
+    cliente_id = row.get("cliente_id") or None
+
+    monto = float(row.get("monto", 0.0) or 0.0)
+    fecha = str(row.get("fecha", "") or "")
+    hora = str(row.get("hora", "") or "") or "N/A"
+    tipo_operacion = str(row.get("tipo_operacion", "") or "")
+    sector_actividad = str(row.get("sector_actividad", "") or "")
+
+    # ------------------------------
+    # Índice EBR y detalle por factor
+    # ------------------------------
+    score_ebr = float(row.get("score_ebr", 0.0) or 0.0)
+    detalles_ebr = str(row.get("detalles_ebr", "") or "")
+
+    # Texto tipo: "Índice EBR = 60 (detalle: efectivo: +25; efectivo alto: +15; ...)"
+    if score_ebr > 0:
+        ebr_resumen_texto = f"Índice EBR = {score_ebr:.0f}"
+        if detalles_ebr:
+            ebr_resumen_texto += f" (detalle: {detalles_ebr})"
     else:
-        files = list(PENDING_DIR.glob("*.csv"))
-    
-    if not files:
-        log("ℹ️ No hay archivos pendientes")
-        return 0
-    
-    log(f"📋 Archivos: {len(files)}")
-    
-    success = sum(1 for f in files if process_file(f))
-    failed = len(files) - success
-    
-    log(f"\n{'='*70}")
-    log(f"📊 RESUMEN: ✅ {success}, ❌ {failed}")
-    log(f"{'='*70}\n")
-    
-    return 0 if failed == 0 else 1
+        ebr_resumen_texto = "Índice EBR sin factores relevantes."
+
+    # ------------------------------
+    # Reglas LFPIORPI (legales)
+    # ------------------------------
+    flag_aviso = int(row.get("flag_aviso_lfpiorpi", 0) or 0)
+    flag_limite_efectivo = int(row.get("flag_limite_efectivo", 0) or 0)
+    legal_red_flag = int(row.get("legal_red_flag", 0) or 0)
+    motivo_legal = str(row.get("motivo_preocupante_legal", "") or "")
+
+    # ------------------------------
+    # Modelos ML (sup / no sup)
+    # ------------------------------
+    anomalia_no_sup = int(row.get("anomalía_no_sup", 0) or 0)
+    prob_inusual_sup = float(row.get("prob_inusual_sup", 0.0) or 0.0)
+
+    # ------------------------------
+    # Razones (para chips en UI)
+    # ------------------------------
+    razones: List[str] = []
+
+    if flag_aviso == 1:
+        razones.append("Monto por encima del umbral de AVISO LFPIORPI")
+    if flag_limite_efectivo == 1:
+        razones.append("Límite legal de EFECTIVO superado")
+    if score_ebr > 0:
+        razones.append(f"Índice EBR = {score_ebr:.0f}")
+    if clasif_ebr == "inusual":
+        razones.append("EBR clasifica la operación como inusual")
+    if clasif_sup == "inusual":
+        razones.append(
+            f"Modelo supervisado marcó 'inusual' (prob. ≈ {prob_inusual_sup * 100:.1f}%)"
+        )
+    if anomalia_no_sup == 1:
+        razones.append("Modelo no supervisado detectó un patrón atípico")
+
+    # Añadimos top 3 factores EBR tipo:
+    # "Principales factores EBR: efectivo: +25; efectivo alto: +15; burst: +10"
+    if detalles_ebr:
+        partes = [p.strip() for p in detalles_ebr.split(";") if p.strip()]
+        top3 = partes[:3]
+        if top3:
+            razones.append("Principales factores EBR: " + "; ".join(top3))
+
+    # ------------------------------
+    # Nivel de confianza (si deciden usarlo en la UI)
+    # ------------------------------
+    if legal_red_flag == 1 or prob_inusual_sup >= 0.80:
+        nivel_confianza = "alta"
+    elif prob_inusual_sup >= 0.60:
+        nivel_confianza = "media"
+    else:
+        nivel_confianza = "baja"
+
+    # ------------------------------
+    # Explicaciones (simple + detallada)
+    # ------------------------------
+    explicacion_simple = construir_explicacion_simple(row)
+
+    lineas_detalle: List[str] = []
+    lineas_detalle.append(
+        f"Clasificación final: {clasif_final.upper()} (nivel de riesgo {nivel_riesgo})."
+    )
+    lineas_detalle.append(ebr_resumen_texto)
+
+    # Reglas legales
+    if motivo_legal:
+        # Intentamos construir una línea explícita indicando cuánto supera en UMA
+        aviso_UMA_row = float(row.get("aviso_UMA", 0.0) or 0.0)
+        monto_umas_row = float(row.get("monto_umas", 0.0) or 0.0)
+        fr = str(row.get("fraccion") or "")
+        if aviso_UMA_row > 0:
+            delta = monto_umas_row - aviso_UMA_row
+            lineas_detalle.append(
+                f"Fundamento legal LFPIORPI: Monto = {monto:,.2f} MXN (~{monto_umas_row:.1f} UMA) "
+                f"supera en {delta:.1f} UMA el umbral de AVISO ({aviso_UMA_row:.1f} UMA) para la fracción {fr}."
+            )
+        else:
+            lineas_detalle.append(f"Fundamento legal LFPIORPI: {motivo_legal}")
+    else:
+        # Si no hay motivo legal, incluimos la descripción/artículo de la fracción si está disponible
+        fr_desc = str(row.get("fraccion_descripcion") or "").strip()
+        if fr_desc:
+            lineas_detalle.append(f"Reglas LFPIORPI ({fr_desc}): sin disparos legales en esta operación.")
+        else:
+            lineas_detalle.append("Reglas LFPIORPI: sin disparos legales en esta operación.")
+
+    # Modelo supervisado
+    if clasif_sup == "inusual":
+        lineas_detalle.append(
+            f"Modelo supervisado: etiquetó la operación como 'inusual' con probabilidad aproximada de {prob_inusual_sup * 100:.1f}%."
+        )
+    else:
+        lineas_detalle.append(
+            "Modelo supervisado: no detectó inusualidad significativa."
+        )
+
+    # Modelo no supervisado
+    if anomalia_no_sup == 1:
+        lineas_detalle.append(
+            "Modelo no supervisado: detectó un patrón atípico en el comportamiento de montos y/o frecuencia."
+        )
+    else:
+        lineas_detalle.append(
+            "Modelo no supervisado: no detectó anomalías adicionales."
+        )
+
+    # Recomendación final
+    if clasif_final in ("preocupante", "inusual"):
+        lineas_detalle.append(
+            "Recomendación: la operación debe ser revisada por el oficial de cumplimiento."
+        )
+    else:
+        lineas_detalle.append(
+            "Recomendación: la operación se considera dentro de un rango normal, sin alertas relevantes."
+        )
+
+    explicacion_detallada = "\n".join(lineas_detalle)
+
+    # ------------------------------
+    # Flags y acciones sugeridas
+    # ------------------------------
+    flags = {
+        "requiere_revision_manual": clasif_final in ("preocupante", "inusual"),
+        "sugerir_reclasificacion": False,
+        "alertas": [],
+    }
+
+    acciones_sugeridas: List[str] = []
+    if clasif_final == "preocupante":
+        acciones_sugeridas.append(
+            "Revisar fundamento legal LFPIORPI y preparar, en su caso, el aviso correspondiente."
+        )
+        acciones_sugeridas.append(
+            "Validar coherencia de la operación con el perfil transaccional del cliente."
+        )
+    elif clasif_final == "inusual":
+        acciones_sugeridas.append(
+            "Analizar si la operación es consistente con el comportamiento histórico del cliente."
+        )
+        acciones_sugeridas.append(
+            "Documentar el análisis interno y decisión de seguimiento."
+        )
+
+    # ------------------------------
+    # ICA (índice de confianza): para 'preocupante' y 'relevante' mostramos 100%
+    # (indica confianza operativa en la clasificación por reglas/umbrales)
+    # ------------------------------
+    if clasif_final in ("preocupante", "relevante"):
+        ica_val = 1.0
+    else:
+        ica_val = max(0.0, min(1.0, prob_inusual_sup))
+
+    # ------------------------------
+    # Origen principal de la alerta (forzamos 'lfpiorpi' si la clasificación final es 'preocupante')
+    # ------------------------------
+    if clasif_final == "preocupante":
+        origen = "lfpiorpi"
+    elif legal_red_flag == 1:
+        origen = "lfpiorpi"
+    elif clasif_ebr == "inusual":
+        origen = "ebr"
+    elif clasif_sup == "inusual" or anomalia_no_sup == 1:
+        origen = "ml"
+    else:
+        origen = "sin_alerta"
+
+    # ------------------------------
+    # Contexto regulatorio corto
+    # ------------------------------
+    if legal_red_flag == 1 and motivo_legal:
+        contexto_regulatorio = (
+            "Esta operación se considera preocupante por criterios LFPIORPI. "
+            + motivo_legal
+        )
+    else:
+        contexto_regulatorio = ""
+
+    # ------------------------------
+    # Ajustes finales: construir exactamente 3 razones en el orden solicitado:
+    # 1) LFPIORPI (cumple / no cumple)
+    # 2) Enfoque Basado en Riesgos = <score_ebr>
+    # 3) Resultado ML (supervisado / no supervisado)
+    # ------------------------------
+    # Razón 1: LFPIORPI (texto por clasificación)
+    if clasif_final == "preocupante":
+        if motivo_legal:
+            razon_lfpiorpi = f"LFPIORPI: REBASA LOS LIMITES MAXIMOS DEFINIDOS EN LFPIORPI ({motivo_legal})"
+        else:
+            razon_lfpiorpi = "LFPIORPI: REBASA LOS LIMITES MAXIMOS DEFINIDOS EN LFPIORPI"
+    else:
+        razon_lfpiorpi = "LFPIORPI: NO REBASA LIMITES MAXIMOS DEFINIDOS EN LFPIORPI"
+
+    # Razón 2: EBR (Enfoque Basado en Riesgos)
+    try:
+        razon_ebr = f"INDICE EBR: Enfoque Basado en Riesgos = {int(score_ebr)}"
+    except Exception:
+        razon_ebr = f"INDICE EBR: Enfoque Basado en Riesgos = {score_ebr}"
+
+    # Razón 3: Resultado ML (resumen de supervisado + no supervisado)
+    parts_ml: List[str] = []
+    if clasif_sup == "inusual":
+        parts_ml.append(f"supervisado=INUSUAL ({prob_inusual_sup * 100:.1f}%)")
+    else:
+        parts_ml.append("supervisado=RELEVANTE")
+
+    if anomalia_no_sup == 1:
+        parts_ml.append("no supervisado=ANOMALÍA")
+    else:
+        parts_ml.append("no supervisado=NORMAL")
+
+    razon_ml = "Resultado ML: " + "; ".join(parts_ml)
+
+    razones_unicas = [razon_lfpiorpi, razon_ebr, razon_ml]
+
+    # ------------------------------
+    # Señales de anomalía (detalle para el no supervisado)
+    # ------------------------------
+    if anomalia_no_sup == 1:
+        detalles_anomalia = row.get("detalles_anomalia") or row.get("anomaly_details") or "Anomalía detectada por el modelo no supervisado."
+        señales_anomalia = detalles_anomalia
+    else:
+        señales_anomalia = "No se detectaron anomalías significativas"
+
+    # ------------------------------
+    # Acciones sugeridas: simplificadas para preocupante
+    # ------------------------------
+    if clasif_final == "preocupante":
+        acciones_sugeridas = ["Preparar reporte XML de aviso a UIF"]
+
+    # ------------------------------
+    # Dict final de transacción (lo que ve el front)
+    # - `id` será `cliente_id` si existe, para que el modal muestre el ID cliente como cabecera
+    # - eliminamos campo `probabilidades` por ser confuso
+    # ------------------------------
+    # Añadir información UMA máxima conforme LFPIORPI al final de la explicación detallada
+    monto_umas_row = float(row.get("monto_umas", 0.0) or 0.0)
+    efectivo_max_UMA_row = float(row.get("efectivo_max_UMA", 0.0) or 0.0)
+    uma_append = ""
+    if row.get("monto_umas") is not None:
+        uma_append = (
+            f"\nMonto aproximado en UMA: {monto_umas_row:.1f} UMA /DE MAX_UMA({efectivo_max_UMA_row:.1f} UMA)"
+        )
+
+    return {
+        "id": str(cliente_id) if cliente_id else None,
+        "cliente_id": str(cliente_id) if cliente_id else None,
+        "monto": monto,
+        "monto_umas": float(row.get("monto_umas", 0.0) or 0.0),
+        "fecha": fecha,
+        "hora": hora,
+        "tipo_operacion": tipo_operacion,
+        "sector_actividad": sector_actividad,
+        "clasificacion_final": clasif_final,
+        "score_ebr": score_ebr,
+        "nivel_riesgo": nivel_riesgo,
+        "ica": ica_val,
+        "explicacion_principal": explicacion_simple,
+        "explicacion_detallada": explicacion_detallada + uma_append,
+        "razones": razones_unicas,
+        "nivel_confianza": nivel_confianza,
+        "flags": flags,
+        "contexto_regulatorio": contexto_regulatorio,
+        "acciones_sugeridas": acciones_sugeridas,
+        "señales_anomalia": señales_anomalia,
+        "origen": origen,
+    }
+
+
+def construir_json_portal(
+    df: pd.DataFrame,
+    analysis_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Construye el JSON completo que el endpoint /api/portal/upload puede devolver
+    y que el componente TarantulaHawkPortal entiende sin transformaciones raras.
+    """
+    df = df.copy()
+    # Si faltan `cliente_id` en el CSV, rellenar con consecutivos empezando en 12345.
+    # Nota: el validador de subida debería evitar CSVs con campos vacíos; aquí
+    # aplicamos un fallback para que la UI tenga siempre un identificador.
+    if "cliente_id" not in df.columns:
+        df["cliente_id"] = None
+    missing_mask = df["cliente_id"].isnull() | (df["cliente_id"].astype(str).str.strip() == "")
+    if missing_mask.any():
+        start = 12345
+        n = int(missing_mask.sum())
+        ids = [str(start + i) for i in range(n)]
+        df.loc[missing_mask, "cliente_id"] = ids
+        log(f"⚠️  Se asignaron {n} cliente_id consecutivos iniciando en {start} para filas faltantes. El validador debe evitar campos vacíos en el CSV.")
+    total = len(df)
+    dist = df["clasificacion_final"].value_counts(dropna=False).to_dict()
+
+    n_relevante = int(dist.get("relevante", 0))
+    n_inusual = int(dist.get("inusual", 0))
+    n_preocupante = int(dist.get("preocupante", 0))
+
+    # Discrepancias simples entre EBR y clasificación final
+    if "clasificacion_ebr" in df.columns:
+        mask_ebr_inusual = df["clasificacion_ebr"] == "inusual"
+        mask_final_relevante = df["clasificacion_final"] == "relevante"
+        discrepancias = int((mask_ebr_inusual & mask_final_relevante).sum())
+    else:
+        discrepancias = 0
+
+    porc_discrepancias = float((discrepancias / total) * 100.0) if total > 0 else 0.0
+
+    # Alertas generadas (todo lo que no es relevante)
+    alertas_generadas = int((df["clasificacion_final"] != "relevante").sum())
+
+    resumen: Dict[str, Any] = {
+        "total_transacciones": total,
+        "clasificacion_final": {
+            "relevante": n_relevante,
+            "inusual": n_inusual,
+            "preocupante": n_preocupante,
+        },
+        "discrepancias_ebr_ml": {
+            "total": discrepancias,
+            "porcentaje": round(porc_discrepancias, 2),
+        },
+        "alertas_generadas": alertas_generadas,
+        # Por si quieres mostrar la “estrategia” usada en UI
+        "estrategia": "hibrida_lfpiorpi_ebr_ml",
+    }
+
+    # Lista de transacciones explicadas
+    transacciones: List[Dict[str, Any]] = []
+    for idx, row in df.reset_index(drop=True).iterrows():
+        transacciones.append(_build_tx_json_portal(row, idx))
+
+    return {
+        "analysis_id": analysis_id,
+        "resumen": resumen,
+        "transacciones": transacciones,
+    }
+
+
+
+
+
+# =============================================================================
+# RESUMEN JSON
+# =============================================================================
+
+def construir_resumen_json(df: pd.DataFrame, analysis_id: Optional[str] = None) -> Dict[str, Any]:
+    total = len(df)
+    dist = df["clasificacion_final"].value_counts(dropna=False).to_dict()
+
+    resumen = {
+        "analysis_id": analysis_id,
+        "total_operaciones": total,
+        "distribucion": {
+            "relevante": int(dist.get("relevante", 0)),
+            "inusual": int(dist.get("inusual", 0)),
+            "preocupante": int(dist.get("preocupante", 0)),
+        },
+        "elevadas_por": {
+            "supervisado": int(df.attrs.get("elev_por_sup", 0)),
+            "no_supervisado": int(df.attrs.get("elev_por_ana", 0)),
+            "ebr": int(df.attrs.get("elev_por_ebr", 0)),
+        },
+    }
+
+    return resumen
+
+
+# =============================================================================
+# PIPELINE PRINCIPAL
+# =============================================================================
+
+def procesar_df_enriquecido(
+    df: pd.DataFrame,
+    cfg: Dict[str, Any],
+    modelo_ns: Optional[ModeloNoSupervisado],
+    modelo_sup: Optional[ModeloSupervisado],
+    analysis_id: Optional[str] = None,
+) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    log("  ⚖️ Paso 0: Reglas LFPIORPI (legales)...")
+    df = aplicar_reglas_lfpiorpi(df, cfg)
+
+    log("  📊 Paso 1: Índice EBR...")
+    df = calcular_ebr(df, cfg)
+
+    log("  🔍 Paso 2: Modelo no supervisado...")
+    df = aplicar_no_supervisado(df, modelo_ns)
+
+    log("  🤖 Paso 3: Modelo supervisado...")
+    df = aplicar_supervisado(df, modelo_sup)
+
+    log("  🔀 Paso 4: Fusión...")
+    df = fusionar_resultados(df, cfg)
+
+    log("  📝 Paso 5: Explicaciones...")
+    df = agregar_explicaciones(df)
+
+    resumen = construir_resumen_json(df, analysis_id=analysis_id)
+
+    # Log resumen
+    dist = resumen["distribucion"]
+    total = max(resumen["total_operaciones"], 1)
+    log("")
+    log("  📊 DISTRIBUCIÓN FINAL:")
+    log(f"     🔴 Preocupante: {dist['preocupante']} ({dist['preocupante'] / total:.1%})")
+    log(f"     🟡 Inusual:     {dist['inusual']} ({dist['inusual'] / total:.1%})")
+    log(f"     🟢 Relevante:   {dist['relevante']} ({dist['relevante'] / total:.1%})")
+    log("")
+
+    return df, resumen
+
+
+def run_for_file(
+    input_csv: Path,
+    output_csv: Path,
+    cfg: Dict[str, Any],
+    analysis_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    log("=" * 70)
+    log(f"📄 Procesando: {input_csv.name}")
+    df = pd.read_csv(input_csv)
+    log(f"  📊 Cargado: {len(df)} filas")
+
+    # modelos
+    log("")
+    log("  📦 Cargando modelos...")
+    modelo_ns = _load_no_supervisado(cfg)
+    modelo_sup = _load_supervisado(cfg)
+
+    df_out, resumen = procesar_df_enriquecido(df, cfg, modelo_ns, modelo_sup, analysis_id)
+
+    output_csv.parent.mkdir(parents=True, exist_ok=True)
+    df_out.to_csv(output_csv, index=False, encoding="utf-8")
+    log(f"  ✅ CSV:  {output_csv.name}")
+
+    # JSON V2: incluir resumen + transacciones (compatibilidad con enhanced_main_api)
+    output_json_v2 = output_csv.with_name(f"{output_csv.stem}_v2.json")
+    full_results = construir_json_portal(df_out, analysis_id=analysis_id)
+    # construir_json_portal ya retorna {'analysis_id','resumen','transacciones'} compatible
+    with output_json_v2.open("w", encoding="utf-8") as f:
+        json.dump(full_results, f, indent=2, ensure_ascii=False)
+
+    # También guardar un JSON legacy (solo resumen) para compatibilidad hacia atrás
+    output_json = output_csv.with_suffix(".json")
+    with output_json.open("w", encoding="utf-8") as f:
+        json.dump(resumen, f, indent=2, ensure_ascii=False)
+
+    log(f"  ✅ JSON: {output_json.name}")
+    log(f"  ✅ JSON v2: {output_json_v2.name}")
+    log("=" * 70)
+    return full_results
+
+
+# =============================================================================
+# CLI
+# =============================================================================
+
+def _run_portal_mode(analysis_id: str, config_path: Optional[str]) -> int:
+    cfg = load_config(config_path)
+
+    input_csv = PENDING_DIR / f"{analysis_id}.csv"
+    if not input_csv.exists():
+        log(f"❌ No se encontró archivo en pendiente: {input_csv}")
+        return 1
+
+    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+    output_csv = PROCESSED_DIR / f"{analysis_id}.csv"
+
+    run_for_file(input_csv, output_csv, cfg, analysis_id=analysis_id)
+    return 0
+
+
+def _run_cli_mode(args: argparse.Namespace) -> int:
+    cfg = load_config(args.config)
+
+    input_csv = Path(args.input)
+    if not input_csv.exists():
+        log(f"❌ No se encontró archivo de entrada: {input_csv}")
+        return 1
+
+    output_csv = Path(args.output)
+    run_for_file(input_csv, output_csv, cfg, analysis_id=None)
+    return 0
+
+
+def parse_args_cli(argv: List[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="ML Runner v6 - reglas LFPIORPI + EBR + modelos"
+    )
+    parser.add_argument(
+        "--input",
+        required=True,
+        help="CSV enriquecido de entrada",
+    )
+    parser.add_argument(
+        "--output",
+        required=True,
+        help="CSV de salida con clasificaciones",
+    )
+    parser.add_argument(
+        "--config",
+        required=False,
+        help="Ruta a config_modelos_v4.json (opcional, se intenta auto-detectar si no se pasa)",
+    )
+    return parser.parse_args(argv)
+
+
+def main() -> int:
+    # Modo portal: primer argumento sin prefijo se toma como analysis_id
+    if len(sys.argv) > 1 and not sys.argv[1].startswith("-"):
+        analysis_id = sys.argv[1]
+        log(f"🤖 Ejecutando ML runner (modo portal) para analysis_id={analysis_id}...")
+        return _run_portal_mode(analysis_id, config_path=None)
+
+    # Modo CLI tradicional
+    args = parse_args_cli(sys.argv[1:])
+    log("🤖 Ejecutando ML runner (modo CLI)...")
+    return _run_cli_mode(args)
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    raise SystemExit(main())
