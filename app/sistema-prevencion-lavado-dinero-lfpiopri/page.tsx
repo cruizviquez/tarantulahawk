@@ -286,6 +286,26 @@ export default function Page() {
             <strong>“software PLD México para sujetos obligados”</strong>. El
             enfoque es ayudarte a operar mejor los componentes clave del proceso.
           </p>
+          <section className="py-12 px-6">
+  <div className="max-w-6xl mx-auto">
+    <div className="bg-gray-900/50 border border-gray-800 rounded-2xl p-6">
+      <h3 className="text-lg font-bold text-emerald-300 mb-2">
+        Guía rápida: ¿Qué exige el Artículo 17 de la LFPIORPI?
+      </h3>
+      <p className="text-gray-300 mb-4">
+        Explicación clara para sujetos obligados: a quién aplica, obligaciones clave y
+        cómo prepararte con evidencia auditable.
+      </p>
+      <a
+        href="/blog/que-exige-articulo-17-lfpiorpi"
+        className="text-teal-300 font-semibold hover:underline"
+      >
+        Leer la guía completa →
+      </a>
+    </div>
+  </div>
+</section>
+
 
           <div className="grid md:grid-cols-2 gap-6">
             {[
