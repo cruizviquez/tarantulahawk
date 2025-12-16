@@ -1,798 +1,682 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import Head from 'next/head';
 import OnboardingForm from './OnboardingForm';
 import AIChat from './AIChat';
-import { Globe, Shield, Zap, TrendingUp, CheckCircle, Brain, Mail } from 'lucide-react';
+import { Shield, Zap, CheckCircle } from 'lucide-react';
 
-const TarantulaHawkLogo = ({ className = "w-12 h-12" }) => (
-  <svg viewBox="0 0 400 400" className={className} xmlns="http://www.w3.org/2000/svg">
+const TarantulaHawkLogo = ({ className = 'w-12 h-12' }) => (
+  <svg viewBox="0 0 400 400" className={className} xmlns="http://www.w3.org/2000/svg" aria-label="TarantulaHawk logo">
     <defs>
       <linearGradient id="orangeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" style={{stopColor: '#3b82f6'}} />
-        <stop offset="50%" style={{stopColor: '#06b6d4'}} />
-        <stop offset="100%" style={{stopColor: '#10b981'}} />
+        <stop offset="0%" style={{ stopColor: '#3b82f6' }} />
+        <stop offset="50%" style={{ stopColor: '#06b6d4' }} />
+        <stop offset="100%" style={{ stopColor: '#10b981' }} />
       </linearGradient>
       <linearGradient id="tealGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" style={{stopColor: '#00CED1'}} />
-        <stop offset="50%" style={{stopColor: '#20B2AA'}} />
-        <stop offset="100%" style={{stopColor: '#48D1CC'}} />
+        <stop offset="0%" style={{ stopColor: '#00CED1' }} />
+        <stop offset="50%" style={{ stopColor: '#20B2AA' }} />
+        <stop offset="100%" style={{ stopColor: '#48D1CC' }} />
       </linearGradient>
     </defs>
-    <circle cx="200" cy="200" r="190" fill="none" stroke="url(#tealGrad)" strokeWidth="3" opacity="0.4"/>
-    <ellipse cx="200" cy="230" rx="35" ry="85" fill="#0A0A0A"/>
-    <ellipse cx="200" cy="170" rx="18" ry="20" fill="#0F0F0F"/>
-    <ellipse cx="200" cy="145" rx="32" ry="35" fill="#0F0F0F"/>
-    <ellipse cx="200" cy="110" rx="22" ry="20" fill="#0A0A0A"/>
-    <ellipse cx="200" cy="215" rx="32" ry="10" fill="url(#orangeGrad)" opacity="0.95"/>
-    <ellipse cx="200" cy="245" rx="30" ry="9" fill="url(#orangeGrad)" opacity="0.9"/>
-    <ellipse cx="200" cy="270" rx="27" ry="8" fill="url(#orangeGrad)" opacity="0.85"/>
-    <path d="M 168 135 Q 95 90 82 125 Q 75 160 115 170 Q 148 175 168 158 Z" fill="url(#orangeGrad)" opacity="0.9"/>
-    <path d="M 232 135 Q 305 90 318 125 Q 325 160 285 170 Q 252 175 232 158 Z" fill="url(#orangeGrad)" opacity="0.9"/>
-    <path d="M 200 305 L 197 330 L 200 350 L 203 330 Z" fill="url(#orangeGrad)"/>
-    <ellipse cx="188" cy="108" rx="5" ry="4" fill="#00CED1"/>
-    <ellipse cx="212" cy="108" rx="5" ry="4" fill="#00CED1"/>
+    <circle cx="200" cy="200" r="190" fill="none" stroke="url(#tealGrad)" strokeWidth="3" opacity="0.4" />
+    <ellipse cx="200" cy="230" rx="35" ry="85" fill="#0A0A0A" />
+    <ellipse cx="200" cy="170" rx="18" ry="20" fill="#0F0F0F" />
+    <ellipse cx="200" cy="145" rx="32" ry="35" fill="#0F0F0F" />
+    <ellipse cx="200" cy="110" rx="22" ry="20" fill="#0A0A0A" />
+    <ellipse cx="200" cy="215" rx="32" ry="10" fill="url(#orangeGrad)" opacity="0.95" />
+    <ellipse cx="200" cy="245" rx="30" ry="9" fill="url(#orangeGrad)" opacity="0.9" />
+    <ellipse cx="200" cy="270" rx="27" ry="8" fill="url(#orangeGrad)" opacity="0.85" />
+    <path d="M 168 135 Q 95 90 82 125 Q 75 160 115 170 Q 148 175 168 158 Z" fill="url(#orangeGrad)" opacity="0.9" />
+    <path d="M 232 135 Q 305 90 318 125 Q 325 160 285 170 Q 252 175 232 158 Z" fill="url(#orangeGrad)" opacity="0.9" />
+    <path d="M 200 305 L 197 330 L 200 350 L 203 330 Z" fill="url(#orangeGrad)" />
+    <ellipse cx="188" cy="108" rx="5" ry="4" fill="#00CED1" />
+    <ellipse cx="212" cy="108" rx="5" ry="4" fill="#00CED1" />
   </svg>
 );
 
-export default function TarantulaHawkWebsite({ authError }: { authError?: string }) {
-  const [language, setLanguage] = useState<'en' | 'es'>('es');
+type AuthError =
+  | 'timeout'
+  | 'link_expired'
+  | 'link_used'
+  | 'link_invalid'
+  | 'signin_failed'
+  | string;
+
+export default function TarantulaHawkWebsite({ authError }: { authError?: AuthError }) {
+  // Enfoque 100% México: dejamos el sitio en ES (SEO + claridad para sujetos obligados)
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingMode, setOnboardingMode] = useState<'signup' | 'login'>('signup');
   const [showAuthError, setShowAuthError] = useState(!!authError);
-  
-  // Mensajes de error según tipo
-  const getErrorMessage = () => {
+
+  const errorInfo = useMemo(() => {
     if (!authError) return null;
-    
-    const messages: Record<string, { title: { es: string; en: string }, message: { es: string; en: string } }> = {
+
+    const messages: Record<
+      string,
+      { title: string; message: string }
+    > = {
       timeout: {
-        title: { es: 'Sesión expirada por inactividad', en: 'Session expired due to inactivity' },
-        message: { es: 'Por seguridad, tu sesión se cerró tras 15 minutos sin actividad. Inicia sesión de nuevo para continuar.', en: 'For your security, your session ended after 15 minutes of inactivity. Please log in again.' }
+        title: 'Sesión expirada por inactividad',
+        message: 'Por seguridad, tu sesión se cerró tras 15 minutos sin actividad. Inicia sesión de nuevo para continuar.',
       },
       link_expired: {
-        title: { es: 'Magic Link Expirado', en: 'Magic Link Expired' },
-        message: { es: 'El enlace de autenticación ha expirado. Por favor, solicita un nuevo enlace.', en: 'The authentication link has expired. Please request a new link.' }
+        title: 'Magic Link expirado',
+        message: 'El enlace de autenticación expiró. Solicita uno nuevo para ingresar.',
       },
       link_used: {
-        title: { es: 'Magic Link Ya Utilizado', en: 'Magic Link Already Used' },
-        message: { es: 'Este enlace ya fue utilizado anteriormente. Por seguridad, solicita un nuevo enlace.', en: 'This link was already used. For security, please request a new link.' }
+        title: 'Magic Link ya utilizado',
+        message: 'Este enlace ya fue utilizado. Por seguridad, solicita uno nuevo.',
       },
       link_invalid: {
-        title: { es: 'Magic Link Inválido', en: 'Invalid Magic Link' },
-        message: { es: 'El enlace de autenticación es inválido. Verifica el link o solicita uno nuevo.', en: 'The authentication link is invalid. Verify the link or request a new one.' }
+        title: 'Magic Link inválido',
+        message: 'El enlace es inválido. Verifica el link o solicita uno nuevo.',
       },
       signin_failed: {
-        title: { es: 'Error de Autenticación', en: 'Authentication Error' },
-        message: { es: 'No se pudo completar la autenticación. Intenta de nuevo.', en: 'Could not complete authentication. Please try again.' }
-      }
+        title: 'Error de autenticación',
+        message: 'No se pudo completar la autenticación. Intenta de nuevo.',
+      },
     };
-    
+
     return messages[authError] || messages.link_expired;
+  }, [authError]);
+
+  const openChat = () => {
+    const chatButton = document.querySelector('[role="chat-button"]') as HTMLButtonElement | null;
+    if (chatButton) chatButton.click();
   };
-  
-  const errorInfo = getErrorMessage();
-  
-  // ...existing code...
+
+  const seo = useMemo(() => {
+    const title =
+      'TarantulaHawk | Sistema PLD para Sujetos Obligados (LFPIORPI Art. 17) – México';
+    const description =
+      'Software PLD (Prevención de Lavado de Dinero) para sujetos obligados en México. Automatiza monitoreo de operaciones, evaluación de riesgo, reportes/expedientes y preparación de avisos conforme a la LFPIORPI (Artículo 17).';
+    const canonical = 'https://tarantulahawk.cloud/';
+    const keywords = [
+      'sistema plD',
+      'prevención de lavado de dinero',
+      'software pld méxico',
+      'lfpiorpi',
+      'artículo 17 lfpiorpi',
+      'sujetos obligados',
+      'actividades vulnerables',
+      'avisos pld shcp',
+      'monitoreo de operaciones',
+      'cumplimiento pld',
+      'plataforma pld',
+      'auditoría pld',
+    ].join(', ');
+
+    const jsonLd = {
+      '@context': 'https://schema.org',
+      '@type': 'SoftwareApplication',
+      name: 'TarantulaHawk',
+      applicationCategory: 'BusinessApplication',
+      operatingSystem: 'Web',
+      offers: {
+        '@type': 'Offer',
+        price: '0',
+        priceCurrency: 'USD',
+        description: 'Registro gratuito y uso por consumo (según plan).',
+      },
+      description,
+      keywords,
+      audience: {
+        '@type': 'Audience',
+        audienceType: 'Sujetos obligados y responsables de cumplimiento en México (LFPIORPI).',
+      },
+      url: canonical,
+      publisher: {
+        '@type': 'Organization',
+        name: 'TarantulaHawk',
+        url: canonical,
+      },
+    };
+
+    return { title, description, canonical, keywords, jsonLd };
+  }, []);
+
+  const capabilityLegend = useMemo(
+    () => [
+      { key: 'green', label: 'Automatizado por TarantulaHawk', dot: 'bg-green-500' },
+      { key: 'blue', label: 'Parcial (asistencia + trazabilidad)', dot: 'bg-blue-500' },
+      { key: 'gray', label: 'Proceso interno del sujeto obligado', dot: 'bg-gray-500' },
+    ],
+    []
+  );
+
+  const colorDotClass = (color: 'green' | 'blue' | 'gray') => {
+    if (color === 'green') return 'bg-green-500';
+    if (color === 'blue') return 'bg-blue-500';
+    return 'bg-gray-500';
+  };
+
+  const colorTileGradient = (color: 'green' | 'blue' | 'gray') => {
+    if (color === 'green') return 'from-green-600 to-teal-500';
+    if (color === 'blue') return 'from-blue-600 to-blue-500';
+    return 'from-blue-600 to-emerald-500';
+  };
+
+  const lfpiorpiCapabilities = useMemo(
+    () =>
+      [
+        {
+          num: '1',
+          title: 'Identificación y expediente de clientes',
+          desc: 'Centraliza y resguarda evidencia y documentación por cliente/operación (trazabilidad y control).',
+          color: 'blue',
+        },
+        {
+          num: '2',
+          title: 'Monitoreo de operaciones y señales de riesgo',
+          desc: 'Detecta patrones y comportamientos relevantes para PLD con reglas + IA (alertas y priorización).',
+          color: 'green',
+        },
+        {
+          num: '3',
+          title: 'Perfilamiento y evaluación de riesgo',
+          desc: 'Scoring de riesgo por cliente y por operación con explicabilidad para auditoría interna.',
+          color: 'green',
+        },
+        {
+          num: '4',
+          title: 'Evidencia lista para auditoría / visita de verificación',
+          desc: 'Expedientes, bitácoras, KPIs y reportes para facilitar revisiones y controles.',
+          color: 'green',
+        },
+        {
+          num: '5',
+          title: 'Conservación y custodia de información y reportes',
+          desc: 'Retención cifrada, control de acceso y trazabilidad (alineado a conservación de información).',
+          color: 'blue',
+        },
+        {
+          num: '6',
+          title: 'Preparación de avisos y reportes',
+          desc: 'Tarantulahawk genera en automático el reporte XML para la UIF; integra validaciones y controles previos.',
+          color: 'blue',
+        },
+      ] as const,
+    []
+  );
 
   return (
     <>
-    {/* Auth Error Toast */}
-    {showAuthError && errorInfo && (
-      <div className="fixed top-20 right-6 z-[9999] animate-fade-in">
-        <div className="bg-emerald-500/90 backdrop-blur-sm border border-emerald-400 rounded-lg p-4 shadow-2xl max-w-md">
-          <div className="flex items-start gap-3">
-            <div className="text-2xl">🔒</div>
-            <div className="flex-1">
-              <h3 className="font-bold text-white mb-1">
-                {errorInfo.title[language]}
-              </h3>
-              <p className="text-sm text-white/90">
-                {errorInfo.message[language]}
-              </p>
-              <div className="mt-3">
-                <button
-                  onClick={() => {
-                    setOnboardingMode('login');
-                    setShowOnboarding(true);
-                  }}
-                  className="px-4 py-2 bg-black/20 border border-white/30 rounded-lg text-sm font-semibold hover:bg-black/30 text-white"
-                >
-                  {language === 'en' ? 'Log in' : 'Iniciar sesión'}
-                </button>
+      <Head>
+        <title>{seo.title}</title>
+        <meta name="description" content={seo.description} />
+        <meta name="keywords" content={seo.keywords} />
+        <link rel="canonical" href={seo.canonical} />
+        <meta property="og:title" content={seo.title} />
+        <meta property="og:description" content={seo.description} />
+        <meta property="og:type" content="website" />
+        <meta property="og:url" content={seo.canonical} />
+        <meta name="twitter:card" content="summary_large_image" />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(seo.jsonLd) }} />
+      </Head>
+
+      {/* Auth Error Toast */}
+      {showAuthError && errorInfo && (
+        <div className="fixed top-20 right-6 z-[9999] animate-fade-in">
+          <div className="bg-emerald-500/90 backdrop-blur-sm border border-emerald-400 rounded-lg p-4 shadow-2xl max-w-md">
+            <div className="flex items-start gap-3">
+              <div className="text-2xl">🔒</div>
+              <div className="flex-1">
+                <h3 className="font-bold text-white mb-1">{errorInfo.title}</h3>
+                <p className="text-sm text-white/90">{errorInfo.message}</p>
+                <div className="mt-3">
+                  <button
+                    onClick={() => {
+                      setOnboardingMode('login');
+                      setShowOnboarding(true);
+                    }}
+                    className="px-4 py-2 bg-black/20 border border-white/30 rounded-lg text-sm font-semibold hover:bg-black/30 text-white"
+                  >
+                    Iniciar sesión
+                  </button>
+                </div>
               </div>
+              <button onClick={() => setShowAuthError(false)} className="text-white/80 hover:text-white text-xl leading-none">
+                ×
+              </button>
             </div>
-            <button 
-              onClick={() => setShowAuthError(false)}
-              className="text-white/80 hover:text-white text-xl leading-none"
-            >
-              ×
-            </button>
           </div>
         </div>
-      </div>
-    )}
-    
-    <div className="min-h-screen bg-black text-white">
-      <nav className="fixed top-0 w-full bg-black/95 backdrop-blur-sm border-b border-gray-800 z-50">
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <TarantulaHawkLogo />
-              <span className="text-xl font-black bg-gradient-to-r from-emerald-500 to-teal-400 bg-clip-text text-transparent">
-                TARANTULAHAWK
-              </span>
-            </div>
+      )}
 
-            <div className="flex items-center gap-8">
-              <nav className="hidden md:flex items-center gap-6">
-                <a href="#solutions" className="text-gray-300 hover:text-white transition">
-                  {language === 'en' ? 'Solutions' : 'Soluciones'}
-                </a>
-                <a href="#services" className="text-gray-300 hover:text-white transition">
-                  {language === 'en' ? 'Services' : 'Servicios'}
-                </a>
-                <a href="#how-it-works" className="text-gray-300 hover:text-white transition">
-                  {language === 'en' ? 'How It Works' : 'Cómo Funciona'}
-                </a>
-                <a href="#about" className="text-gray-300 hover:text-white transition">
-                  {language === 'en' ? 'About' : 'Acerca de'}
-                </a>
-                <button 
-                  onClick={() => {
-                    const chatButton = document.querySelector('[role="chat-button"]') as HTMLButtonElement;
-                    if (chatButton) chatButton.click();
-                  }} 
-                  className="text-gray-300 hover:text-white transition"
-                >
-                  {language === 'en' ? 'Chat' : 'Contáctanos'}
-                </button>
-              </nav>
-              
-              <div className="flex items-center gap-4">
-                <button 
-                  onClick={() => setLanguage(language === 'en' ? 'es' : 'en')}
-                  className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-700 hover:border-teal-500 transition"
-                >
-                  <Globe className="w-4 h-4" />
-                  <span className="text-sm">{language === 'en' ? 'ES' : 'EN'}</span>
-                </button>
+      <div className="min-h-screen bg-black text-white">
+        <nav className="fixed top-0 w-full bg-black/95 backdrop-blur-sm border-b border-gray-800 z-50">
+          <div className="max-w-7xl mx-auto px-6 py-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <TarantulaHawkLogo />
+                <span className="text-xl font-black bg-gradient-to-r from-emerald-500 to-teal-400 bg-clip-text text-transparent">
+                  TARANTULAHAWK
+                </span>
+              </div>
+
+              <div className="flex items-center gap-8">
+                <nav className="hidden md:flex items-center gap-6">
+                  <a href="#solucion" className="text-gray-300 hover:text-white transition">
+                    Solución
+                  </a>
+                  <a href="#como-funciona" className="text-gray-300 hover:text-white transition">
+                    Cómo funciona
+                  </a>
+                  <a href="#lfpiorpi" className="text-gray-300 hover:text-white transition">
+                    LFPIORPI Art. 17
+                  </a>
+                  <a href="#about" className="text-gray-300 hover:text-white transition">
+                    Acerca de
+                  </a>
+                  <button onClick={openChat} className="text-gray-300 hover:text-white transition">
+                    Contacto
+                  </button>
+                </nav>
+
+                <div className="flex items-center gap-4">
+                  <button
+                    className="px-4 py-2 border border-gray-700 rounded-lg font-semibold hover:bg-gray-800 transition"
+                    onClick={() => {
+                      setOnboardingMode('login');
+                      setShowOnboarding(true);
+                    }}
+                  >
+                    Ingresar
+                  </button>
+                  <button
+                    className="px-6 py-2 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-lg font-semibold hover:from-emerald-700 hover:to-emerald-500 transition"
+                    onClick={() => {
+                      setOnboardingMode('signup');
+                      setShowOnboarding(true);
+                    }}
+                  >
+                    Registrarse gratis
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </nav>
+
+        {/* HERO */}
+        <section id="hero" className="pt-32 pb-20 px-6">
+          <div className="max-w-7xl mx-auto">
+            <div className="text-center">
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600/10 border border-emerald-600/20 rounded-full mb-8">
+                <Zap className="w-4 h-4 text-emerald-500" />
+                <span className="text-sm text-cyan-400">PLD con IA • Evidencia auditable • Implementación rápida</span>
+              </div>
+
+              <h1 className="text-5xl md:text-7xl font-black mb-6">
+                <span className="text-white">
+                  Sistema de Prevención de Lavado de Dinero
+                  <br />
+                  para Sujetos Obligados (LFPIORPI)
+                </span>
+              </h1>
+
+              <h2 className="text-2xl md:text-3xl text-white font-bold mb-6">
+                Cumple con el Artículo 17 con automatización, trazabilidad y control
+              </h2>
+
+              <p className="text-xl text-gray-400 max-w-4xl mx-auto mb-12">
+                TarantulaHawk es un <strong>software PLD para México</strong> diseñado para sujetos obligados.
+                Centraliza información, <strong>monitorea operaciones</strong>, evalúa <strong>riesgo PLD</strong> y
+                genera expedientes y reportes para auditoría interna y visitas de verificación.
+              </p>
+
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <button
-                  className="px-4 py-2 border border-gray-700 rounded-lg font-semibold hover:bg-gray-800 transition"
-                  onClick={() => {
-                    setOnboardingMode('login');
-                    setShowOnboarding(true);
-                  }}
-                >
-                  {language === 'en' ? 'Login' : 'Ingresar'}
-                </button>
-                <button
-                  className="px-6 py-2 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-lg font-semibold hover:from-emerald-700 hover:to-emerald-500 transition"
+                  className="px-8 py-4 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-lg font-bold text-lg hover:from-emerald-700 hover:to-emerald-500 transition"
                   onClick={() => {
                     setOnboardingMode('signup');
                     setShowOnboarding(true);
                   }}
                 >
-                  {language === 'en' ? 'Try Free' : 'Registrarse Gratis'}
+                  Registrarse gratis
+                </button>
+                <button
+                  onClick={openChat}
+                  className="px-8 py-4 border-2 border-teal-500 rounded-lg font-bold text-lg hover:bg-teal-500/10 transition"
+                >
+                  Agenda una demo
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-      </nav>
 
-      // ...existing code...
-
-      <section id="hero" className="pt-32 pb-20 px-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center">
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600/10 border border-emerald-600/20 rounded-full mb-8">
-              <Zap className="w-4 h-4 text-emerald-500" />
-              <span className="text-sm text-cyan-400">{language === 'en' ? 'AI-Powered • Pay-as-you-go • Instant Reports' : 'AI-Powered • Pago por uso • Reportes instantáneos'}</span>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mt-20">
+              <div className="text-center">
+                <div className="text-4xl font-black text-blue-500 mb-2">&lt;100ms</div>
+                <div className="text-gray-400">Tiempo de procesamiento</div>
+              </div>
+              <div className="text-center">
+                <div className="text-4xl font-black text-emerald-500 mb-2">&gt;99%</div>
+                <div className="text-gray-400">Precisión de detección</div>
+              </div>
+              <div className="text-center">
+                <div className="text-4xl font-black text-teal-400 mb-2">3-Capas</div>
+                <div className="text-gray-400">Architectura de IA</div>
+              </div>
+              <div className="text-center">
+                <div className="text-4xl font-black text-teal-400 mb-2">24/7</div>
+                <div className="text-gray-400">Soporte y Monitoreo</div>
+              </div>
             </div>
-            
-            <h1 className="text-5xl md:text-7xl font-black mb-6">
-              <span className="bg-gradient-to-r from-blue-900 via-blue-500 to-teal-400 bg-clip-text text-transparent">
-                {language === 'en' ? 'AI-Powered AML Compliance System' : 'Plataforma IA para Análisis de PLD'}
-              </span>
-            </h1>
-            
-            <p className="text-xl text-gray-400 max-w-3xl mx-auto mb-12">
-              {language === 'en' 
-                ? 'Simply upload your transactions and get instant AML compliance reports. Or through secure API if you are a large corporation. Pay-as-you-go pricing perfect for fintechs and small businesses. AI-powered dashboard with real-time alerts.'
-                : 'Simplemente sube tus transacciones y obten reportes de cumplimiento PLD al instante. O a través de API segura si eres una gran corporación. Precios por uso perfectos para fintechs y pequeñas empresas. Panel con IA y alertas en tiempo real.'}
+          </div>
+
+          {/* SEO helper content (hidden, helps long-tail search without afectar el diseño) */}
+          <div className="sr-only">
+            <h2>Sistema PLD México para LFPIORPI</h2>
+            <p>
+              TarantulaHawk es un sistema de prevención de lavado de dinero (PLD) para México. Enfocado a sujetos obligados y
+              actividades vulnerables para cumplir LFPIORPI, Artículo 17, con monitoreo de operaciones, evaluación de riesgo y
+              expedientes auditables.
+            </p>
+          </div>
+        </section>
+
+        {/* SOLUCIÓN */}
+        <section id="solucion" className="py-20 px-6 bg-gradient-to-b from-black to-gray-900">
+          <div className="max-w-7xl mx-auto">
+            <div className="text-center mb-16">
+              <h2 className="text-4xl font-black mb-4">
+                <span className="bg-gradient-to-r from-emerald-500 to-teal-400 bg-clip-text text-transparent">
+                  Una plataforma PLD clara, práctica y lista para auditoría
+                </span>
+              </h2>
+              <p className="text-xl text-gray-400 max-w-4xl mx-auto mb-10">
+                Diseñada para el mercado mexicano y para el trabajo real del oficial de cumplimiento: datos en orden, riesgos explicables,
+                evidencia trazable y reportes consistentes.
+              </p>
+
+              <div className="grid md:grid-cols-3 gap-6 text-left">
+                <div className="bg-gray-900/60 border border-gray-800 rounded-2xl p-6">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-blue-600 to-emerald-500 flex items-center justify-center">
+                      <span className="font-black">1</span>
+                    </div>
+                    <h3 className="text-lg font-bold">Monitoreo + alertas útiles</h3>
+                  </div>
+                  <p className="text-gray-400">
+                    Detección y priorización de señales de riesgo para reducir ruido y enfocar investigación interna.
+                  </p>
+                </div>
+
+                <div className="bg-gray-900/60 border border-gray-800 rounded-2xl p-6">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 flex items-center justify-center">
+                      <span className="font-black">2</span>
+                    </div>
+                    <h3 className="text-lg font-bold">Expedientes y evidencia</h3>
+                  </div>
+                  <p className="text-gray-400">
+                    Bitácoras, historial y documentos organizados por cliente/operación para auditoría y visitas de verificación.
+                  </p>
+                </div>
+
+                <div className="bg-gray-900/60 border border-gray-800 rounded-2xl p-6">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-r from-teal-500 to-blue-500 flex items-center justify-center">
+                      <span className="font-black">3</span>
+                    </div>
+                    <h3 className="text-lg font-bold">Implementación rápida</h3>
+                  </div>
+                  <p className="text-gray-400">
+                    Empieza con archivo (Excel/CSV) o integra por API. Diseñado para crecer contigo sin proyectos eternos.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* CÓMO FUNCIONA */}
+        <section id="como-funciona" className="py-20 px-6 bg-gray-900/50">
+          <div className="max-w-7xl mx-auto">
+            <div className="text-center mb-16">
+              <h2 className="text-4xl font-black mb-4">Cómo funciona</h2>
+              <p className="text-xl text-gray-400">Tres pasos simples para operar PLD con orden y evidencia</p>
+            </div>
+
+            <div className="grid md:grid-cols-3 gap-8">
+              <div className="text-center group">
+                <div className="w-20 h-20 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform">
+                  <span className="text-2xl font-black text-white">1</span>
+                </div>
+                <h3 className="text-2xl font-bold mb-4">Centraliza tus datos</h3>
+                <p className="text-gray-400">
+                  Carga operaciones (Excel/CSV) o conecta por API. Estandariza campos, valida consistencia y crea historial por cliente.
+                </p>
+              </div>
+
+              <div className="text-center group">
+                <div className="w-20 h-20 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform">
+                  <span className="text-2xl font-black text-white">2</span>
+                </div>
+                <h3 className="text-2xl font-bold mb-4">Evalúa riesgo PLD</h3>
+                <p className="text-gray-400">
+                  El sistema identifica señales, patrones y anomalías, asigna puntajes de riesgo y recomienda priorización de casos.
+                </p>
+              </div>
+
+              <div className="text-center group">
+                <div className="w-20 h-20 bg-gradient-to-r from-teal-500 to-blue-500 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform">
+                  <span className="text-2xl font-black text-white">3</span>
+                </div>
+                <h3 className="text-2xl font-bold mb-4">Genera evidencia y reportes</h3>
+                <p className="text-gray-400">
+                  Expide reportes y expedientes auditablemente: bitácoras, KPIs, documentación y paquetes listos para revisión.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-16 text-center">
+              <div className="inline-flex items-center gap-4 px-8 py-4 bg-gradient-to-r from-green-600/20 to-teal-600/20 border border-green-600/30 rounded-2xl">
+                <span className="text-2xl">⚡</span>
+                <div className="text-left">
+                  <div className="font-bold text-green-400">Implementación sin fricción</div>
+                  <div className="text-sm text-gray-400">Empieza con archivo hoy. Integra por API cuando estés listo.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* MODELOS IA */}
+        <section className="py-20 px-6">
+          <div className="max-w-7xl mx-auto">
+            <div className="text-center mb-16">
+              <h2 className="text-4xl font-black mb-4">
+                <span className="bg-gradient-to-r from-emerald-500 to-teal-400 bg-clip-text text-transparent">
+                  IA aplicada a PLD (sin perder explicabilidad)
+                </span>
+              </h2>
+              <p className="text-xl text-gray-400">
+                Modelos que ayudan a priorizar riesgo, reducir falsos positivos y mantener trazabilidad para auditoría.
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-3 gap-8">
+              <div className="bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-2xl p-8 text-center">
+                <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-500 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                  <span className="text-2xl font-black text-white">S</span>
+                </div>
+                <h3 className="text-2xl font-bold mb-4 text-blue-400">Aprendizaje supervisado</h3>
+                <p className="text-gray-400">
+                  Aprende de casos históricos (etiquetados) para identificar comportamientos similares con consistencia.
+                </p>
+              </div>
+
+              <div className="bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-2xl p-8 text-center">
+                <div className="w-16 h-16 bg-gradient-to-r from-green-600 to-teal-500 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                  <span className="text-2xl font-black text-white">U</span>
+                </div>
+                <h3 className="text-2xl font-bold mb-4 text-green-400">Aprendizaje no supervisado</h3>
+                <p className="text-gray-400">
+                  Detecta anomalías y patrones emergentes para fortalecer controles sin depender solo de reglas estáticas.
+                </p>
+              </div>
+
+              <div className="bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-2xl p-8 text-center">
+                <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                  <span className="text-2xl font-black text-white">R</span>
+                </div>
+                <h3 className="text-2xl font-bold mb-4 text-emerald-400">Aprendizaje por refuerzo</h3>
+                <p className="text-gray-400">
+                  Mejora con retroalimentación del equipo de cumplimiento (investigación interna) para afinar priorización.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* LFPIORPI */}
+        <section id="lfpiorpi" className="py-20 px-6 bg-gradient-to-b from-black to-gray-900">
+          <div className="max-w-7xl mx-auto">
+            <div className="text-center mb-12">
+              <h2 className="text-4xl md:text-5xl font-black mb-4">Cumplimiento LFPIORPI (Artículo 17)</h2>
+              <p className="text-xl text-gray-400 max-w-4xl mx-auto mb-4">
+                TarantulaHawk facilita el trabajo operativo del sujeto obligado: ordena información, automatiza análisis y genera evidencia.
+                La plataforma está pensada para apoyar procesos internos de cumplimiento PLD con enfoque en auditoría.
+              </p>
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600/10 border border-emerald-600/30 rounded-full mb-8">
+                <Shield className="w-4 h-4 text-emerald-400" />
+                <span className="text-sm text-emerald-400">
+                  El sujeto obligado mantiene la responsabilidad legal del cumplimiento y de sus decisiones
+                </span>
+              </div>
+            </div>
+
+            <div className="mb-10 max-w-5xl mx-auto">
+              <div className="bg-gray-900/50 border border-gray-700 rounded-xl p-6">
+                <h3 className="text-lg font-bold mb-4 text-white">Capacidades (enfoque Art. 17)</h3>
+                <div className="grid md:grid-cols-3 gap-4 text-sm">
+                  {capabilityLegend.map((x) => (
+                    <div key={x.key} className="flex items-center gap-3">
+                      <div className={`w-3 h-3 ${x.dot} rounded-full`} />
+                      <span className="text-gray-300">{x.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+              {lfpiorpiCapabilities.map((item, idx) => (
+                <div key={idx} className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
+                  <div className="flex items-start gap-4 mb-4">
+                    <div
+                      className={`w-12 h-12 bg-gradient-to-br ${colorTileGradient(item.color)} rounded-lg flex items-center justify-center flex-shrink-0`}
+                    >
+                      <span className="text-white font-black text-lg">{item.num}</span>
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-bold text-white mb-2">{item.title}</h3>
+                      <p className="text-sm text-gray-400 mb-3">{item.desc}</p>
+                      <div className="flex items-center gap-2">
+                        <div className={`w-3 h-3 ${colorDotClass(item.color)} rounded-full`} />
+                        <span className="text-xs text-gray-400">
+                          {item.color === 'green'
+                            ? 'Automatizado por TarantulaHawk'
+                            : item.color === 'blue'
+                            ? 'Parcial (asistencia + trazabilidad)'
+                            : 'Proceso interno del sujeto obligado'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="bg-blue-900/10 border border-blue-800/30 rounded-xl p-6 mb-8">
+              <h3 className="text-lg font-bold mb-3 text-cyan-400">Aviso legal importante</h3>
+              <p className="text-sm text-gray-300 leading-relaxed">
+                TarantulaHawk es una plataforma tecnológica de PLD que facilita procesos operativos de cumplimiento. El sujeto obligado
+                permanece total y únicamente responsable del cumplimiento con la LFPIORPI y de todas las obligaciones aplicables. Esta
+                plataforma no proporciona asesoría legal y no asume responsabilidad por resultados de cumplimiento. Consulta con tu
+                equipo legal y expertos de cumplimiento para decisiones regulatorias.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* ABOUT */}
+        <section id="about" className="py-20 px-6">
+          <div className="max-w-4xl mx-auto text-center">
+            <h2 className="text-4xl font-black mb-6">Acerca de TarantulaHawk</h2>
+            <p className="text-xl text-gray-400 mb-12">
+              TarantulaHawk es un sistema de prevención de lavado de dinero diseñado para el mercado mexicano. Nuestro enfoque es hacer
+              el cumplimiento más claro y eficiente: menos trabajo manual, mejor evidencia y decisiones con trazabilidad.
             </p>
 
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <div className="bg-black border border-gray-800 rounded-2xl p-8">
+              <h3 className="text-2xl font-bold mb-6">Lo que nos hace diferentes</h3>
+              <div className="grid md:grid-cols-2 gap-6">
+                <div className="flex items-start gap-3 text-left">
+                  <CheckCircle className="w-5 h-5 text-cyan-400 flex-shrink-0 mt-1" />
+                  <span className="text-gray-300">Enfoque 100% México: LFPIORPI, sujetos obligados y actividades vulnerables.</span>
+                </div>
+                <div className="flex items-start gap-3 text-left">
+                  <CheckCircle className="w-5 h-5 text-cyan-400 flex-shrink-0 mt-1" />
+                  <span className="text-gray-300">Evidencia y trazabilidad para auditoría (bitácoras, expedientes, KPIs).</span>
+                </div>
+                <div className="flex items-start gap-3 text-left">
+                  <CheckCircle className="w-5 h-5 text-cyan-400 flex-shrink-0 mt-1" />
+                  <span className="text-gray-300">Alertas priorizadas y explicables para reducir ruido operativo.</span>
+                </div>
+                <div className="flex items-start gap-3 text-left">
+                  <CheckCircle className="w-5 h-5 text-cyan-400 flex-shrink-0 mt-1" />
+                  <span className="text-gray-300">Arranque rápido: archivo hoy, API mañana (cuando tu operación lo requiera).</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* CTA */}
+        <section className="py-20 px-6 bg-gradient-to-b from-black to-gray-900">
+          <div className="max-w-4xl mx-auto text-center">
+            <h2 className="text-5xl font-black mb-4">¿Listo para ordenar tu operación PLD?</h2>
+            <p className="text-xl text-gray-400 mb-8">
+              Empieza en minutos. Si quieres, hacemos una demo enfocada a tu actividad vulnerable y tu operación real.
+            </p>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <button
-                className="px-8 py-4 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-lg font-bold text-lg hover:from-emerald-700 hover:to-emerald-500 transition"
                 onClick={() => {
-                  setOnboardingMode('signup');
+                  setOnboardingMode('login');
                   setShowOnboarding(true);
                 }}
+                className="px-10 py-5 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-lg font-bold text-xl hover:from-emerald-700 hover:to-emerald-600 transition shadow-2xl shadow-emerald-500/50"
               >
-                {language === 'en' ? 'Start Free Trial - Get $500 USD' : 'Registrarse - Obtén $500 USD Gratis'}
+                Acceder a la plataforma
               </button>
-              <button 
-                onClick={() => {
-                  // Trigger the AI chat to open
-                  const chatButton = document.querySelector('[role="chat-button"]') as HTMLButtonElement;
-                  if (chatButton) chatButton.click();
-                }} 
-                className="px-8 py-4 border-2 border-teal-500 rounded-lg font-bold text-lg hover:bg-teal-500/10 transition"
+              <button
+                onClick={openChat}
+                className="px-10 py-5 border-2 border-teal-500 rounded-lg font-bold text-xl hover:bg-teal-500/10 transition"
               >
-                {language === 'en' ? 'Chat with us' : 'Chat con nosotros'}
+                Hablar con un especialista
               </button>
             </div>
           </div>
+        </section>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mt-20">
-            <div className="text-center">
-              <div className="text-4xl font-black text-blue-500 mb-2">&lt;100ms</div>
-              <div className="text-gray-400">Transaction Scoring</div>
-            </div>
-            <div className="text-center">
-              <div className="text-4xl font-black text-emerald-500 mb-2">&gt;95%</div>
-              <div className="text-gray-400">Detection Accuracy</div>
-            </div>
-            <div className="text-center">
-              <div className="text-4xl font-black text-teal-400 mb-2">3-Layer</div>
-              <div className="text-gray-400">ML Architecture</div>
-            </div>
-            <div className="text-center">
-              <div className="text-4xl font-black text-teal-400 mb-2">24/7</div>
-              <div className="text-gray-400">Monitoring</div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* How It Works - Simple 3-Step Process */}
-      <section id="how-it-works" className="py-20 px-6 bg-gray-900/50">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-black mb-4">
-              {language === 'en' ? 'How It Works' : 'Cómo Funciona'}
-            </h2>
-            <p className="text-xl text-gray-400">
-              {language === 'en' ? 'Three simple steps to AML compliance' : 'Tres pasos simples para cumplimiento PLD'}
+        <footer className="border-t border-gray-800 py-12 px-6">
+          <div className="max-w-7xl mx-auto text-center text-gray-500">
+            <p>2025 TarantulaHawk. Todos los derechos reservados.</p>
+            <p className="mt-2 text-sm">
+              Sistema PLD México | Software de Prevención de Lavado de Dinero | LFPIORPI Artículo 17 | Sujetos obligados
             </p>
+            <p className="mt-1 text-sm">Evidencia auditable • Monitoreo de operaciones • Evaluación de riesgo • Expedientes</p>
           </div>
+        </footer>
+      </div>
 
-          <div className="grid md:grid-cols-3 gap-8">
-            <div className="text-center group">
-              <div className="w-20 h-20 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform">
-                <span className="text-2xl font-black text-white">1</span>
-              </div>
-              <h3 className="text-2xl font-bold mb-4">
-                {language === 'en' ? 'Connect Your Data' : 'Conecta Tus Datos'}
-              </h3>
-              <p className="text-gray-400">
-                {language === 'en' 
-                  ? 'Upload transaction files or connect directly through our secure API. Deploy on your own servers for maximum security.'
-                  : 'Sube archivos de transacciones o conéctate directamente a través de nuestra API segura. Despliega en tus propios servidores para máxima seguridad.'}
-              </p>
-            </div>
+      <AIChat language={'es'} />
 
-            <div className="text-center group">
-              <div className="w-20 h-20 bg-gradient-to-r from-emerald-500 to-teal-500 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform">
-                <span className="text-2xl font-black text-white">2</span>
-              </div>
-              <h3 className="text-2xl font-bold mb-4">
-                {language === 'en' ? 'AI-Powered Analysis' : 'Análisis AI-Powered'}
-              </h3>
-              <p className="text-gray-400">
-                {language === 'en' 
-                  ? 'Advanced AI algorithms detect suspicious patterns, flag risky activities, and generate compliance reports in real-time.'
-                  : 'Algoritmos avanzados de IA detectan patrones sospechosos, marcan actividades riesgosas y generan reportes de cumplimiento en tiempo real.'}
-              </p>
-            </div>
-
-            <div className="text-center group">
-              <div className="w-20 h-20 bg-gradient-to-r from-teal-500 to-blue-500 rounded-2xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform">
-                <span className="text-2xl font-black text-white">3</span>
-              </div>
-              <h3 className="text-2xl font-bold mb-4">
-                {language === 'en' ? 'Get Reports & Alerts' : 'Obtener Reportes y Alertas'}
-              </h3>
-              <p className="text-gray-400">
-                {language === 'en' 
-                  ? 'Receive instant compliance reports and real-time alerts through your personalized dashboard.'
-                  : 'Recibe reportes de cumplimiento instantáneos y alertas en tiempo real a través de tu panel personalizado.'}
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-16 text-center">
-            <div className="inline-flex items-center gap-4 px-8 py-4 bg-gradient-to-r from-green-600/20 to-teal-600/20 border border-green-600/30 rounded-2xl">
-              <span className="text-2xl">💳</span>
-              <div className="text-left">
-                <div className="font-bold text-green-400">
-                  {language === 'en' ? 'Pay-as-you-go Pricing' : 'Precios de Pago por Uso'}
-                </div>
-                <div className="text-sm text-gray-400">
-                  {language === 'en' 
-                    ? 'Perfect for fintechs & small businesses. No setup fees, no minimums.'
-                    : 'Perfecto para fintechs y pequeñas empresas. Sin tarifas de configuración, sin mínimos.'}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="solutions" className="py-20 px-6 bg-gradient-to-b from-black to-gray-900">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-black mb-4">
-              <span className="bg-gradient-to-r from-emerald-500 to-teal-400 bg-clip-text text-transparent">
-                {language === 'en' ? 'Solutions for Every Business Size' : 'Soluciones para Cada Tamaño de Empresa'}
-              </span>
-            </h2>
-            <p className="text-xl text-gray-400 max-w-4xl mx-auto mb-12">
-              {language === 'en' 
-                ? 'From small fintechs to large corporations, access our market-leading AI models through secure API integration running on your own servers. The most powerful AML detection technology available.'
-                : 'Desde pequeñas fintechs hasta grandes corporaciones, accede a nuestros modelos de IA líderes del mercado con tan sólo subir un archivo de Excel o a través de integración API segura ejecutándose en tus propios servidores. La tecnología de detección PLD más poderosa que existe.'}
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* 3 AI Models Section */}
-      <section className="py-20 px-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-black mb-4">
-              <span className="bg-gradient-to-r from-emerald-500 to-teal-400 bg-clip-text text-transparent">
-                {language === 'en' ? 'Market-Leading AI Models' : 'Modelos de IA Líderes del Mercado'}
-              </span>
-            </h2>
-            <p className="text-xl text-gray-400">
-              {language === 'en' 
-                ? 'Our trained models are the most powerful in the market. The only AML platform combining supervised, unsupervised, and reinforcement learning for unmatched detection accuracy.'
-                : 'Nuestros modelos entrenados son los más potentes del mercado. La única plataforma PLD que combina aprendizaje supervisado, no supervisado y por refuerzo para precisión de detección inigualable.'}
-            </p>
-          </div>
-
-          <div className="grid md:grid-cols-3 gap-8">
-            <div className="bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-2xl p-8 text-center">
-              <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-purple-500 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                <span className="text-2xl font-black text-white">S</span>
-              </div>
-              <h3 className="text-2xl font-bold mb-4 text-blue-400">
-                {language === 'en' ? 'Supervised Learning' : 'Aprendizaje Supervisado'}
-              </h3>
-              <p className="text-gray-400">
-                {language === 'en' 
-                  ? 'Trained on known money laundering patterns to identify similar suspicious activities with high accuracy.'
-                  : 'Entrenado en patrones conocidos de lavado de dinero para identificar actividades sospechosas similares con alta precisión.'}
-              </p>
-            </div>
-
-            <div className="bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-2xl p-8 text-center">
-              <div className="w-16 h-16 bg-gradient-to-r from-green-600 to-teal-500 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                <span className="text-2xl font-black text-white">U</span>
-              </div>
-              <h3 className="text-2xl font-bold mb-4 text-green-400">
-                {language === 'en' ? 'Unsupervised Learning' : 'Aprendizaje No Supervisado'}
-              </h3>
-              <p className="text-gray-400">
-                {language === 'en' 
-                  ? 'Discovers new and evolving money laundering schemes by detecting anomalies in transaction patterns.'
-                  : 'Descubre esquemas de lavado de dinero nuevos y en evolución detectando anomalías en patrones de transacciones.'}
-              </p>
-            </div>
-
-            <div className="bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-2xl p-8 text-center">
-              <div className="w-16 h-16 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                <span className="text-2xl font-black text-white">R</span>
-              </div>
-              <h3 className="text-2xl font-bold mb-4 text-emerald-400">
-                {language === 'en' ? 'Reinforcement Learning' : 'Aprendizaje por Refuerzo'}
-              </h3>
-              <p className="text-gray-400">
-                {language === 'en' 
-                  ? 'Continuously improves detection accuracy by learning from investigator feedback and regulatory updates.'
-                  : 'Mejora continuamente la precisión de detección aprendiendo de retroalimentación de investigadores y actualizaciones regulatorias.'}
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="services" className="py-20 px-6">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-16">
-            <Shield className="w-16 h-16 text-teal-400 mx-auto mb-6" />
-            <h2 className="text-4xl font-black mb-4">
-              {language === 'en' ? 'AML Compliance Services' : 'Servicios de Cumplimiento PLD'}
-            </h2>
-          </div>
-
-          <div className="grid lg:grid-cols-2 gap-12">
-            {/* US AML Section */}
-            <div className="bg-gradient-to-br from-blue-900/20 to-blue-800/10 border border-blue-800/30 rounded-2xl p-8">
-              <h3 className="text-3xl font-bold mb-6 text-blue-400">
-                {language === 'en' ? 'US AML Compliance' : 'Cumplimiento PLD Estados Unidos'}
-              </h3>
-              <div className="space-y-4">
-                <div className="flex items-start gap-3">
-                  <div className="w-2 h-2 bg-blue-400 rounded-full mt-2 flex-shrink-0"></div>
-                  <div>
-                    <h4 className="font-semibold text-white mb-2">Bank Secrecy Act (BSA)</h4>
-                    <p className="text-gray-300 text-sm">
-                      {language === 'en' ? 'Compliance with federal anti-money laundering regulations and reporting requirements.' : 'Cumplimiento con regulaciones federales anti-lavado y requisitos de reporte.'}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <div className="w-2 h-2 bg-blue-400 rounded-full mt-2 flex-shrink-0"></div>
-                  <div>
-                    <h4 className="font-semibold text-white mb-2">USA PATRIOT Act</h4>
-                    <p className="text-gray-300 text-sm">
-                      {language === 'en' ? 'Enhanced due diligence and customer identification program compliance.' : 'Debida diligencia reforzada y cumplimiento del programa de identificación de clientes.'}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3">
-                  <div className="w-2 h-2 bg-blue-400 rounded-full mt-2 flex-shrink-0"></div>
-                  <div>
-                    <h4 className="font-semibold text-white mb-2">SAR Filing</h4>
-                    <p className="text-gray-300 text-sm">
-                      {language === 'en' ? 'Suspicious Activity Reports generation and submission to authorities.' : 'Generación y envío de Reportes de Actividad Sospechosa a las autoridades.'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Mexico AML Section */}
-            <div className="bg-gradient-to-br from-emerald-900/20 to-emerald-800/10 border border-emerald-800/30 rounded-2xl p-8">
-              <h3 className="text-3xl font-bold mb-6 text-emerald-400">
-                {language === 'en' ? 'Mexico LFPIORPI Compliance' : 'Cumplimiento LFPIORPI México'}
-              </h3>
-
-              {/* Responsive Table */}
-              <div className="overflow-x-auto">
-                <div className="min-w-full">
-                  {/* Mobile: Stack format */}
-                  <div className="block md:hidden space-y-4">
-                    <div className="bg-gray-800/50 rounded-lg p-4 border-l-4 border-emerald-500">
-                      <h4 className="font-semibold text-emerald-400 mb-2">
-                        {language === 'en' ? 'Transactions Monitoring' : 'Monitoreo de Transacciones'}
-                      </h4>
-                      <p className="text-gray-300 text-sm mb-3">
-                        {language === 'en' 
-                          ? 'AI-Powered Transactions Analysis'
-                          : 'Análisis de Transacciones con IA'}
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <span className="text-teal-400 font-bold">✓</span>
-                        <span className="text-xs text-gray-400">
-                          {language === 'en' ? 'Solved' : 'Resuelto'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="bg-gray-800/50 rounded-lg p-4 border-l-4 border-emerald-500">
-                      <h4 className="font-semibold text-emerald-400 mb-2">
-                        {language === 'en' ? 'XML Reports' : 'Reportes XML'}
-                      </h4>
-                      <p className="text-gray-300 text-sm mb-3">
-                        {language === 'en' 
-                          ? 'Official format-ready for SHCP'
-                          : 'Formato oficial listo para SHCP'}
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <span className="text-teal-400 font-bold">✓</span>
-                        <span className="text-xs text-gray-400">
-                          {language === 'en' ? 'Solved' : 'Resuelto'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="bg-gray-800/50 rounded-lg p-4 border-l-4 border-emerald-500">
-                      <h4 className="font-semibold text-emerald-400 mb-2">
-                        {language === 'en' ? '10-Year Storage' : 'Custodia 10 años'}
-                      </h4>
-                      <p className="text-gray-300 text-sm mb-3">
-                        {language === 'en' 
-                          ? 'Encrypted retention'
-                          : 'Retención cifrada'}
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <span className="text-teal-400 font-bold">✓</span>
-                        <span className="text-xs text-gray-400">
-                          {language === 'en' ? 'Solved' : 'Resuelto'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="bg-gray-800/50 rounded-lg p-4 border-l-4 border-emerald-500">
-                      <h4 className="font-semibold text-emerald-400 mb-2">
-                        {language === 'en' ? 'Audit and Reporting' : 'Auditoría y Reportes'}
-                      </h4>
-                      <p className="text-gray-300 text-sm mb-3">
-                        {language === 'en' 
-                          ? 'Dashboards and documents, KPI ready for audit'
-                          : 'Dashboards y documentos, KPI listos para auditoría'}
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <span className="text-teal-400 font-bold">✓</span>
-                        <span className="text-xs text-gray-400">
-                          {language === 'en' ? 'Solved' : 'Resuelto'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Desktop: Table format */}
-                  <div className="hidden md:block">
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr className="bg-gradient-to-r from-emerald-600 to-emerald-600">
-                          <th className="px-4 py-3 text-left font-bold text-black text-sm rounded-l-lg">
-                            {language === 'en' ? 'Law Obligation' : 'Obligación Legal'}
-                          </th>
-                          <th className="px-4 py-3 text-left font-bold text-black text-sm">
-                            {language === 'en' ? 'TarantulaHawk' : 'TarantulaHawk'}
-                          </th>
-                          <th className="px-4 py-3 text-center font-bold text-black text-sm rounded-r-lg">
-                            {language === 'en' ? 'Solved' : 'Resuelto'}
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr className="bg-gray-800/30 hover:bg-gray-700/50 transition-colors">
-                          <td className="px-4 py-3 font-medium text-emerald-400 border-l-2 border-emerald-500 text-sm">
-                            {language === 'en' ? 'Transactions Monitoring' : 'Monitoreo de Transacciones'}
-                          </td>
-                          <td className="px-4 py-3 text-gray-300 text-sm">
-                            {language === 'en' 
-                              ? 'AI-Powered Transactions Analysis'
-                              : 'Análisis de Transacciones con IA'}
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <span className="text-teal-400 font-bold">✓</span>
-                          </td>
-                        </tr>
-                        <tr className="bg-gray-800/30 hover:bg-gray-700/50 transition-colors">
-                          <td className="px-4 py-3 font-medium text-emerald-400 border-l-2 border-emerald-500 text-sm">
-                            {language === 'en' ? 'XML Reports' : 'Reportes XML'}
-                          </td>
-                          <td className="px-4 py-3 text-gray-300 text-sm">
-                            {language === 'en' 
-                              ? 'Official format-ready for SHCP'
-                              : 'Formato oficial listo para SHCP'}
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <span className="text-teal-400 font-bold">✓</span>
-                          </td>
-                        </tr>
-                        <tr className="bg-gray-800/30 hover:bg-gray-700/50 transition-colors">
-                          <td className="px-4 py-3 font-medium text-emerald-400 border-l-2 border-emerald-500 text-sm">
-                            {language === 'en' ? '10-Year Storage' : 'Custodia 10 años'}
-                          </td>
-                          <td className="px-4 py-3 text-gray-300 text-sm">
-                            {language === 'en' 
-                              ? 'Encrypted retention'
-                              : 'Retención cifrada'}
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <span className="text-teal-400 font-bold">✓</span>
-                          </td>
-                        </tr>
-                        <tr className="bg-gray-800/30 hover:bg-gray-700/50 transition-colors">
-                          <td className="px-4 py-3 font-medium text-emerald-400 border-l-2 border-emerald-500 text-sm">
-                            {language === 'en' ? 'Audit and Reporting' : 'Auditoría y Reportes'}
-                          </td>
-                          <td className="px-4 py-3 text-gray-300 text-sm">
-                            {language === 'en' 
-                              ? 'Dashboards and documents, KPI ready for audit'
-                              : 'Dashboards y documentos, KPI listos para auditoría'}
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <span className="text-teal-400 font-bold">✓</span>
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="py-20 px-6 bg-gradient-to-b from-black to-gray-900">
-        <div className="max-w-7xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-4xl md:text-5xl font-black mb-4">
-              {language === 'en' ? 'Mexico LFPIORPI Compliance' : 'Cumplimiento LFPIORPI México'}
-            </h2>
-            <p className="text-xl text-gray-400 max-w-4xl mx-auto mb-4">
-              {language === 'en'
-                ? 'AI-powered solution for Mexican institutions to assist in compliance with Article 18 obligations under LFPIORPI (reformed July 2025):'
-                : 'Solución potenciada por IA para instituciones mexicanas para asistir en el cumplimiento de las obligaciones del Artículo 18 bajo LFPIORPI (reformado julio 2025):'}
-            </p>
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600/10 border border-emerald-600/30 rounded-full mb-8">
-              <Shield className="w-4 h-4 text-emerald-400" />
-              <span className="text-sm text-emerald-400">
-                {language === 'en' ? 'Institutions Remain Legally Responsible for the whole process' : 'Las Instituciones Mantienen la Responsabilidad Legal de todo el proceso'}
-              </span>
-            </div>
-          </div>
-
-          <div className="mb-12 max-w-5xl mx-auto">
-            <div className="bg-gray-900/50 border border-gray-700 rounded-xl p-6">
-              <h3 className="text-lg font-bold mb-4 text-white">
-                {language === 'en' ? 'LFPIORPI Article 18 - TH Solution Capabilities' : 'LFPIORPI Articulo 18 - Capacidades de Solución TH'}
-              </h3>
-              <div className="grid md:grid-cols-3 gap-4 text-sm">
-                <div className="flex items-center gap-3">
-                  <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                  <span className="text-gray-300">
-                    {language === 'en' ? 'TH AI-Powered Solution' : 'Solución IA TH'}
-                  </span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                  <span className="text-gray-300">
-                    {language === 'en' ? 'Partially TH Solved' : 'Parcialmente Resuelto por TH'}
-                  </span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-3 h-3 bg-gray-500 rounded-full"></div>
-                  <span className="text-gray-300">
-                    {language === 'en' ? 'Manual Process Institution Responsibility' : 'Proceso Manual Responsabilidad Institución'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-            {[
-              { num: 'I', titleEN: 'Customer ID & KYC Verification', titleES: 'Identificacion de Clientes y Verificacion KYC', descEN: 'Document storage, OCR extraction, API validation (INE/RENAPO)', descES: 'Almacenamiento de docs, extraccion OCR, validacion API (INE/RENAPO)', color: 'gray' },
-              { num: 'II', titleEN: 'Business Relationship Data Management', titleES: 'Gestion de Datos de Relacion Comercial', descEN: 'Activity data storage, SAT RFC lookup integration', descES: 'Almacenamiento de datos de actividad, consulta RFC SAT', color: 'gray' },
-              { num: 'III', titleEN: 'Beneficial Ownership Identification', titleES: 'Identificacion de Beneficiario Controlador', descEN: 'Corporate structure visualization, ownership analysis tools', descES: 'Visualizacion de estructura corporativa, herramientas de analisis', color: 'gray' },
-              { num: 'IV', titleEN: '10-Year Document Custody & Retention', titleES: 'Custodia y Retencion de Documentos 10 Anos', descEN: 'Encrypted cloud storage, automatic retention, audit trails', descES: 'Almacenamiento encriptado en nube, retencion automatica, trazabilidad', color: 'blue' },
-              { num: 'IV Bis', titleEN: 'Registry in Padron SAT', titleES: 'Registro en Padron SAT', descEN: 'Checklist and guide provided, FI registers with SAT directly', descES: 'Lista de verificacion y guia, IF se registra directamente con SAT', color: 'gray' },
-              { num: 'V', titleEN: 'Facilitate SHCP Verification', titleES: 'Facilitar Verificacion SHCP', descEN: 'Pre-built audit reports, document packages for SHCP inspections', descES: 'Reportes de auditoria, paquetes de documentos para inspecciones SHCP', color: 'blue' },
-              { num: 'VI', titleEN: 'Present Avisos & Reports to SHCP', titleES: 'Presentar Avisos e Informes a SHCP', descEN: 'XML generation for SHCP, automated submission if allowed', descES: 'Generacion XML para SHCP, envio automatizado si permitido', color: 'green' },
-              { num: 'VII', titleEN: 'Risk Assessment & EBR Analysis', titleES: 'Evaluacion de Riesgo y Analisis EBR', descEN: 'Core platform: ML-powered risk scoring and classification', descES: 'Funcion principal: scoring de riesgo con ML y clasificacion', color: 'green' },
-              { num: 'VIII', titleEN: 'AML Policy Manual Management', titleES: 'Gestión de Manual de Políticas PLD', descEN: 'Template library, version control, FI customization', descES: 'Biblioteca de plantillas, control de versiones, personalización IF', color: 'gray' },
-              { num: 'IX', titleEN: 'Personnel Training & Certification', titleES: 'Capacitación y Certificación de Personal', descEN: 'Online AML courses, materials, LMS with certification tracking', descES: 'Cursos PLD online, materiales, LMS con seguimiento de certificaciones', color: 'gray' },
-              { num: 'X', titleEN: 'Automated Transaction Monitoring', titleES: 'Monitoreo Automatizado de Transacciones', descEN: 'Core platform: Real-time 3-layer ML monitoring, alerts', descES: 'Funcion principal: Monitoreo ML de 3 capas en tiempo real, alertas', color: 'green' },
-              { num: 'XI', titleEN: 'AML Audit Management & Reporting', titleES: 'Gestión de Auditorías PLD e Informes', descEN: 'Compliance reports, audit dashboards, KPI tracking', descES: 'Reportes de cumplimiento, dashboards de auditoría, seguimiento KPIs', color: 'green' },
-            ].map((item, idx) => (
-              <div key={idx} className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
-                <div className="flex items-start gap-4 mb-4">
-                  <div className={`w-12 h-12 bg-gradient-to-br ${item.color === 'green' ? 'from-green-600 to-teal-500' : item.color === 'blue' ? 'from-blue-600 to-blue-500' : 'from-blue-600 to-emerald-500'} rounded-lg flex items-center justify-center flex-shrink-0`}>
-                    <span className="text-white font-black text-lg">{item.num}</span>
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-bold text-white mb-2">
-                      {language === 'en' ? item.titleEN : item.titleES}
-                    </h3>
-                    <p className="text-sm text-gray-400 mb-3">
-                      {language === 'en' ? item.descEN : item.descES}
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <div className={`w-3 h-3 bg-${item.color}-500 rounded-full`}></div>
-                      <span className="text-xs text-gray-400">
-                        {item.color === 'green' ? (language === 'en' ? 'TH AI-Powered Solution' : 'Solución IA TH') :
-                         item.color === 'blue' ? (language === 'en' ? 'Partially TH Solved' : 'Parcialmente Resuelto por TH') :
-                         (language === 'en' ? 'Manual Process Institution Responsibility' : 'Proceso Manual Responsabilidad Institución')}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="bg-blue-900/10 border border-blue-800/30 rounded-xl p-6 mb-8">
-            <h3 className="text-lg font-bold mb-3 text-cyan-400">
-              {language === 'en' ? 'Important Legal Disclaimer - LFPIORPI Compliance' : 'Aviso Legal Importante - Cumplimiento LFPIORPI'}
-            </h3>
-            <p className="text-sm text-gray-300 leading-relaxed">
-              {language === 'en'
-                ? 'TarantulaHawk is an AML technology platform that facilitates compliance processes for financial institutions. The Financial Institution remains fully and solely responsible for compliance with LFPIORPI, BSA, and all regulatory obligations in US and Mexico. This platform does not provide legal advice and does not assume liability for regulatory compliance outcomes. Always consult with qualified legal counsel and compliance experts for AML matters.'
-                : 'TarantulaHawk es una plataforma tecnológica de PLD que facilita procesos de cumplimiento para instituciones financieras. La Institución Financiera permanece total y únicamente responsable del cumplimiento con LFPIORPI, BSA y todas las obligaciones regulatorias en Estados Unidos y México. Esta plataforma no proporciona asesoría legal y no asume responsabilidad por resultados de cumplimiento regulatorio. Siempre consulte con asesoría legal calificada y expertos en cumplimiento para asuntos de Prevención de Lavado de Dinero.'}
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section id="about" className="py-20 px-6">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-4xl font-black mb-6">
-            {language === 'en' ? 'About TarantulaHawk' : 'Acerca de TarantulaHawk'}
-          </h2>
-          <p className="text-xl text-gray-400 mb-12">
-            {language === 'en'
-              ? 'TarantulaHawk is a technology platform that provides an AML AI-powered solution to assist full compliance with US and Mexican regulations and authorities.'
-              : 'TarantulaHawk es una plataforma tecnológica que proporciona una solución PLD potenciada por IA para asistir en el cumplimiento total con las regulaciones y autoridades de Estados Unidos y México.'}
-          </p>
-
-          <div className="bg-black border border-gray-800 rounded-2xl p-8">
-            <h3 className="text-2xl font-bold mb-6">{language === 'en' ? 'What Makes TarantulaHawk Unique for AML' : 'Lo Que Hace Único a TarantulaHawk para PLD'}</h3>
-            <div className="grid md:grid-cols-2 gap-6">
-              <div className="flex items-start gap-3 text-left">
-                <CheckCircle className="w-5 h-5 text-cyan-400 flex-shrink-0 mt-1" />
-                <span className="text-gray-300">
-                  {language === 'en' 
-                    ? 'Only AML platform combining supervised, unsupervised, and reinforcement learning models'
-                    : 'Única plataforma PLD que combina modelos de aprendizaje supervisado, no supervisado y por refuerzo'}
-                </span>
-              </div>
-              <div className="flex items-start gap-3 text-left">
-                <CheckCircle className="w-5 h-5 text-cyan-400 flex-shrink-0 mt-1" />
-                <span className="text-gray-300">
-                  {language === 'en'
-                    ? 'Dual compliance for US (BSA) and Mexico (LFPIORPI, SHCP, CNBV)'
-                    : 'Cumplimiento dual para US (BSA) y México (LFPIORPI, SHCP, CNBV)'}
-                </span>
-              </div>
-              <div className="flex items-start gap-3 text-left">
-                <CheckCircle className="w-5 h-5 text-cyan-400 flex-shrink-0 mt-1" />
-                <span className="text-gray-300">
-                  {language === 'en' ? 'Sub-100 millisecond real-time transaction risk scoring and AML monitoring' : 'Scoring de riesgo de transacciones en tiempo real en menos de 100 milisegundos y monitoreo PLD'}
-                </span>
-              </div>
-              <div className="flex items-start gap-3 text-left">
-                <CheckCircle className="w-5 h-5 text-cyan-400 flex-shrink-0 mt-1" />
-                <span className="text-gray-300">
-                  {language === 'en' ? 'Self-improving AI system that continuously learns from compliance investigations' : 'Plataforma IA auto-mejorable que aprende continuamente de investigaciones de cumplimiento'}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="py-20 px-6 bg-gradient-to-b from-black to-gray-900">
-        <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-5xl font-black mb-4">
-            {language === 'en' ? 'Ready to Transform Your AML Compliance?' : '¿Listo para Transformar tu Cumplimiento PLD?'}
-          </h2>
-          <p className="text-xl text-gray-400 mb-8">
-            {language === 'en' ? 'Start monitoring transactions and detecting money laundering in minutes' : 'Comienza a monitorear transacciones y detectar lavado de dinero en minutos'}
-          </p>
-          <button 
-            onClick={() => {
-              // Open login modal instead of signup for this CTA
-              setOnboardingMode('login');
-              setShowOnboarding(true);
-            }}
-            className="px-12 py-5 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-lg font-bold text-xl hover:from-emerald-700 hover:to-emerald-600 transition shadow-2xl shadow-emerald-500/50"
-          >
-            {language === 'en' ? 'Access AML Platform' : 'Acceder a Plataforma PLD'}
-          </button>
-        </div>
-      </section>
-
-      <footer className="border-t border-gray-800 py-12 px-6">
-        <div className="max-w-7xl mx-auto text-center text-gray-500">
-          <p>{language === 'en' ? '2025 TarantulaHawk, Inc. All rights reserved.' : '2025 TarantulaHawk, Inc. Todos los derechos reservados.'}</p>
-          <p className="mt-2 text-sm">
-            {language === 'en' ? 'US-Based AML Technology Platform | Secure Data Centers in US and Mexico' : 'Plataforma Tecnológica PLD con Sede en Estados Unidos | Centros de Datos Seguros en Estados Unidos y México'}
-          </p>
-          <p className="mt-1 text-sm">
-            {language === 'en' ? 'Compliant with BSA (USA) and LFPIORPI (Mexico) | Anti-Money Laundering Platform' : 'Cumple con BSA (Estados Unidos) y LFPIORPI (México) | Plataforma de Prevención de Lavado de Dinero'}
-          </p>
-        </div>
-      </footer>
-    </div>
-
-    <AIChat language={language} />
-    
-    {showOnboarding && (
-      <OnboardingForm onClose={() => setShowOnboarding(false)} mode={onboardingMode} />
-    )}
+      {showOnboarding && <OnboardingForm onClose={() => setShowOnboarding(false)} mode={onboardingMode} />}
     </>
   );
 }
