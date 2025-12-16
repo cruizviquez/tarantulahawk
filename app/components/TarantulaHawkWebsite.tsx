@@ -264,6 +264,12 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: AuthEr
                   <a href="#como-funciona" className="text-gray-300 hover:text-white transition">
                     Cómo funciona
                   </a>
+                  <a
+                    href="/sistema-prevencion-lavado-dinero-lfpiopri#sujetos-obligados"
+                    className="text-gray-300 hover:text-white transition"
+                  >
+                    Sujetos obligados
+                  </a>
                   <a href="#lfpiorpi" className="text-gray-300 hover:text-white transition">
                     LFPIORPI Art. 17
                   </a>
@@ -669,6 +675,14 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: AuthEr
             <p className="mt-2 text-sm">
               Sistema PLD México | Software de Prevención de Lavado de Dinero | LFPIORPI Artículo 17 | Sujetos obligados
             </p>
+            <div className="mt-4">
+              <a
+                href="/sistema-prevencion-lavado-dinero-lfpiopri"
+                className="text-sm text-teal-400 hover:text-teal-300 hover:underline"
+              >
+                Guía: Sistema PLD para Sujetos Obligados (LFPIORPI Artículo 17)
+              </a>
+            </div>
             <p className="mt-1 text-sm">Evidencia auditable • Monitoreo de operaciones • Evaluación de riesgo • Expedientes</p>
           </div>
         </footer>
