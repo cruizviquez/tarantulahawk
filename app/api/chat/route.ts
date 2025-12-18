@@ -22,9 +22,17 @@ async function getEmbeddingPipeline() {
 }
 
 async function embedText(text: string): Promise<number[]> {
+  const startEmbed = Date.now();
   const extractor = await getEmbeddingPipeline();
   const output = await extractor(text, { pooling: 'mean', normalize: true });
-  return Array.from(output.data as Float32Array);
+  const embedding = Array.from(output.data as Float32Array);
+  console.log(`[EMBED] ${Date.now() - startEmbed}ms`);
+  return embedding;
+}
+
+function truncateText(text: string, maxChars: number): string {
+  if (text.length <= maxChars) return text;
+  return text.slice(0, maxChars) + '...';
 }
 
 function dedupeReply(text: string) {
@@ -65,6 +73,7 @@ async function callGroq(systemPrompt: string, userPrompt: string) {
   const groqKey = process.env.GROQ_API_KEY;
   if (!groqKey) throw new Error('GROQ_API_KEY not configured');
 
+  const startLLM = Date.now();
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -91,6 +100,7 @@ async function callGroq(systemPrompt: string, userPrompt: string) {
   const data = await res.json();
   const content = data?.choices?.[0]?.message?.content;
   if (!content) throw new Error('Groq returned empty response');
+  console.log(`[GROQ] ${Date.now() - startLLM}ms`);
   return content.trim();
 }
 
@@ -98,6 +108,7 @@ async function callHuggingFace(prompt: string) {
   const hfKey = process.env.HUGGINGFACE_API_KEY || process.env.HF_API_KEY;
   if (!hfKey) throw new Error('HuggingFace API key not configured');
 
+  const startLLM = Date.now();
   // Use free inference API with a smaller model (has rate limits and cold starts)
   const res = await fetch('https://api-inference.huggingface.co/models/HuggingFaceH4/zephyr-7b-beta', {
     method: 'POST',
@@ -129,10 +140,12 @@ async function callHuggingFace(prompt: string) {
   else if (Array.isArray(data) && data.length > 0 && typeof data[0].generated_text === 'string') textOut = data[0].generated_text;
   else if (Array.isArray(data) && data.length > 0 && typeof data[0].text === 'string') textOut = data[0].text;
   else textOut = JSON.stringify(data);
+  console.log(`[HF] ${Date.now() - startLLM}ms`);
   return textOut.trim();
 }
 
 async function retrieveContext(sb: SupabaseClient, queryEmbedding: number[], k = 5) {
+  const startRAG = Date.now();
   const { data, error } = await sb.rpc('match_documents', {
     query_embedding: queryEmbedding,
     match_count: k
@@ -141,20 +154,25 @@ async function retrieveContext(sb: SupabaseClient, queryEmbedding: number[], k =
   if (error) throw error;
   if (!data || data.length === 0) return '';
 
-  return data
+  const context = data
     .map((row: any, idx: number) => `(${idx + 1}) ${row.title ?? 'doc'}: ${row.content}
 URL: ${row.url ?? 'n/a'} (sim=${row.similarity?.toFixed?.(3) ?? 'n/a'})`)
     .join('\n');
+  console.log(`[RAG] retrieved ${data.length} docs in ${Date.now() - startRAG}ms`);
+  return context;
 }
 
 export async function POST(request: Request) {
   try {
     const body: ReqBody = await request.json();
-    const { text, language = 'es', sessionId } = body;
+    let { text, language = 'es', sessionId } = body;
 
     if (!text || text.trim().length === 0) {
       return NextResponse.json({ error: 'Empty text' }, { status: 400 });
     }
+
+    // Truncate user input to prevent timeouts and cost overruns
+    text = truncateText(text.trim(), 2000);
 
     const system = language === 'en'
       ? 'You are a helpful assistant for TarantulaHawk. Answer concisely and politely.'
@@ -169,6 +187,8 @@ export async function POST(request: Request) {
       try {
         const queryEmbedding = await embedText(text);
         context = await retrieveContext(supabaseClient, queryEmbedding, 5);
+        // Truncate context to avoid token limit issues
+        context = truncateText(context, 4000);
       } catch (err) {
         console.error('RAG retrieve failed', err);
       }
