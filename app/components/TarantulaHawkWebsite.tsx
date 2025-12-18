@@ -249,41 +249,46 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: AuthEr
         <nav className="fixed top-0 w-full bg-black/95 backdrop-blur-sm border-b border-gray-800 z-50">
           <div className="max-w-7xl mx-auto px-6 py-4">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
+              <a href="/" aria-label="TarantulaHawk home" className="flex items-center gap-3">
                 <TarantulaHawkLogo />
                 <span className="text-xl font-black bg-gradient-to-r from-emerald-500 to-teal-400 bg-clip-text text-transparent">
                   TARANTULAHAWK
                 </span>
-              </div>
+              </a>
 
               <div className="flex items-center gap-8">
                 <nav className="hidden md:flex items-center gap-6">
-                  <a href="#solucion" className="text-gray-300 hover:text-white transition">
-                    Solución
-                  </a>
-                  <a href="#como-funciona" className="text-gray-300 hover:text-white transition">
-                    Cómo funciona
-                  </a>
                   <a
                     href="/sistema-prevencion-lavado-dinero-lfpiopri#sujetos-obligados"
-                    className="text-gray-300 hover:text-white transition"
+                    className="text-gray-300 hover:text-white lg:pl-0 lg:border-l-0 lg:border-0 transition lg:duration-150"
                   >
                     Sujetos obligados
                   </a>
-                  <a href="#lfpiorpi" className="text-gray-300 hover:text-white transition">
-                    LFPIORPI Art. 17
+                  <span className="hidden md:inline lg:hidden text-gray-500">•</span>
+                  <a href="#solucion" className="text-gray-300 hover:text-white lg:pl-4 lg:border-l lg:border-gray-800 lg:hover:border-teal-400 lg:transition-colors">
+                    Solución
                   </a>
-                  <a href="#about" className="text-gray-300 hover:text-white transition">
+                  <span className="hidden md:inline lg:hidden text-gray-500">•</span>
+                  <a href="#como-funciona" className="text-gray-300 hover:text-white lg:pl-4 lg:border-l lg:border-gray-800 lg:hover:border-teal-400 lg:transition-colors">
+                    Cómo funciona
+                  </a>
+                  <span className="hidden md:inline lg:hidden text-gray-500">•</span>
+                  <a href="#lfpiorpi" className="text-gray-300 hover:text-white lg:pl-4 lg:border-l lg:border-gray-800 lg:hover:border-teal-400 lg:transition-colors">
+                    LFPIORPI
+                  </a>
+                  <span className="hidden md:inline lg:hidden text-gray-500">•</span>
+                  <a href="#about" className="text-gray-300 hover:text-white lg:pl-4 lg:border-l lg:border-gray-800 lg:hover:border-teal-400 lg:transition-colors">
                     Acerca de
                   </a>
-                  <button onClick={openChat} className="text-gray-300 hover:text-white transition">
-                    Contacto
+                  <span className="hidden md:inline lg:hidden text-gray-500">•</span>
+                  <button onClick={openChat} className="text-gray-300 hover:text-white lg:pl-4 lg:border-l lg:border-gray-800 lg:hover:border-teal-400 lg:transition-colors">
+                    Chat
                   </button>
                 </nav>
 
                 <div className="flex items-center gap-4">
                   <button
-                    className="px-4 py-2 border border-gray-700 rounded-lg font-semibold hover:bg-gray-800 transition"
+                    className="px-4 py-1.5 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-lg font-semibold text-sm hover:from-emerald-700 hover:to-emerald-500 transition"
                     onClick={() => {
                       setOnboardingMode('login');
                       setShowOnboarding(true);
@@ -292,13 +297,13 @@ export default function TarantulaHawkWebsite({ authError }: { authError?: AuthEr
                     Ingresar
                   </button>
                   <button
-                    className="px-6 py-2 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-lg font-semibold hover:from-emerald-700 hover:to-emerald-500 transition"
+                    className="px-4 py-1.5 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-lg font-semibold text-sm hover:from-emerald-700 hover:to-emerald-500 transition"
                     onClick={() => {
                       setOnboardingMode('signup');
                       setShowOnboarding(true);
                     }}
                   >
-                    Registrarse gratis
+                    Registrarse
                   </button>
                 </div>
               </div>
