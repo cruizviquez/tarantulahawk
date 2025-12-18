@@ -19,6 +19,7 @@ export default function AIChat({ language }: AIChatProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [leadCaptured, setLeadCaptured] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const STORAGE_KEY = 'th_chat_messages_v1';
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -27,6 +28,19 @@ export default function AIChat({ language }: AIChatProps) {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  // Load persisted messages from localStorage
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Message[];
+        setMessages(parsed.map(m => ({ ...m, timestamp: new Date(m.timestamp) })));
+      }
+    } catch (e) {
+      // ignore
+    }
+  }, []);
 
   // Initialize with welcome message
   useEffect(() => {
@@ -96,64 +110,60 @@ export default function AIChat({ language }: AIChatProps) {
     return null;
   };
 
-  // Enhanced AI-like response system using advanced pattern matching
+  // Ask server for AI response (Hugging Face proxy)
   const getAIResponse = async (text: string): Promise<string> => {
-    await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000)); // Simulate AI thinking time
-    
-    const lowerText = text.toLowerCase();
-    const words = lowerText.split(/\s+/);
-    
-    // Advanced pattern matching for AI-like responses
-    if (words.some(w => ['compare', 'versus', 'vs', 'difference', 'better'].includes(w))) {
-      return language === 'en'
-        ? "TarantulaHawk stands out with our unique 3-layer AI architecture and <100ms response time. Unlike traditional rule-based systems, we use reinforcement learning to continuously improve detection accuracy. Would you like to see a comparison demo?"
-        : "TarantulaHawk se destaca con nuestra arquitectura IA única de 3 capas y tiempo de respuesta <100ms. A diferencia de sistemas tradicionales basados en reglas, usamos aprendizaje por refuerzo para mejorar continuamente la precisión de detección. ¿Te gustaría ver una demo comparativa?";
+    // Use streaming endpoint: read text chunks progressively
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, language, sessionId: 'web-' + (typeof window !== 'undefined' ? (window as any).__sessionId || 'anon' : 'anon') })
+      });
+
+      if (!res.body) return 'No response body from server.';
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let done = false;
+      let accumulated = '';
+
+      // Create/append interim bot message in UI
+      const botMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: '',
+        isBot: true,
+        timestamp: new Date()
+      };
+      // add placeholder bot message
+      setMessages((prev) => {
+        const next = [...prev, botMessage];
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch (e) {}
+        return next;
+      });
+
+      while (!done) {
+        const { value, done: readerDone } = await reader.read();
+        done = readerDone;
+        if (value) {
+          const chunk = decoder.decode(value);
+          accumulated += chunk;
+          // update last bot message text progressively
+          setMessages((prev) => {
+            const copy = prev.slice();
+            const last = copy[copy.length - 1];
+            if (last && last.isBot) {
+              copy[copy.length - 1] = { ...last, text: accumulated };
+            }
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(copy)); } catch (e) {}
+            return copy;
+          });
+        }
+      }
+
+      return accumulated;
+    } catch (err) {
+      return 'Error conectando al servicio de IA.';
     }
-    
-    if (words.some(w => ['cost', 'expensive', 'cheap', 'budget', 'money'].includes(w))) {
-      return language === 'en'
-        ? "Our pay-as-you-go model means you only pay for transactions processed. No upfront costs, no monthly minimums. Most clients save 40-60% compared to traditional AML solutions. Want to calculate potential savings for your volume?"
-        : "Nuestro modelo de pago por uso significa que solo pagas por transacciones procesadas. Sin costos iniciales, sin mínimos mensuales. La mayoría de clientes ahorran 40-60% comparado con soluciones AML tradicionales. ¿Quieres calcular ahorros potenciales para tu volumen?";
-    }
-    
-    if (words.some(w => ['security', 'safe', 'secure', 'privacy', 'data'].includes(w))) {
-      return language === 'en'
-        ? "Security is our priority. You can deploy TarantulaHawk on your own infrastructure, ensuring your data never leaves your environment. We're SOC2 compliant and support end-to-end encryption. Your transaction data remains 100% under your control."
-        : "La seguridad es nuestra prioridad. Puedes desplegar TarantulaHawk en tu propia infraestructura, asegurando que tus datos nunca salgan de tu entorno. Somos conformes con SOC2 y soportamos cifrado end-to-end. Tus datos de transacciones permanecen 100% bajo tu control.";
-    }
-    
-    if (words.some(w => ['implementation', 'setup', 'install', 'deploy', 'integration'].includes(w))) {
-      return language === 'en'
-        ? "Implementation is typically 2-4 weeks. We provide REST APIs, SDKs for major languages, and dedicated support engineers. Our team handles the initial setup and training. Most clients are processing live transactions within the first week."
-        : "La implementación típicamente toma 2-4 semanas. Proporcionamos APIs REST, SDKs para lenguajes principales, e ingenieros de soporte dedicados. Nuestro equipo maneja la configuración inicial y entrenamiento. La mayoría de clientes procesan transacciones en vivo dentro de la primera semana.";
-    }
-    
-    if (words.some(w => ['accuracy', 'false', 'positive', 'detection', 'performance'].includes(w))) {
-      return language === 'en'
-        ? "We maintain >95% detection accuracy with <2% false positive rate. Our reinforcement learning continuously adapts to new patterns, reducing false alerts over time. This means fewer manual reviews and faster transaction processing for your customers."
-        : "Mantenemos >95% precisión de detección con <2% tasa de falsos positivos. Nuestro aprendizaje por refuerzo se adapta continuamente a nuevos patrones, reduciendo alertas falsas con el tiempo. Esto significa menos revisiones manuales y procesamiento más rápido de transacciones para tus clientes.";
-    }
-    
-    if (words.some(w => ['industries', 'sector', 'banking', 'fintech', 'crypto'].includes(w))) {
-      return language === 'en'
-        ? "We serve banking, fintech, crypto exchanges, remittance services, and e-commerce platforms. Each industry has unique AML patterns - our AI adapts to your specific transaction types and regulatory requirements. Which industry are you in?"
-        : "Servimos banca, fintech, exchanges crypto, servicios de remesas, y plataformas e-commerce. Cada industria tiene patrones AML únicos - nuestra IA se adapta a tus tipos específicos de transacciones y requisitos regulatorios. ¿En qué industria estás?";
-    }
-    
-    if (words.some(w => ['support', 'help', 'assistance', 'customer', 'service'].includes(w))) {
-      return language === 'en'
-        ? "We provide comprehensive support including: 🔧 Technical integration assistance 📚 Training and onboarding 📞 24/7 customer success team 📈 Performance optimization Our dedicated engineers ensure smooth implementation and ongoing success."
-        : "Proporcionamos soporte integral incluyendo: 🔧 Asistencia técnica de integración 📚 Entrenamiento e incorporación 📞 Equipo de éxito del cliente 24/7 📈 Optimización de rendimiento Nuestros ingenieros dedicados aseguran implementación fluida y éxito continuo.";
-    }
-    
-    if (words.some(w => ['volume', 'transactions', 'scale', 'capacity', 'throughput'].includes(w))) {
-      return language === 'en'
-        ? "Our platform handles any volume: 💳 Small fintech: 1K-10K transactions/day 🏦 Regional banks: 100K-1M transactions/day 🌐 Global institutions: 10M+ transactions/day Auto-scaling ensures consistent performance regardless of volume spikes."
-        : "Nuestra plataforma maneja cualquier volumen: 💳 Fintech pequeño: 1K-10K transacciones/día 🏦 Bancos regionales: 100K-1M transacciones/día 🌐 Instituciones globales: 10M+ transacciones/día Auto-escalado asegura rendimiento consistente sin importar picos de volumen.";
-    }
-    
-    // Generate contextual response based on content
-    return getRuleBasedFallback(text);
   };
 
   const getRuleBasedFallback = (text: string): string => {
@@ -192,9 +202,8 @@ export default function AIChat({ language }: AIChatProps) {
     setInputText('');
     setIsLoading(true);
 
-    // Try rule-based first, then AI if needed
+    // Try rule-based first, then server-side AI if needed
     let response = getRuleBasedResponse(inputText);
-    
     if (!response) {
       response = await getAIResponse(inputText);
     }
@@ -206,9 +215,15 @@ export default function AIChat({ language }: AIChatProps) {
       timestamp: new Date()
     };
 
-    setMessages(prev => [...prev, botMessage]);
+    const next = [...(messagesRef.current || []), botMessage];
+    setMessages(next);
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch (e) {}
     setIsLoading(false);
   };
+
+  // keep a ref to messages for safe updates inside async flows
+  const messagesRef = useRef<Message[]>(messages);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {

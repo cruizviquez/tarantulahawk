@@ -115,7 +115,7 @@ export default function Page() {
                 Enfoque Legal
               </div>
               <p className="text-gray-300">
-                Copy y flujos diseñados para <strong>LFPIORPI</strong> y sujetos
+                Reglas y flujos diseñados para <strong>LFPIORPI</strong> y sujetos
                 obligados (Art. 17).
               </p>
             </div>
