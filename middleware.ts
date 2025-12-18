@@ -3,7 +3,7 @@ import type { NextRequest } from 'next/server';
 import { createServerClient } from '@supabase/ssr';
 
 // Rutas públicas que NO requieren autenticación
-const PUBLIC_ROUTES = ['/', '/auth/callback', '/auth/redirect', '/auth', '/auth/login', '/login', '/signup', '/onboarding'];
+const PUBLIC_ROUTES = ['/', '/auth/callback', '/auth/redirect', '/auth', '/auth/login', '/login', '/signup', '/onboarding', '/precios'];
 
 // APIs públicas que NO requieren autenticación (reducido a mínimo)
 const PUBLIC_API_PREFIXES = [
@@ -13,6 +13,8 @@ const PUBLIC_API_PREFIXES = [
   '/api/turnstile',        // CAPTCHA validation
   '/api/health',           // Health checks
   '/api/heartbeat',        // Monitoring
+  '/api/chat',             // AI chat endpoint
+  '/api/warmup',           // Model warmup
 ];
 
 // APIs que requieren autenticación (proteger explícitamente)

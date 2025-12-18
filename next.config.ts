@@ -8,12 +8,12 @@ const nextConfig: NextConfig = {
   // Optimize bundle size and caching
   experimental: {
     optimizePackageImports: ['lucide-react', '@supabase/ssr'],
-    turbo: {
-      rules: {
-        '*.svg': {
-          loaders: ['@svgr/webpack'],
-          as: '*.js',
-        },
+  },
+  turbopack: {
+    rules: {
+      '*.svg': {
+        loaders: ['@svgr/webpack'],
+        as: '*.js',
       },
     },
   },
