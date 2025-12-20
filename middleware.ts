@@ -15,6 +15,7 @@ const PUBLIC_API_PREFIXES = [
   '/api/heartbeat',        // Monitoring
   '/api/chat',             // AI chat endpoint
   '/api/warmup',           // Model warmup
+  '/api/chat/clear',       // Clear chat history
 ];
 
 // APIs que requieren autenticación (proteger explícitamente)
@@ -76,6 +77,11 @@ function addSecurityHeaders(response: NextResponse): NextResponse {
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // 301 redirects to root for legacy/invalid paths
+  if (pathname === '/en' || pathname === '/es' || pathname === '/$') {
+    return NextResponse.redirect(new URL('/', request.url), 301);
+  }
 
   // Helper local para trazas (solo dev) sin exponer info sensible
   const trace = (stage: string, extra: Record<string, any> = {}) => {

@@ -1,4 +1,9 @@
 'use client';
+// components/StatusMessage.tsx
+/**
+ * Centro de Mensajes - Sistema de notificaciones in-app
+ * Reemplaza los alerts nativos del browser con UI consistente
+ */
 
 import React from 'react';
 import { CheckCircle, AlertTriangle, AlertCircle, Info, X } from 'lucide-react';
@@ -11,13 +16,15 @@ export interface StatusMessageProps {
   duration?: number;
 }
 
-const StatusMessage: React.FC<StatusMessageProps> = ({
-  type,
-  message,
+const StatusMessage: React.FC<StatusMessageProps> = ({ 
+  type, 
+  message, 
   onClose,
   autoClose = true,
-  duration = 5000,
+  duration = 5000 
 }) => {
+  
+  // Auto-close después de duration
   React.useEffect(() => {
     if (autoClose && onClose) {
       const timer = setTimeout(onClose, duration);
@@ -25,6 +32,7 @@ const StatusMessage: React.FC<StatusMessageProps> = ({
     }
   }, [autoClose, duration, onClose]);
 
+  // Configuración por tipo
   const config = {
     success: {
       bg: 'bg-emerald-500/10',
@@ -55,20 +63,15 @@ const StatusMessage: React.FC<StatusMessageProps> = ({
   const { bg, border, text, icon: Icon } = config[type];
 
   return (
-    <div
-      className={[
-        bg,
-        border,
-        'border rounded-lg px-4 py-3 flex items-start gap-3',
-        'min-h-[48px]',
-        'transition-opacity duration-200 ease-out',
-      ].join(' ')}
-      role="status"
-      aria-live="polite"
+    <div 
+      className={`${bg} ${border} border rounded-lg p-4 flex items-start gap-3 animate-in slide-in-from-top-4 duration-300`}
+      role="alert"
     >
       <Icon className={`w-5 h-5 ${text} flex-shrink-0 mt-0.5`} />
       <div className="flex-1">
-        <p className="text-gray-200 text-sm leading-relaxed">{message}</p>
+        <p className="text-gray-300 text-sm leading-relaxed">
+          {message}
+        </p>
       </div>
       {onClose && (
         <button

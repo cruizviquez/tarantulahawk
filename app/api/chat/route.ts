@@ -30,6 +30,18 @@ async function embedText(text: string): Promise<number[]> {
   return embedding;
 }
 
+const DEBUG_DEDUPE = process.env.DEBUG_DEDUPE === '1';
+function debugLog(label: string, payload: any) {
+  if (!DEBUG_DEDUPE) return;
+  try {
+    const s = typeof payload === 'string' ? payload : JSON.stringify(payload);
+    const out = s.length > 8000 ? s.slice(0, 8000) + '...[truncated]' : s;
+    console.log(label, out);
+  } catch {
+    console.log(label, '[unserializable]');
+  }
+}
+
 function truncateText(text: string, maxChars: number): string {
   if (text.length <= maxChars) return text;
   return text.slice(0, maxChars) + '...';
@@ -43,20 +55,28 @@ function dedupeReply(text: string) {
   const normalized = trimmed.replace(/\s+/g, ' ').trim();
 
   // If the whole text is the same block twice (with or without whitespace differences)
-  const repeatMatch = normalized.match(/^(.+?)\s+\1$/);
-  if (repeatMatch && repeatMatch[1]) return repeatMatch[1].trim();
+  // Use dot-all via [\s\S] to match across newlines
+  const repeatMatch = normalized.match(/^([\s\S]+?)\s+\1$/);
+  if (repeatMatch && repeatMatch[1]) {
+    console.log('[DEDUPE] full-block repeat detected');
+    return repeatMatch[1].trim();
+  }
 
   // Try split-halves comparison (case-insensitive)
   if (normalized.length > 60) {
     const half = Math.floor(normalized.length / 2);
     const first = normalized.slice(0, half).trim().toLowerCase();
     const second = normalized.slice(half).trim().toLowerCase();
-    if (first && first === second) return normalized.slice(0, half).trim();
+    if (first && first === second) {
+      console.log('[DEDUPE] split-halves match');
+      return normalized.slice(0, half).trim();
+    }
   }
 
   // Drop duplicate paragraphs (case-insensitive)
   const seen = new Set<string>();
-  const parts = trimmed.split(/\n{2,}/);
+  // Split on one-or-more newlines to catch paragraph repeats
+  const parts = trimmed.split(/\n+/);
   const filtered = parts.filter((p) => {
     const key = p.trim().replace(/\s+/g, ' ').toLowerCase();
     if (!key) return false;
@@ -65,7 +85,32 @@ function dedupeReply(text: string) {
     return true;
   });
 
-  const joined = filtered.join('\n\n').trim();
+  const joined = filtered.join('\n').trim();
+  const wasRepeated = parts.length > filtered.length;
+  if (wasRepeated) {
+    console.log('[DEDUPE] paragraph-level dedupe applied');
+    // If dedupe did not reduce length (edge cases with whitespace), return first unique paragraph
+    if (joined.length >= trimmed.length && filtered.length > 0) {
+      return filtered[0].trim();
+    }
+  }
+  // Sentence-level dedupe as final guard
+  const sentenceSplit = (joined || trimmed)
+    .split(/(?<=[\.\!\?])\s+|\n+/)
+    .map(s => s.trim())
+    .filter(Boolean);
+  const seenSent = new Set<string>();
+  const uniqueSent = sentenceSplit.filter(s => {
+    const key = s.replace(/\s+/g, ' ').toLowerCase();
+    if (seenSent.has(key)) return false;
+    seenSent.add(key);
+    return true;
+  });
+  const sentenceJoined = uniqueSent.join(' ').trim();
+  if (sentenceJoined.length < (joined || trimmed).length) {
+    console.log('[DEDUPE] sentence-level dedupe applied');
+    return sentenceJoined;
+  }
   return joined || trimmed;
 }
 
@@ -74,6 +119,7 @@ async function callGroq(systemPrompt: string, userPrompt: string) {
   if (!groqKey) throw new Error('GROQ_API_KEY not configured');
 
   const startLLM = Date.now();
+  debugLog('[GROQ_PROMPT]', { systemPrompt: systemPrompt.slice(0, 4000), userPrompt: userPrompt.slice(0, 4000) });
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -98,9 +144,11 @@ async function callGroq(systemPrompt: string, userPrompt: string) {
   }
 
   const data = await res.json();
+  debugLog('[GROQ_RAW]', data);
   const content = data?.choices?.[0]?.message?.content;
   if (!content) throw new Error('Groq returned empty response');
-  console.log(`[GROQ] ${Date.now() - startLLM}ms`);
+  const preview = String(content).slice(0, 160).replace(/\n/g, ' ');
+  console.log(`[GROQ] ${Date.now() - startLLM}ms, len=${String(content).length}, preview="${preview}"`);
   return content.trim();
 }
 
@@ -135,6 +183,7 @@ async function callHuggingFace(prompt: string) {
   }
 
   const data = await res.json();
+  debugLog('[HF_RAW]', data);
   let textOut = '';
   if (typeof data === 'string') textOut = data;
   else if (Array.isArray(data) && data.length > 0 && typeof data[0].generated_text === 'string') textOut = data[0].generated_text;
@@ -194,9 +243,10 @@ export async function POST(request: Request) {
       }
     }
 
+    const dedupeInstruction = 'Responde una sola vez, sin repetir el mismo contenido ni el párrafo.';
     const systemPrompt = context
-      ? `${system}\n\nContexto (usa solo si es relevante):\n${context}`
-      : system;
+      ? `${system}\n\nContexto (usa solo si es relevante):\n${context}\n\n${dedupeInstruction}`
+      : `${system}\n\n${dedupeInstruction}`;
 
     const userPrompt = context
       ? `Pregunta: ${text}`
@@ -211,7 +261,14 @@ export async function POST(request: Request) {
       reply = await callHuggingFace(hfPrompt);
     }
 
+    debugLog('[REPLY_RAW]', reply);
     const cleanedReply = dedupeReply(reply);
+    if (cleanedReply !== reply) {
+      console.log(`[DEDUPE] cleaned: orig_len=${reply.length}, new_len=${cleanedReply.length}`);
+      debugLog('[REPLY_CLEANED]', cleanedReply);
+    } else {
+      console.log('[DEDUPE] no change');
+    }
 
     // Persist conversation to Supabase if configured
     if (supabaseClient) {

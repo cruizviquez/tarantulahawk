@@ -1,4 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+"use client";
+
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { MessageSquare, X, Send, Bot, User } from 'lucide-react';
 
 interface Message {
@@ -12,14 +14,40 @@ interface AIChatProps {
   language: string;
 }
 
+const STORAGE_KEY = 'th_chat_messages_v1';
+
+function safeParseMessages(raw: string | null): Message[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as any[];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((m) => ({
+      id: String(m.id ?? Date.now()),
+      text: String(m.text ?? ''),
+      isBot: Boolean(m.isBot),
+      timestamp: new Date(m.timestamp ?? Date.now()),
+    }));
+  } catch {
+    return [];
+  }
+}
+
+function persist(messages: Message[]) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
+  } catch {
+    // ignore
+  }
+}
+
 export default function AIChat({ language }: AIChatProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [leadCaptured, setLeadCaptured] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const STORAGE_KEY = 'th_chat_messages_v1';
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -31,256 +59,268 @@ export default function AIChat({ language }: AIChatProps) {
 
   // Load persisted messages from localStorage
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw) as Message[];
-        setMessages(parsed.map(m => ({ ...m, timestamp: new Date(m.timestamp) })));
-      }
-    } catch (e) {
-      // ignore
-    }
+    const loaded = safeParseMessages(typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null);
+    if (loaded.length > 0) setMessages(loaded);
   }, []);
 
-  // Initialize with welcome message
+  const welcomeMessageText = useMemo(() => {
+    return language === 'en'
+      ? "Hi! I'm TarantulaHawk AI assistant. I can help you with AML compliance questions, API integration, or getting started with our platform. What would you like to know?"
+      : '¡Hola! Soy el asistente IA de TarantulaHawk. Puedo ayudarte con preguntas sobre cumplimiento AML, integración de API, o comenzar con nuestra plataforma. ¿Qué te gustaría saber?';
+  }, [language]);
+
+  // Ensure a welcome message exists when opening an empty chat
   useEffect(() => {
-    if (isOpen && messages.length === 0) {
-      const welcomeMessage: Message = {
-        id: '1',
-        text: language === 'en' 
-          ? "Hi! I'm TarantulaHawk AI assistant. I can help you with AML compliance questions, API integration, or getting started with our platform. What would you like to know?"
-          : "¡Hola! Soy el asistente IA de TarantulaHawk. Puedo ayudarte con preguntas sobre cumplimiento AML, integración de API, o comenzar con nuestra plataforma. ¿Qué te gustaría saber?",
-        isBot: true,
-        timestamp: new Date()
-      };
-      setMessages([welcomeMessage]);
-    }
-  }, [isOpen, language]);
+    if (!isOpen) return;
+    if (messages.length > 0) return;
+
+    const welcomeMessage: Message = {
+      id: 'welcome',
+      text: welcomeMessageText,
+      isBot: true,
+      timestamp: new Date(),
+    };
+    setMessages([welcomeMessage]);
+    persist([welcomeMessage]);
+  }, [isOpen, messages.length, welcomeMessageText]);
 
   // Enhanced rule-based responses for common questions
   const getRuleBasedResponse = (text: string): string | null => {
     const lowerText = text.toLowerCase();
     const words = lowerText.split(/\s+/);
-    
+
     // Greeting patterns
-    if (words.some(w => ['hello', 'hi', 'hey', 'hola', 'buenos'].includes(w))) {
+    if (words.some((w) => ['hello', 'hi', 'hey', 'hola', 'buenos'].includes(w))) {
       return language === 'en'
-        ? "Hello! I'm here to help you understand how TarantulaHawk can enhance your AML compliance. What specific area interests you - our AI technology, API integration, or getting started with a trial?"
-        : "¡Hola! Estoy aquí para ayudarte a entender cómo TarantulaHawk puede mejorar tu cumplimiento AML. ¿Qué área específica te interesa - nuestra tecnología IA, integración API, o comenzar con una prueba?";
+        ? 'Hello! I’m here to help you understand how TarantulaHawk can enhance your AML compliance. What interests you most—our AI technology, API integration, or getting started with a trial?'
+        : '¡Hola! Estoy aquí para ayudarte a entender cómo TarantulaHawk puede mejorar tu cumplimiento AML. ¿Qué te interesa más: nuestra tecnología IA, integración API, o comenzar con una prueba?';
     }
-    
-    // Lead capture triggers - enhanced patterns
-    if (words.some(w => ['demo', 'trial', 'pricing', 'price', 'cost', 'quote', 'estimate'].includes(w))) {
+
+    // Lead capture triggers
+    if (words.some((w) => ['demo', 'trial', 'pricing', 'price', 'cost', 'quote', 'estimate', 'precios', 'costo'].includes(w))) {
       if (!leadCaptured) {
         setLeadCaptured(true);
         return language === 'en'
-          ? "Excellent! I'd love to help you get started. To provide the most relevant information and connect you with the right specialist, could you share: 1) Your company name, 2) Your email, and 3) Your approximate monthly transaction volume? This helps me tailor the demo to your needs."
-          : "¡Excelente! Me encantaría ayudarte a comenzar. Para proporcionar la información más relevante y conectarte con el especialista adecuado, ¿podrías compartir: 1) Nombre de tu empresa, 2) Tu email, y 3) Tu volumen aproximado mensual de transacciones? Esto me ayuda a adaptar la demo a tus necesidades.";
+          ? "Excellent! To tailor pricing or a demo, can you share: 1) monthly transactions, 2) country/region, and 3) whether you need API or dashboard?"
+          : '¡Excelente! Para darte precios o una demo a tu medida, dime: 1) volumen mensual de transacciones, 2) país/región, y 3) si necesitas API o dashboard.';
       }
     }
 
-    // API questions - enhanced
-    if (words.some(w => ['api', 'integration', 'sdk', 'endpoint', 'webhook'].includes(w))) {
+    // Basic product explainer
+    if (words.some((w) => ['aml', 'pld', 'lavado', 'money', 'laundering'].includes(w))) {
       return language === 'en'
-        ? "Our REST API provides real-time transaction scoring in <100ms. Key features: • JSON/XML support • Batch processing • Real-time webhooks • SDKs for Python, Java, Node.js • On-premise deployment • 99.9% uptime SLA. Want to see the API documentation or test endpoints?"
-        : "Nuestra API REST proporciona puntuación de transacciones en tiempo real en <100ms. Características clave: • Soporte JSON/XML • Procesamiento por lotes • Webhooks en tiempo real • SDKs para Python, Java, Node.js • Despliegue local • SLA 99.9% uptime. ¿Quieres ver la documentación API o endpoints de prueba?";
-    }
-
-    // AI/ML questions - enhanced
-    if (words.some(w => ['ai', 'artificial', 'intelligence', 'machine', 'learning', 'models', 'algorithm'].includes(w))) {
-      return language === 'en'
-        ? "Our 3-layer AI architecture: 🧠 Layer 1: Supervised Learning (trained on 50M+ labeled transactions) 🔍 Layer 2: Unsupervised Learning (detects novel money laundering patterns) 🎯 Layer 3: Reinforcement Learning (learns from your feedback) Result: >95% accuracy, <2% false positives, continuous improvement."
-        : "Nuestra arquitectura IA de 3 capas: 🧠 Capa 1: Aprendizaje Supervisado (entrenado en 50M+ transacciones etiquetadas) 🔍 Capa 2: Aprendizaje No Supervisado (detecta patrones nuevos de lavado) 🎯 Capa 3: Aprendizaje por Refuerzo (aprende de tu retroalimentación) Resultado: >95% precisión, <2% falsos positivos, mejora continua.";
-    }
-
-    // Compliance - enhanced
-    if (words.some(w => ['compliance', 'fincen', 'bsa', 'regulatory', 'regulation', 'law'].includes(w))) {
-      return language === 'en'
-        ? "🏛️ Compliance Standards: • FinCEN BSA (USA) • LFPIORPI (Mexico) • EU AMLD directives • FATF recommendations Important: We provide detection technology only. You retain full control over compliance decisions, investigations, and regulatory reporting. We enhance your team's capabilities, not replace them."
-        : "🏛️ Estándares de Cumplimiento: • FinCEN BSA (USA) • LFPIORPI (México) • Directivas UE AMLD • Recomendaciones FATF Importante: Solo proporcionamos tecnología de detección. Mantienes control total sobre decisiones de cumplimiento, investigaciones y reportes regulatorios. Mejoramos las capacidades de tu equipo, no las reemplazamos.";
-    }
-
-    // Technical questions
-    if (words.some(w => ['performance', 'speed', 'latency', 'throughput', 'scale'].includes(w))) {
-      return language === 'en'
-        ? "⚡ Performance Metrics: • <100ms response time • 10,000+ TPS throughput • 99.9% uptime SLA • Auto-scaling architecture • Global edge deployment • Real-time processing Our infrastructure handles millions of transactions daily for major financial institutions."
-        : "⚡ Métricas de Rendimiento: • <100ms tiempo de respuesta • 10,000+ TPS throughput • SLA 99.9% uptime • Arquitectura auto-escalable • Despliegue global edge • Procesamiento tiempo real Nuestra infraestructura maneja millones de transacciones diarias para instituciones financieras principales.";
+        ? 'TarantulaHawk helps detect suspicious transactions using layered AI (supervised + unsupervised + reinforcement). It flags risk patterns and supports investigations with explainable signals.'
+        : 'TarantulaHawk detecta transacciones sospechosas con IA en capas (supervisado + no supervisado + refuerzo). Marca riesgos y apoya investigaciones con señales explicables.';
     }
 
     return null;
   };
 
-  // Ask server for AI response (Hugging Face proxy)
-  const getAIResponse = async (text: string): Promise<string> => {
-    // Use streaming endpoint: read text chunks progressively
+  /**
+   * STREAMING:
+   * - Crea UN solo mensaje bot placeholder
+   * - Lo actualiza mientras llegan chunks
+   * - NO agrega otro mensaje al final (evita duplicados)
+   */
+  const streamAIResponseIntoChat = async (text: string) => {
+    const botId = (Date.now() + 1).toString();
+
+    // 1) Insert placeholder bot message once
+    setMessages((prev) => {
+      const next: Message[] = [
+        ...prev,
+        { id: botId, text: '', isBot: true, timestamp: new Date() },
+      ];
+      persist(next);
+      return next;
+    });
+
     try {
+      const sessionId =
+        'web-' +
+        (typeof window !== 'undefined'
+          ? (window as any).__sessionId || 'anon'
+          : 'anon');
+
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, language, sessionId: 'web-' + (typeof window !== 'undefined' ? (window as any).__sessionId || 'anon' : 'anon') })
+        body: JSON.stringify({ text, language, sessionId }),
       });
 
-      if (!res.body) return 'No response body from server.';
+      if (!res.body) {
+        // update bot placeholder with error
+        setMessages((prev) => {
+          const next = prev.map((m) =>
+            m.id === botId ? { ...m, text: language === 'en' ? 'No response body from server.' : 'No llegó respuesta del servidor.' } : m
+          );
+          persist(next);
+          return next;
+        });
+        return;
+      }
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let done = false;
       let accumulated = '';
 
-      // Create/append interim bot message in UI
-      const botMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: '',
-        isBot: true,
-        timestamp: new Date()
-      };
-      // add placeholder bot message
-      setMessages((prev) => {
-        const next = [...prev, botMessage];
-        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch (e) {}
-        return next;
-      });
-
       while (!done) {
         const { value, done: readerDone } = await reader.read();
         done = readerDone;
+
         if (value) {
           const chunk = decoder.decode(value);
           accumulated += chunk;
-          // update last bot message text progressively
+
+          // 2) Update placeholder progressively
           setMessages((prev) => {
-            const copy = prev.slice();
-            const last = copy[copy.length - 1];
-            if (last && last.isBot) {
-              copy[copy.length - 1] = { ...last, text: accumulated };
-            }
-            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(copy)); } catch (e) {}
-            return copy;
+            const next = prev.map((m) => (m.id === botId ? { ...m, text: accumulated } : m));
+            persist(next);
+            return next;
           });
         }
       }
-
-      return accumulated;
-    } catch (err) {
-      return 'Error conectando al servicio de IA.';
+    } catch {
+      setMessages((prev) => {
+        const next = prev.map((m) =>
+          m.id === botId ? { ...m, text: language === 'en' ? 'Error connecting to AI service.' : 'Error conectando al servicio de IA.' } : m
+        );
+        persist(next);
+        return next;
+      });
     }
-  };
-
-  const getRuleBasedFallback = (text: string): string => {
-    const lowerText = text.toLowerCase();
-    const fallbackResponses = language === 'en' ? [
-      "That's a great question! TarantulaHawk specializes in AI-powered AML detection. Could you be more specific about what aspect interests you most?",
-      "I'd be happy to help with that. Our platform focuses on transaction monitoring and compliance automation. What specific challenge are you trying to solve?",
-      "Interesting question! Our AI technology can help with various AML scenarios. Could you share more context about your use case?",
-      "Thanks for asking! TarantulaHawk offers advanced detection capabilities. What's your main concern - accuracy, speed, or implementation?",
-      "Good point! Our system is designed for modern financial institutions. Would you like to know about our technology, pricing, or see a demo?"
-    ] : [
-      "¡Excelente pregunta! TarantulaHawk se especializa en detección AML con IA. ¿Podrías ser más específico sobre qué aspecto te interesa más?",
-      "Me encantaría ayudarte con eso. Nuestra plataforma se enfoca en monitoreo de transacciones y automatización de cumplimiento. ¿Qué desafío específico tratas de resolver?",
-      "¡Pregunta interesante! Nuestra tecnología IA puede ayudar con varios escenarios AML. ¿Podrías compartir más contexto sobre tu caso de uso?",
-      "¡Gracias por preguntar! TarantulaHawk ofrece capacidades de detección avanzadas. ¿Cuál es tu preocupación principal - precisión, velocidad, o implementación?",
-      "¡Buen punto! Nuestro sistema está diseñado para instituciones financieras modernas. ¿Te gustaría saber sobre nuestra tecnología, precios, o ver una demo?"
-    ];
-    
-    // Select a fallback response based on text content to add variety
-    const textHash = lowerText.split('').reduce((a, b) => { a = ((a << 5) - a) + b.charCodeAt(0); return a & a; }, 0);
-    const responseIndex = Math.abs(textHash) % fallbackResponses.length;
-    return fallbackResponses[responseIndex];
   };
 
   const handleSend = async () => {
-    if (!inputText.trim() || isLoading) return;
+    const text = inputText.trim();
+    if (!text || isLoading) return;
 
+    // Add user message
     const userMessage: Message = {
       id: Date.now().toString(),
-      text: inputText,
+      text,
       isBot: false,
-      timestamp: new Date()
+      timestamp: new Date(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    setMessages((prev) => {
+      const next = [...prev, userMessage];
+      persist(next);
+      return next;
+    });
+
     setInputText('');
     setIsLoading(true);
 
-    // Try rule-based first, then server-side AI if needed
-    let response = getRuleBasedResponse(inputText);
-    if (!response) {
-      response = await getAIResponse(inputText);
+    // If rule-based answer exists, just append it (no streaming)
+    const ruleBased = getRuleBasedResponse(text);
+    if (ruleBased) {
+      const botMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: ruleBased,
+        isBot: true,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => {
+        const next = [...prev, botMessage];
+        persist(next);
+        return next;
+      });
+      setIsLoading(false);
+      return;
     }
 
-    const botMessage: Message = {
-      id: (Date.now() + 1).toString(),
-      text: response,
-      isBot: true,
-      timestamp: new Date()
-    };
-
-    const next = [...(messagesRef.current || []), botMessage];
-    setMessages(next);
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch (e) {}
+    // Otherwise stream response into a single placeholder bot message
+    await streamAIResponseIntoChat(text);
     setIsLoading(false);
   };
 
-  // keep a ref to messages for safe updates inside async flows
-  const messagesRef = useRef<Message[]>(messages);
-  useEffect(() => { messagesRef.current = messages; }, [messages]);
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') handleSend();
+  };
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
+  const clearChat = () => {
+    setMessages([]);
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // ignore
     }
   };
 
   return (
     <>
-      {/* Chat Button */}
-      <button
-        onClick={() => setIsOpen(true)}
-        role="chat-button"
-        className="fixed bottom-6 right-6 bg-gradient-to-r from-blue-600 to-emerald-500 text-white rounded-full p-4 shadow-2xl hover:from-blue-700 hover:to-emerald-600 transition-all z-50 animate-pulse"
-      >
-        <MessageSquare className="w-6 h-6" />
-      </button>
+      {/* Floating Button */}
+      {!isOpen && (
+        <button
+          onClick={() => setIsOpen(true)}
+          className="fixed bottom-4 right-4 md:bottom-6 md:right-6 z-[9999] bg-gradient-to-r from-blue-600 to-emerald-500 text-white rounded-full p-4 shadow-lg hover:shadow-xl transition-all"
+          aria-label="Open chat"
+        >
+          <MessageSquare className="w-6 h-6" />
+        </button>
+      )}
 
       {/* Chat Window */}
       {isOpen && (
-        <div className="fixed bottom-6 right-6 w-96 h-96 bg-gradient-to-br from-gray-900 to-black border border-gray-800 rounded-2xl shadow-2xl z-50 flex flex-col">
+        <div
+          className="
+            fixed bottom-4 right-4 md:bottom-6 md:right-6 z-[9999]
+            w-[calc(100vw-2rem)] max-w-sm
+            h-[70vh] max-h-[36rem]
+            bg-gray-900 border border-gray-800 rounded-2xl shadow-2xl flex flex-col
+            overflow-hidden
+          "
+          role="dialog"
+          aria-label="TarantulaHawk AI Chat"
+        >
           {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-gray-800">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-full flex items-center justify-center">
-                <Bot className="w-4 h-4 text-white" />
+          <div className="p-4 bg-gradient-to-r from-gray-800 to-gray-900 border-b border-gray-800">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-full flex items-center justify-center">
+                  <Bot className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-white">TarantulaHawk AI</h3>
+                  <p className="text-xs text-gray-400">{language === 'en' ? 'Online' : 'En línea'}</p>
+                </div>
               </div>
-              <div>
-                <h3 className="font-bold text-white">TarantulaHawk AI</h3>
-                <p className="text-xs text-gray-400">
-                  {language === 'en' ? 'Online' : 'En línea'}
-                </p>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={clearChat}
+                  className="text-xs text-gray-400 hover:text-white px-2 py-1 rounded-md border border-gray-700 hover:border-gray-600"
+                  title={language === 'en' ? 'Clear chat' : 'Limpiar chat'}
+                >
+                  {language === 'en' ? 'Clear' : 'Limpiar'}
+                </button>
+                <button onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-white transition" aria-label="Close chat">
+                  <X className="w-6 h-6" />
+                </button>
               </div>
             </div>
-            <button onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-white">
-              <X className="w-5 h-5" />
-            </button>
           </div>
 
           {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-4">
             {messages.map((message) => (
               <div key={message.id} className={`flex ${message.isBot ? 'justify-start' : 'justify-end'}`}>
-                <div className={`max-w-xs p-3 rounded-2xl ${
-                  message.isBot 
-                    ? 'bg-gray-800 text-white' 
-                    : 'bg-gradient-to-r from-blue-600 to-emerald-500 text-white'
-                }`}>
+                <div
+                  className={`max-w-[85%] p-3 rounded-2xl ${
+                    message.isBot ? 'bg-gray-800 text-white' : 'bg-gradient-to-r from-blue-600 to-emerald-500 text-white'
+                  }`}
+                >
                   <div className="flex items-start gap-2">
-                    {message.isBot && <Bot className="w-4 h-4 mt-0.5 flex-shrink-0" />}
-                    {!message.isBot && <User className="w-4 h-4 mt-0.5 flex-shrink-0" />}
-                    <p className="text-sm">{message.text}</p>
+                    {message.isBot ? <Bot className="w-4 h-4 mt-0.5 flex-shrink-0" /> : <User className="w-4 h-4 mt-0.5 flex-shrink-0" />}
+                    <p className="text-sm whitespace-pre-wrap break-words overflow-hidden">{message.text}</p>
                   </div>
                 </div>
               </div>
             ))}
+
+            {/* Optional typing indicator (only while waiting BEFORE first chunks; we keep it simple here) */}
             {isLoading && (
               <div className="flex justify-start">
                 <div className="bg-gray-800 text-white max-w-xs p-3 rounded-2xl">
@@ -288,13 +328,14 @@ export default function AIChat({ language }: AIChatProps) {
                     <Bot className="w-4 h-4" />
                     <div className="flex gap-1">
                       <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                     </div>
                   </div>
                 </div>
               </div>
             )}
+
             <div ref={messagesEndRef} />
           </div>
 
@@ -314,6 +355,7 @@ export default function AIChat({ language }: AIChatProps) {
                 onClick={handleSend}
                 disabled={isLoading || !inputText.trim()}
                 className="bg-gradient-to-r from-blue-600 to-emerald-500 text-white rounded-lg p-2 hover:from-blue-700 hover:to-emerald-600 transition disabled:opacity-50"
+                aria-label="Send message"
               >
                 <Send className="w-4 h-4" />
               </button>
