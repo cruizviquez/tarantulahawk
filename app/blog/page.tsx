@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { formatDateES } from '../lib/dateFormatter';
 
 export const metadata: Metadata = {
   title: "Blog PLD | LFPIORPI Art. 17 para Sujetos Obligados | TarantulaHawk",
@@ -90,11 +91,7 @@ export default function BlogIndexPage() {
               >
                 <div className="flex items-center gap-3 text-sm text-gray-400 mb-3">
                   <time dateTime={p.dateISO}>
-                    {new Date(p.dateISO).toLocaleDateString("es-MX", {
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                    })}
+                    {formatDateES(p.dateISO)}
                   </time>
                   <span>•</span>
                   <span>{p.readMins} min</span>

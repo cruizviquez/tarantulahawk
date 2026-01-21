@@ -9,13 +9,18 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react', '@supabase/ssr'],
   },
-  turbopack: {
-    rules: {
-      '*.svg': {
-        loaders: ['@svgr/webpack'],
-        as: '*.js',
+  async rewrites() {
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
+    return [
+      {
+        source: '/api/portal/:path*',
+        destination: `${backendUrl}/api/portal/:path*`,
       },
-    },
+      {
+        source: '/outputs/:path*',
+        destination: `${backendUrl}/outputs/:path*`,
+      },
+    ];
   },
   webpack: (config, { dev, isServer }) => {
     // Optimize for production builds
@@ -40,14 +45,6 @@ const nextConfig: NextConfig = {
           },
         },
       };
-
-      // Reduce bundle size by externalizing large dependencies in client
-      config.externals = config.externals || [];
-      if (!isServer) {
-        config.externals.push({
-          'lucide-react': 'lucide-react',
-        });
-      }
     }
 
     return config;

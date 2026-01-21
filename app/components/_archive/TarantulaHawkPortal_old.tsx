@@ -11,8 +11,8 @@
  * ✅ FilePreview integrado
  */
 
-import React, { useState, useEffect } from 'react';
-import { createBrowserClient } from '@supabase/ssr';
+import React, { useState, useEffect, useMemo } from 'react';
+import { getSupabaseBrowserClient } from '../lib/supabaseBrowser';
 import { calculateTieredCost } from '../lib/pricing';
 import { Upload, FileSpreadsheet, Download, User, Clock, Shield, CreditCard, Menu, X, Zap, LogOut, BarChart3 } from 'lucide-react';
 
@@ -93,11 +93,8 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
   const [statusMessage, setStatusMessage] = useState<Omit<StatusMessageProps, 'onClose'> | null>(null);
 
 
-  // Supabase client
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  // Supabase client (singleton pattern)
+  const supabase = useMemo(() => getSupabaseBrowserClient(), []);
 
   // API_URL robusto (igual que complete_portal_ui)
   const [API_URL, setApiUrl] = useState<string>('');

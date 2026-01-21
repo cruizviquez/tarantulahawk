@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Shield, AlertTriangle, Activity, Users, Clock } from 'lucide-react';
+import { formatDateTimeES } from '../lib/dateFormatter';
 
 interface SuspiciousActivity {
   user_id: string;
@@ -177,7 +178,7 @@ export default function SecurityDashboard() {
                       <td className="py-4 px-4">
                         <div className="flex items-center gap-2 text-sm">
                           <Clock className="w-4 h-4 text-gray-500" />
-                          {new Date(user.last_activity).toLocaleString('es-MX')}
+                          {user.last_activity ? formatDateTimeES(user.last_activity) : 'Nunca'}
                         </div>
                       </td>
                       <td className="py-4 px-4 text-center">

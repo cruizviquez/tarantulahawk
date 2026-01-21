@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import { Eye, Download, Search, Calendar, AlertTriangle, Clock, CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import AnalysisHistoryPanel from './AnalysisHistoryPanel';
+import { formatDateShortES } from '../lib/dateFormatter';
 
 interface HistoryItem {
   analysis_id: string;
@@ -181,7 +182,7 @@ export const HistoryTab: React.FC<Props> = ({
                     <div className="flex items-center gap-4 text-sm text-gray-400">
                       <span className="flex items-center gap-1">
                         <Calendar className="h-3 w-3" />
-                        {new Date(item.created_at).toLocaleDateString()}
+                        {formatDateShortES(item.created_at)}
                       </span>
                       <span>{item.total_transacciones} transacciones</span>
                       <span>${item.costo?.toFixed(2) || '0.00'}</span>
@@ -280,8 +281,6 @@ export const HistoryTab: React.FC<Props> = ({
             <div className="p-6">
               <AnalysisHistoryPanel
                 history={[selectedResult]}
-                apiUrl={apiUrl}
-                token={token}
               />
             </div>
           </div>

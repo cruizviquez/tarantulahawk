@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 // import dynamic from 'next/dynamic'
-import CompletePortalUIClient from './CompletePortalUIClient';
+import TarantulaHawkPortal from '@/app/components/TarantulaHawkPortal';
 import SessionMonitor from '@/app/components/SessionMonitor'
 import { Suspense } from 'react'
 
@@ -96,9 +96,8 @@ export default async function DashboardPage() {
         inactivityTimeout={process.env.NEXT_PUBLIC_SESSION_INACTIVITY_TIMEOUT ? Number(process.env.NEXT_PUBLIC_SESSION_INACTIVITY_TIMEOUT) : 0} 
       />
       
-      {/** Usar el portal clásico en dashboard **/}
-      {/* Usar el portal clásico en dashboard, importado como Client Component */}
-      <CompletePortalUIClient
+      {/** Usar el nuevo TarantulaHawkPortal con módulos integrados **/}
+      <TarantulaHawkPortal
         user={{
           id: user.id,
           email: user.email || '',

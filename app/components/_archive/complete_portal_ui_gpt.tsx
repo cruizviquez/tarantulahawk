@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useState, useEffect, lazy, Suspense } from 'react';
-import { createBrowserClient } from '@supabase/ssr';
+import React, { useState, useEffect, lazy, Suspense, useMemo } from 'react';
+import { getSupabaseBrowserClient } from '../lib/supabaseBrowser';
 import { calculateTieredCost } from '../lib/pricing';
 import {
   Upload,
@@ -155,11 +155,8 @@ interface MockResults {
 }
 
 const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) => {
-  // Supabase client for auth (using @supabase/ssr for compatibility)
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  // Supabase client for auth (singleton pattern)
+  const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   
   // Helper to get auth token
   const getAuthToken = async () => {

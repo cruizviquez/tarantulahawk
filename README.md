@@ -23,6 +23,7 @@ Open [http://localhost:3000](http://localhost:3000) to see the application.
 - **[SETUP_GUIDE.md](SETUP_GUIDE.md)** - Complete setup instructions (Supabase, Redis, Turnstile, PayPal)
 - **[SECURITY_IMPLEMENTATION.md](SECURITY_IMPLEMENTATION.md)** - Security features and compliance
 - **[SUPABASE_CONFIG.md](SUPABASE_CONFIG.md)** - Database configuration and auth setup
+- **[LISTA_69B_AUTOMATIZACION.md](LISTA_69B_AUTOMATIZACION.md)** - 📋 Lista 69B SAT automation (KYC)
 - **[supabase/README.md](supabase/README.md)** - Database schema and migrations
 - **[CONSOLIDATION_EXECUTIVE_SUMMARY.md](CONSOLIDATION_EXECUTIVE_SUMMARY.md)** - ⚠️ Folder consolidation (run once after clone)
 
@@ -35,6 +36,7 @@ Open [http://localhost:3000](http://localhost:3000) to see the application.
 - **API Keys** - Enterprise programmatic access
 - **Pay-as-you-go** - 3 free reports, then PayPal
 - **3-Layer AI** - Supervised, unsupervised, and reinforcement learning
+- **KYC Automation** - OFAC, CSNU, Lista 69B SAT verification (free APIs)
 
 ## 📋 Available Scripts
 
@@ -43,6 +45,10 @@ npm run dev      # Start development server
 npm run build    # Build for production
 npm run start    # Start production server
 npm run deploy   # Deploy to Vercel
+
+# Backend scripts (Python)
+bash INSTALAR_LISTA_69B.sh                  # Install & setup Lista 69B SAT
+python3 app/backend/scripts/ejemplo_lista_69b.py  # Interactive KYC example
 ```
 
 ## 🧪 Testing

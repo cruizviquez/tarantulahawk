@@ -11,8 +11,8 @@
  * ✅ Tracker solo en Upload; en otras tabs se muestra banner discreto si hay análisis corriendo
  */
 
-import React, { useEffect, useMemo, useState, useRef } from 'react';
-import { getSupabaseBrowserClient } from '../lib/supabaseClient';
+import React, { useEffect, useMemo, useState } from 'react';
+import { createBrowserClient } from '@supabase/ssr';
 import { calculateTieredCost } from '../lib/pricing';
 import {
   Upload,
@@ -42,7 +42,7 @@ import AnalysisSummary from './AnalysisSummary';
 import StatusMessage from './StatusMessage';
 import FilePreview from './FilePreview';
 import GlobalStatusBar from './GlobalStatusBar';
-import KYCModule from './kyc/KYCModule';
+import KYCModule from './KYCModule';
 import MonitoringModule from './monitoring/MonitoringModule';
 import UIFReportModule from './reportes-uif/UIFReportModule';
 import RegulatoryDashboard from './dashboard/RegulatoryDashboard';
@@ -135,7 +135,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
 
   // Estado básico
   const [user, setUser] = useState<UserData>(initialUser);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'kyc' | 'monitoring' | 'reportes-uif' | 'history' | 'admin' | 'billing'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'kyc' | 'monitoring' | 'reportes-uif' | 'dashboard' | 'upload' | 'history' | 'admin' | 'billing'>('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
 
@@ -163,33 +163,40 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
   // Estado de mensajes
   const [statusMessage, setStatusMessage] = useState<Omit<StatusMessageProps, 'onClose'> | null>(null);
 
-  // Supabase client (singleton)
-  const supabase = useMemo(() => getSupabaseBrowserClient(), []);
+  // Supabase client
+  const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!);
+
+  // API_URL robusto
+  const [API_URL, setApiUrl] = useState<string>('');
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      if (process.env.NEXT_PUBLIC_BACKEND_API_URL) {
+        setApiUrl(process.env.NEXT_PUBLIC_BACKEND_API_URL);
+      } else if (window.location.hostname.includes('github.dev')) {
+        const backendHost = window.location.hostname.replace('-3000.app', '-8000.app');
+        setApiUrl(`https://${backendHost}`);
+      } else if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        setApiUrl('');
+      } else {
+        setApiUrl('http://localhost:8000');
+      }
+    }
+  }, []);
 
   // Cargar datos iniciales
   useEffect(() => {
     fetchHistory();
     fetchPendingPayments();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [API_URL]);
 
   const fetchHistory = async () => {
     try {
-      const { data, error } = await supabase.auth.getSession();
-      if (error || !data.session) {
-        console.error('No session found');
-        return;
-      }
-      const token = data.session.access_token;
-
-      const response = await fetch('/api/portal/history', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      const url = API_URL ? `${API_URL}/api/portal/history` : '/api/portal/history';
+      const response = await fetch(url, { credentials: 'include' });
       if (response.ok) {
         const data = await response.json();
-        setHistory(data.historial || []);
+        setHistory(data.history || []);
       }
     } catch (error) {
       console.error('Error fetching history:', error);
@@ -198,21 +205,11 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
 
   const fetchPendingPayments = async () => {
     try {
-      const { data, error } = await supabase.auth.getSession();
-      if (error || !data.session) {
-        console.error('No session found');
-        return;
-      }
-      const token = data.session.access_token;
-
-      const response = await fetch('/api/portal/pending-payments', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
+      const url = API_URL ? `${API_URL}/api/portal/pending-payments` : '/api/portal/pending-payments';
+      const response = await fetch(url, { credentials: 'include' });
       if (response.ok) {
         const data = await response.json();
-        setPendingPayments(data.pending_payments || []);
+        setPendingPayments(data.payments || []);
       }
     } catch (error) {
       console.error('Error fetching pending payments:', error);
@@ -240,22 +237,14 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
     setStatusMessage({ type: 'info', message: 'Analizando archivo...' });
 
     try {
-      const { data, error } = await supabase.auth.getSession();
-      if (error || !data.session) {
-        setStatusMessage({ type: 'error', message: 'No se pudo obtener el token de autenticación.' });
-        return;
-      }
-      const token = data.session.access_token;
-
       const formData = new FormData();
       formData.append('file', selectedFile);
 
-      const response = await fetch('/api/portal/validate', {
+      const url = API_URL ? `${API_URL}/api/portal/validate` : '/api/portal/validate';
+      const response = await fetch(url, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
         body: formData,
+        credentials: 'include',
       });
 
       const result = await response.json();
@@ -268,8 +257,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
         return;
       }
 
-      // ✅ Compatibilidad con backend: rowCount (nuevo) o row_count (legacy)
-      const rowCount = result.rowCount ?? result.row_count ?? 0;
+      const rowCount = result.rowCount || 0;
       const columns = result.columns || [];
       setDetectedColumns(columns.map((c: string) => c.toLowerCase().trim()));
 
@@ -358,8 +346,11 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
 
       const uploadData = await new Promise<{ analysis_id: string }>((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-        xhr.open('POST', '/api/portal/upload', true);
+        const uploadUrl = API_URL ? `${API_URL}/api/portal/upload` : '/api/portal/upload';
+        xhr.open('POST', uploadUrl, true);
+        xhr.withCredentials = true;
         xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+        xhr.setRequestHeader('X-User-ID', user.id);
         xhr.onload = function () {
           if (xhr.status === 200) {
             try {
@@ -400,24 +391,12 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
       let pollAttempts = 0;
       const maxAttempts = 150; // 5 min
       const analysisId = uploadData.analysis_id;
+      const processedPath = `${API_URL ? API_URL : ''}/outputs/enriched/processed/${analysisId}.csv`;
 
       const pollInterval = setInterval(async () => {
         pollAttempts++;
         try {
-          const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-          if (sessionError || !sessionData.session) {
-            clearInterval(pollInterval);
-            setProcessingStage('');
-            setStatusMessage({ type: 'error', message: 'Sesión expirada' });
-            return;
-          }
-          const token = sessionData.session.access_token;
-          
-          const res = await fetch(`/api/portal/analysis/${analysisId}/result`, {
-            headers: {
-              'Authorization': `Bearer ${token}`,
-            },
-          });
+          const res = await fetch(processedPath);
           if (res.ok) {
             const csvText = await res.text();
             clearInterval(pollInterval);
@@ -429,11 +408,8 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
             setStatusMessage({ type: 'success', message: '✓ Análisis completado: archivo procesado disponible.' });
 
             // Actualizar balance
-            fetch('/api/portal/balance', { 
-              headers: {
-                'Authorization': `Bearer ${token}`,
-              },
-            })
+            const balanceUrl = API_URL ? `${API_URL}/api/portal/balance` : '/api/portal/balance';
+            fetch(balanceUrl, { credentials: 'include' })
               .then((balanceResponse) => (balanceResponse.ok ? balanceResponse.json() : null))
               .then((balanceData) => {
                 if (balanceData && balanceData.balance !== undefined) {
@@ -537,6 +513,18 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
 
             {/* Desktop Menu */}
             <nav className="hidden md:flex items-center gap-6">
+              <button
+                onClick={() => setActiveTab('upload')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+                  activeTab === 'upload'
+                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+              >
+                <Upload className="w-4 h-4" />
+                Nuevo análisis
+              </button>
+
               <button
                 onClick={() => setActiveTab('dashboard')}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
@@ -657,6 +645,16 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
               <nav className="flex flex-col gap-2">
                 <button
                   onClick={() => {
+                    setActiveTab('upload');
+                    setMobileMenuOpen(false);
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 text-gray-400 hover:text-white"
+                >
+                  <Upload className="w-4 h-4" />
+                  Nuevo análisis
+                </button>
+                <button
+                  onClick={() => {
                     setActiveTab('dashboard');
                     setMobileMenuOpen(false);
                   }}
@@ -744,15 +742,24 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
         isProcessing={isProcessing}
         progress={progress}
         processingStage={processingStage}
-        onViewDetails={() => setActiveTab('monitoring')}
-        statusMessage={activeTab !== 'monitoring' ? statusMessage : null}
+        onViewDetails={() => setActiveTab('upload')}
+        statusMessage={activeTab !== 'upload' ? statusMessage : null}
       />
 
       {/* Main with internal scroll */}
       <div className="flex-1 overflow-y-auto">
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          {/* Status Message (para tabs activos con análisis) */}
-          {(activeTab === 'monitoring' || activeTab === 'dashboard') && (
+          {/* ✅ Banner discreto en tabs NO upload si hay análisis corriendo */}
+          {activeTab !== 'upload' && isProcessing && (
+            <div className="mb-4">
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg px-4 py-2 text-sm text-blue-300">
+                Análisis en progreso ({Math.min(100, Math.max(0, progress))}%). Ve a <span className="font-semibold">“Nuevo análisis”</span> para ver el detalle.
+              </div>
+            </div>
+          )}
+
+          {/* Status Message (solo para tabs que no sean upload) */}
+          {activeTab !== 'upload' && (
             <div className="mb-6 min-h-[56px]">
               {statusMessage ? (
                 <StatusMessage
@@ -767,37 +774,293 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
             </div>
           )}
 
+          {/* Tab: Upload/Analizar */}
+          {activeTab === 'upload' ? (
+            <div className="space-y-6 flex flex-col items-center">
+              {/* Área superior estable: wizard + tracker + status (ALTURA RESERVADA) */}
+              <div className="w-full max-w-3xl mt-2 mx-auto">
+                <WizardSteps />
+
+                {/* ✅ Tracker: un solo componente (MLProgressTracker) controla compact/full */}
+                <div className="min-h-[96px] md:min-h-[168px]">
+                  <MLProgressTracker
+                    progress={progress}
+                    stage={processingStage || 'idle'}
+                    fileName={file?.name}
+                    variant={isMobile ? 'compact' : 'full'}
+                    showTimeline={!isMobile}
+                    showTechDetails={!isMobile}
+                    reserveHeight
+                  />
+                </div>
+
+                {/* Status area: siempre ocupa espacio + placeholder con estilo consistente */}
+                <div className="min-h-[72px] bg-gray-900/80 border border-emerald-700/30 rounded-lg p-3 flex items-center justify-center">
+                  <div className="w-full">
+                    {statusMessage ? (
+                      <StatusMessage
+                        {...statusMessage}
+                        onClose={() => setStatusMessage(null)}
+                        autoClose={statusMessage.type !== 'error'}
+                        duration={statusMessage.type === 'success' ? 5000 : 10000}
+                      />
+                    ) : (
+                      <div className="bg-gray-900/60 border border-gray-700 rounded-lg px-4 py-3 min-h-[48px] flex items-center justify-center text-sm text-gray-400">
+                        {uploadStep === 'select'
+                          ? 'Selecciona un archivo para comenzar.'
+                          : uploadStep === 'validated'
+                            ? 'Archivo validado. Listo para ejecutar.'
+                            : uploadStep === 'processing'
+                              ? 'Procesando… mantén esta pestaña abierta.'
+                              : 'Resultados disponibles.'}
+                      </div>
+                    )}
+
+                    {/* Leyenda costo (si aplica) */}
+                    {file && fileStats && estimatedCost > 0 && (
+                      <div className="text-center text-xs text-gray-400 mt-2">
+                        Al ejecutar el análisis se descontará el costo estimado del saldo de la cuenta.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* “Trust hints” (micro-UX) */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div className="rounded-lg border border-gray-700 bg-gray-800/40 p-3 text-xs text-gray-300">
+                    <div className="font-semibold text-gray-200">🔒 Seguridad</div>
+                    <div className="text-gray-400">Comunicación autenticada y sesión protegida.</div>
+                  </div>
+                  <div className="rounded-lg border border-gray-700 bg-gray-800/40 p-3 text-xs text-gray-300">
+                    <div className="font-semibold text-gray-200">🧾 Transparencia</div>
+                    <div className="text-gray-400">Costo estimado antes de ejecutar el análisis.</div>
+                  </div>
+                  <div className="rounded-lg border border-gray-700 bg-gray-800/40 p-3 text-xs text-gray-300">
+                    <div className="font-semibold text-gray-200">⏱ Progreso</div>
+                    <div className="text-gray-400">Estatus claro por etapa para reducir incertidumbre.</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Caja de carga / flujo */}
+              {!currentAnalysis && !currentCsvText && (
+                <div className="w-full max-w-xl">
+                  <div className="bg-gray-800/40 border border-gray-700 rounded-lg p-4 flex flex-col items-center">
+                    <h2 className="text-lg font-bold text-white mb-3 flex items-center gap-2">
+                      <Upload className="w-5 h-5 text-emerald-400" />
+                      Cargar archivo para Análisis PLD
+                    </h2>
+
+                    <div className="border-2 border-dashed border-gray-600 rounded-lg p-4 text-center hover:border-emerald-500/50 transition-all w-full max-w-xs mx-auto">
+                      <input
+                        type="file"
+                        accept=".csv,.xlsx"
+                        onChange={(e) => {
+                          const selectedFile = e.target.files?.[0];
+                          if (selectedFile) handleFileChange(selectedFile);
+                        }}
+                        className="hidden"
+                        id="file-upload"
+                        disabled={isProcessing}
+                      />
+                      <label
+                        htmlFor="file-upload"
+                        className={`cursor-pointer flex flex-col items-center gap-2 ${
+                          isProcessing ? 'opacity-50 cursor-not-allowed' : ''
+                        }`}
+                      >
+                        <FileSpreadsheet className="w-10 h-10 text-gray-400" />
+                        <div>
+                          <p className="text-white font-medium mb-1">
+                            {file ? file.name : 'Selecciona un archivo CSV o Excel'}
+                          </p>
+                          <p className="text-gray-400 text-xs">Formatos: .csv, .xlsx (máx 50MB)</p>
+                        </div>
+                      </label>
+                    </div>
+
+                    {/* File Preview */}
+                    {fileStats && (
+                      <FilePreview
+                        fileStats={fileStats}
+                        estimatedCost={estimatedCost}
+                        userBalance={user.balance}
+                        detectedColumns={detectedColumns}
+                        onClear={clearFile}
+                      />
+                    )}
+
+                    {/* CTA */}
+                    {file && fileStats && (
+                      <div className="w-full mt-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                        <button
+                          onClick={handleFileUpload}
+                          disabled={!canAnalyze}
+                          className="w-full sm:w-auto sm:flex-1 px-6 py-3 bg-emerald-500 text-white rounded-lg font-medium hover:bg-emerald-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        >
+                          <Zap className="w-5 h-5" />
+                          {processingStage === 'uploading'
+                            ? 'Subiendo…'
+                            : isProcessing
+                              ? 'Analizando…'
+                              : 'Ejecutar análisis'}
+                        </button>
+
+                        <button
+                          onClick={clearFile}
+                          className="w-full sm:w-auto px-6 py-3 bg-gray-700 text-white rounded-lg font-medium hover:bg-gray-600 transition-all flex items-center justify-center"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Resumen rápido en validado */}
+                    {uploadStep === 'validated' && fileStats && (
+                      <div className="w-full mt-4 rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm text-gray-200">
+                        <div className="flex items-center justify-between gap-3 flex-wrap">
+                          <div className="font-medium">Listo para ejecutar</div>
+                          <div className="text-gray-300">
+                            <span className="text-gray-400">Costo: </span>${estimatedCost.toFixed(2)} USD
+                          </div>
+                        </div>
+                        <div className="text-xs text-gray-400 mt-1">
+                          Archivo: {fileStats.fileName} · {fileStats.rows.toLocaleString()} filas · {formatBytes(fileStats.fileSize)}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Results: JSON */}
+              {currentAnalysis && (
+                <div className="w-full max-w-5xl space-y-6">
+                  <button
+                    onClick={() => {
+                      setCurrentAnalysis(null);
+                      clearFile();
+                    }}
+                    className="text-emerald-400 hover:text-emerald-300 flex items-center gap-2"
+                  >
+                    ← Nuevo análisis
+                  </button>
+
+                  <AnalysisSummary results={currentAnalysis} />
+
+                  <div className="bg-gray-800/40 border border-gray-700 rounded-lg p-4">
+                    <div className="flex items-center gap-4 flex-wrap">
+                      <span className="text-gray-400 text-sm">Filtrar por:</span>
+                      <div className="flex gap-2 flex-wrap">
+                        {(['all', 'preocupante', 'inusual', 'relevante'] as const).map((filter) => (
+                          <button
+                            key={filter}
+                            onClick={() => setFilterClassification(filter)}
+                            className={`px-4 py-2 rounded-lg text-sm transition-all ${
+                              filterClassification === filter
+                                ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                                : 'bg-gray-700/50 text-gray-400 hover:text-white'
+                            }`}
+                          >
+                            {filter === 'all' ? 'Todas' : filter.charAt(0).toUpperCase() + filter.slice(1)}
+                          </button>
+                        ))}
+                      </div>
+                      <span className="text-gray-500 text-sm ml-auto">{filteredTransactions.length} transacciones</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <h3 className="text-xl font-semibold text-white">Detalle de transacciones</h3>
+                    {filteredTransactions.length > 0 ? (
+                      <div className="grid gap-4">
+                        {filteredTransactions.map((transaction, index) => (
+                          <TransactionCard key={transaction.datos_transaccion.id} transaction={transaction} index={index} />
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="bg-gray-800/40 border border-gray-700 rounded-lg p-8 text-center">
+                        <p className="text-gray-400">No hay transacciones con este filtro</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Results: CSV */}
+              {currentCsvText && !currentAnalysis && (
+                <div className="w-full max-w-5xl space-y-4">
+                  <button
+                    onClick={() => {
+                      setCurrentCsvText(null);
+                      clearFile();
+                    }}
+                    className="text-emerald-400 hover:text-emerald-300 flex items-center gap-2"
+                  >
+                    ← Nuevo análisis
+                  </button>
+
+                  <div className="bg-gray-800/40 border border-gray-700 rounded-lg p-6">
+                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                      <h3 className="text-lg font-semibold text-white">CSV procesado</h3>
+
+                      <button
+                        onClick={() =>
+                          downloadTextFile(
+                            `tarantulahawk_processed_${new Date().toISOString().slice(0, 10)}.csv`,
+                            currentCsvText,
+                            'text/csv;charset=utf-8'
+                          )
+                        }
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-lg hover:bg-blue-500/30 transition-all"
+                      >
+                        <Download className="w-4 h-4" />
+                        Descargar CSV
+                      </button>
+                    </div>
+
+                    {/* En móvil NO mostramos <pre> */}
+                    {isMobile ? (
+                      <div className="mt-4 rounded-lg border border-gray-700 bg-gray-900/60 p-4 text-sm text-gray-200">
+                        <div className="font-medium">Vista previa deshabilitada en móvil</div>
+                        <div className="text-xs text-gray-400 mt-1">
+                          Para mejor lectura, descarga el CSV o ábrelo desde una computadora.
+                        </div>
+                      </div>
+                    ) : (
+                      <pre className="mt-4 overflow-x-auto text-xs text-gray-200 bg-gray-900 p-4 rounded-lg max-h-[520px] whitespace-pre-wrap">
+                        {currentCsvText}
+                      </pre>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : null}
+
           {/* Tab: Historial */}
           {activeTab === 'history' && (
             <AnalysisHistoryPanel
               history={history}
-              onSelectAnalysis={async (analysisId) => {
-                try {
-                  const { data, error } = await supabase.auth.getSession();
-                  if (error || !data.session) {
-                    alert('No se pudo obtener el token de autenticación.');
-                    return;
-                  }
-                  const token = data.session.access_token;
-
-                  const res = await fetch(`/api/portal/analysis/${analysisId}/result`, {
-                    headers: {
-                      'Authorization': `Bearer ${token}`,
-                    },
-                  });
-
-                  if (res.ok) {
-                    const csvText = await res.text();
-                    setCurrentAnalysis(null);
-                    setCurrentCsvText(csvText);
-                    setActiveTab('monitoring');
-                  } else {
-                    throw new Error('No se pudo obtener el archivo procesado');
-                  }
-                } catch (err) {
+              onSelectAnalysis={(analysisId) => {
+                const item = history.find((h) => h.analysis_id === analysisId);
+                if (item && item.processed_file_path) {
+                  fetch(item.processed_file_path)
+                    .then((res) => (res.ok ? res.text() : Promise.reject('No se pudo obtener el archivo procesado')))
+                    .then((csvText) => {
+                      setCurrentAnalysis(null);
+                      setCurrentCsvText(csvText);
+                      setActiveTab('upload');
+                    })
+                    .catch((err) => {
+                      setCurrentAnalysis(null);
+                      setCurrentCsvText(null);
+                      alert('Error al obtener el archivo procesado: ' + err);
+                    });
+                } else {
                   setCurrentAnalysis(null);
                   setCurrentCsvText(null);
-                  alert('Error al obtener el archivo procesado: ' + err);
+                  setActiveTab('upload');
                 }
               }}
             />

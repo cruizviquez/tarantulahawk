@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo, useRef, useCallback } from 'react';
 import { Clock, ChevronDown, ChevronUp, Download, FileText, FileSpreadsheet, File } from 'lucide-react';
+import { getSupabaseBrowserClient } from '../lib/supabaseBrowser';
 
 interface HistoryItem {
   analysis_id: string;
@@ -24,16 +25,36 @@ interface HistoryItem {
 interface Props {
   history: HistoryItem[];
   language?: 'es' | 'en';
-  apiUrl?: string;
-  token?: string;
   onSelectAnalysis?: (analysisId: string) => void;
 }
 
-export default function AnalysisHistoryPanel({ history, language = 'es', apiUrl = '', token = '', onSelectAnalysis }: Props) {
+export default function AnalysisHistoryPanel({ history, language = 'es', onSelectAnalysis }: Props) {
+  const supabase = useMemo(() => getSupabaseBrowserClient(), []);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [detailsCache, setDetailsCache] = useState<Record<string, any>>({});
+  const tokenCacheRef = useRef<{ token: string; expires: number } | null>(null);
 
-  const toggleExpand = async (analysisId: string) => {
+  const getToken = useCallback(async () => {
+    // Check if we have a cached token that's still valid (with 60s buffer)
+    if (tokenCacheRef.current && tokenCacheRef.current.expires > Date.now() + 60000) {
+      return tokenCacheRef.current.token;
+    }
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) {
+      console.error('[AnalysisHistoryPanel] No active session');
+      return null;
+    }
+
+    // Cache token with expiration (JWT exp claim would be better, but this is simple)
+    tokenCacheRef.current = {
+      token: session.access_token,
+      expires: Date.now() + 50 * 60 * 1000 // 50 minutes (tokens usually last 60 min)
+    };
+
+    return session.access_token;
+  }, [supabase]);
+
+  const toggleExpand = (analysisId: string) => {
     if (expandedId === analysisId) {
       setExpandedId(null);
       return;
@@ -43,29 +64,18 @@ export default function AnalysisHistoryPanel({ history, language = 'es', apiUrl 
     if (onSelectAnalysis) {
       onSelectAnalysis(analysisId);
     }
-
-    // Fetch details if not cached
-    if (!detailsCache[analysisId]) {
-      try {
-        const response = await fetch(`${apiUrl}/api/history/${analysisId}`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          setDetailsCache(prev => ({ ...prev, [analysisId]: data }));
-        }
-      } catch (error) {
-        console.error('Error fetching details:', error);
-      }
-    }
   };
 
   const downloadFile = async (analysisId: string, type: 'original' | 'results') => {
     try {
-      const response = await fetch(`${apiUrl}/api/history/${analysisId}/download/${type}`, {
+      const token = await getToken();
+      if (!token) return;
+
+      const endpoint = type === 'original'
+        ? `/api/history/${analysisId}/download/original`
+        : `/api/portal/analysis/${analysisId}/result`;
+
+      const response = await fetch(endpoint, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -100,7 +110,6 @@ export default function AnalysisHistoryPanel({ history, language = 'es', apiUrl 
     <div className="space-y-2">
       {history.map((item) => {
         const isExpanded = expandedId === item.analysis_id;
-        const details = detailsCache[item.analysis_id];
 
         return (
           <div key={item.analysis_id} className="border border-gray-800 rounded-lg overflow-hidden">
@@ -121,7 +130,11 @@ export default function AnalysisHistoryPanel({ history, language = 'es', apiUrl 
                 <div className="col-span-2">
                   <div className="font-medium text-white truncate">{item.file_name}</div>
                   <div className="text-xs text-gray-500">
-                    {new Date(item.created_at).toLocaleString(language === 'es' ? 'es-MX' : 'en-US')}
+                    {new Intl.DateTimeFormat(language === 'es' ? 'es-MX' : 'en-US', {
+                      dateStyle: 'medium',
+                      timeStyle: 'short',
+                      timeZone: 'America/Mexico_City'
+                    }).format(new Date(item.created_at))}
                   </div>
                 </div>
 
@@ -232,7 +245,7 @@ export default function AnalysisHistoryPanel({ history, language = 'es', apiUrl 
 
                     {item.xml_path && (
                       <button
-                        onClick={() => window.open(`${apiUrl}/api/xml/${item.analysis_id}`, '_blank')}
+                        onClick={() => window.open(`/api/portal/xml/${item.analysis_id}`, '_blank')}
                         className="flex items-center gap-2 px-4 py-2 bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 rounded-lg text-sm transition"
                       >
                         <File className="w-4 h-4" />

@@ -16,6 +16,7 @@ const PUBLIC_API_PREFIXES = [
   '/api/chat',             // AI chat endpoint
   '/api/warmup',           // Model warmup
   '/api/chat/clear',       // Clear chat history
+  '/api/portal/validate',  // File validation (read-only, no data processing)
 ];
 
 // APIs que requieren autenticación (proteger explícitamente)
@@ -39,17 +40,24 @@ const ADMIN_ROUTES = ['/admin'];
  * Apply security headers to all responses
  */
 function addSecurityHeaders(response: NextResponse): NextResponse {
-  // Content Security Policy (ajustar según necesidades)
-  response.headers.set(
-    'Content-Security-Policy',
-    "default-src 'self'; " +
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com; " +
-    "style-src 'self' 'unsafe-inline'; " +
-    "img-src 'self' data: https:; " +
-    "font-src 'self' data:; " +
-    "connect-src 'self' https://*.supabase.co https://*.github.dev https://challenges.cloudflare.com wss://*.supabase.co; " +
-    "frame-src 'self' https://challenges.cloudflare.com;"
-  );
+  // Content Security Policy (relajada en dev para Codespaces/github.dev)
+  const isDev = process.env.NODE_ENV !== 'production';
+  
+  const cspDirectives = [
+    "default-src 'self'",
+    "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://challenges.cloudflare.com",
+    isDev 
+      ? "style-src 'self' 'unsafe-inline' https://github.dev https://*.github.dev https://githubpreview.dev https://*.githubpreview.dev" 
+      : "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: https:",
+    "font-src 'self' data:",
+    isDev
+      ? "connect-src 'self' https://github.dev https://*.github.dev https://githubpreview.dev https://*.githubpreview.dev https://*.app.github.dev https://challenges.cloudflare.com https://*.supabase.co wss://*.supabase.co"
+      : "connect-src 'self' https://*.supabase.co https://challenges.cloudflare.com wss://*.supabase.co",
+    "frame-src 'self' https://challenges.cloudflare.com",
+  ];
+  
+  response.headers.set('Content-Security-Policy', cspDirectives.join('; '));
 
   // Strict Transport Security (HTTPS only)
   response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
@@ -147,7 +155,11 @@ export async function middleware(request: NextRequest) {
       return addSecurityHeaders(response);
     }
     
-    if (!authValid) {
+    // Check for Bearer token (backend will validate with validar_supabase_jwt)
+    const authHeader = request.headers.get('authorization') || '';
+    const hasBearer = authHeader.toLowerCase().startsWith('bearer ');
+    
+    if (!authValid && !hasBearer) {
       trace('api-unauthorized');
       const response = NextResponse.json(
         { error: 'Unauthorized - Invalid or expired session' },
@@ -157,17 +169,9 @@ export async function middleware(request: NextRequest) {
       return response;
     }
     
-    const isProtectedApi = PROTECTED_API_PREFIXES.some(prefix => pathname.startsWith(prefix));
-    if (isProtectedApi) {
-      trace('api-protected-allow');
-      const response = NextResponse.next();
-      response.headers.set('X-Middleware-Trace', 'api-protected');
-      return addSecurityHeaders(response);
-    }
-    
-    trace('api-default-allow');
+    trace('api-authenticated-allow', { method: authValid ? 'cookie' : 'bearer' });
     const response = NextResponse.next();
-    response.headers.set('X-Middleware-Trace', 'api-default');
+    response.headers.set('X-Middleware-Trace', 'api-authenticated');
     return addSecurityHeaders(response);
   }
   

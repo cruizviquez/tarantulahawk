@@ -1,0 +1,24 @@
+[2026-01-20 04:01:19] [INFO] ============================================================
+[2026-01-20 04:01:19] [INFO] 🚀 ACTUALIZADOR LISTA 69B SAT - INICIO
+[2026-01-20 04:01:19] [INFO] ============================================================
+[2026-01-20 04:01:19] [INFO] 🌐 Conectando al SAT para descargar Lista 69B...
+[2026-01-20 04:01:19] [ERROR] ❌ Error al descargar desde SAT: 403 Client Error: Forbidden for url: https://www.sat.gob.mx/consulta/92764/descarga-de-listados-completos
+[2026-01-20 04:01:19] [ERROR] ❌ No se pudo descargar la lista del SAT
+[2026-01-20 04:01:19] [WARNING] 💡 Sugerencia: Verificar URLs del SAT o descargar manualmente
+[2026-01-20 04:01:19] [WARNING] 💡 URL: https://www.sat.gob.mx/consulta/92764/descarga-de-listados-completos
+[2026-01-20 04:01:19] [INFO] ============================================================
+[2026-01-20 04:01:19] [INFO] 📁 Archivos generados en: /workspaces/tarantulahawk/app/backend/data/lista_69b
+[2026-01-20 04:01:19] [INFO] 📋 Log disponible en: /workspaces/tarantulahawk/app/backend/data/lista_69b/actualizacion.log
+[2026-01-20 04:01:19] [INFO] ============================================================
+[2026-01-20 04:09:48] [INFO] ============================================================
+[2026-01-20 04:09:48] [INFO] 🚀 ACTUALIZADOR LISTA 69B SAT - INICIO
+[2026-01-20 04:09:48] [INFO] ============================================================
+[2026-01-20 04:09:48] [INFO] 🌐 Conectando al SAT para descargar Lista 69B...
+[2026-01-20 04:09:49] [ERROR] ❌ Error al descargar desde SAT: 403 Client Error: Forbidden for url: https://www.sat.gob.mx/consulta/92764/descarga-de-listados-completos
+[2026-01-20 04:09:49] [ERROR] ❌ No se pudo descargar la lista del SAT
+[2026-01-20 04:09:49] [WARNING] 💡 Sugerencia: Verificar URLs del SAT o descargar manualmente
+[2026-01-20 04:09:49] [WARNING] 💡 URL: https://www.sat.gob.mx/consulta/92764/descarga-de-listados-completos
+[2026-01-20 04:09:49] [INFO] ============================================================
+[2026-01-20 04:09:49] [INFO] 📁 Archivos generados en: /workspaces/tarantulahawk/app/backend/data/lista_69b
+[2026-01-20 04:09:49] [INFO] 📋 Log disponible en: /workspaces/tarantulahawk/app/backend/data/lista_69b/actualizacion.log
+[2026-01-20 04:09:49] [INFO] ============================================================

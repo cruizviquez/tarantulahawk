@@ -24,7 +24,9 @@ import time
 from pathlib import Path
 
 from dotenv import load_dotenv
-load_dotenv()  # Cargar .env explícitamente
+
+BASE_DIR = Path(__file__).resolve().parent.parent  # .../app/backend
+load_dotenv(BASE_DIR / ".env")
 
 # Security imports
 import bcrypt
@@ -37,6 +39,9 @@ import httpx  # Para verificar con Supabase API
 # Import validador_enriquecedor from utils
 import sys
 sys.path.insert(0, str(Path(__file__).parent / "utils"))
+# Also add parent directory for relative imports
+sys.path.insert(0, str(Path(__file__).parent))
+
 try:
     # Try explicit import via importlib to provide better diagnostics on failure
     import importlib
@@ -63,8 +68,35 @@ except Exception:
     except Exception:
         PricingTier = None  # final fallback; will use local calcular_costo
 
-# Define base directory for file operations
-BASE_DIR = Path(__file__).resolve().parent.parent
+# Import KYC router
+try:
+    from app.backend.api.kyc import router as kyc_router
+except Exception as e:
+    try:
+        from .kyc import router as kyc_router
+    except Exception as e2:
+        import traceback
+        kyc_router = None
+        print("⚠️  WARNING: KYC router no disponible")
+        print(f"❌ Absolute import failed: {e}")
+        print(f"❌ Relative import failed: {e2}")
+        traceback.print_exc()
+
+# Auth helpers (separate module to avoid circular imports)
+try:
+    from app.backend.api.auth_supabase import verificar_token_supabase, validar_supabase_jwt
+except Exception:
+    try:
+        from .auth_supabase import verificar_token_supabase, validar_supabase_jwt
+    except Exception:
+        # Direct import as last resort when running as script
+        try:
+            import auth_supabase
+            verificar_token_supabase = auth_supabase.verificar_token_supabase
+            validar_supabase_jwt = auth_supabase.validar_supabase_jwt
+        except Exception as e:
+            print(f"❌ Error importing auth_supabase: {e}")
+            raise
 
 # Internal modules (from your existing code)
 # from validador_enriquecedor import procesar_archivo, validar_estructura, enriquecer_features
@@ -119,6 +151,13 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 security = HTTPBearer()
+
+# Include routers
+if kyc_router:
+    app.include_router(kyc_router)
+    print("✅ KYC router incluido")
+else:
+    print("⚠️  KYC router no disponible")
 
 # CORS Configuration
 # In GitHub Codespaces, cross-port requests (3000 -> 8000) often require
@@ -643,162 +682,6 @@ def validar_usuario_portal(
     except Exception:
         # Fallback to X-User-ID for backwards compatibility (development only)
         raise HTTPException(status_code=401, detail="Authentication required")
-
-
-# ===================================================================
-# ✅ VALIDACIÓN JWT DE SUPABASE
-# ===================================================================
-
-async def verificar_token_supabase(
-    credentials: HTTPAuthorizationCredentials = Depends(security)
-) -> Dict:
-    """
-    Valida JWT token de Supabase
-    
-    Esta función verifica que el token JWT sea válido y pertenezca a un usuario
-    autenticado en Supabase. Soporta dos métodos de validación:
-    
-    1. Verificación local con JWT Secret (más rápido, recomendado)
-    2. Verificación remota con API de Supabase (más lento, más seguro)
-    
-    Returns:
-        Dict con user_id, email, tier, balance
-        
-    Raises:
-        HTTPException 401 si el token es inválido o expirado
-    """
-    try:
-        token = credentials.credentials
-        
-        print(f"[AUTH] Verificando token: {token[:20]}...")
-        
-        # ========== MÉTODO 1: Verificación Local con JWT Secret ==========
-        if SUPABASE_JWT_SECRET:
-            try:
-                payload = jwt.decode(
-                    token,
-                    SUPABASE_JWT_SECRET,
-                    algorithms=['HS256'],
-                    audience='authenticated',
-                    options={"verify_aud": True}
-                )
-                
-                user_id = payload.get('sub')
-                email = payload.get('email')
-                role = payload.get('role')
-                
-                if not user_id:
-                    raise HTTPException(
-                        status_code=401,
-                        detail='Token inválido: no contiene user_id'
-                    )
-                
-                print(f"[AUTH] ✅ Usuario autenticado: {email} (ID: {user_id[:8]}..., Role: {role})")
-                
-                # TODO: En producción, obtener tier y balance de Supabase profiles table
-                # Por ahora, usar valores por defecto
-                return {
-                    "user_id": user_id,
-                    "email": email,
-                    "role": role,
-                    "tier": "free",  # Default tier
-                    "balance": 500.0  # Default balance
-                }
-                
-            except jwt.ExpiredSignatureError:
-                print("[AUTH] ❌ Token expirado")
-                raise HTTPException(
-                    status_code=401,
-                    detail='Token expirado. Por favor inicia sesión nuevamente.'
-                )
-            except jwt.InvalidAudienceError:
-                print("[AUTH] ❌ Audience inválida")
-                raise HTTPException(
-                    status_code=401,
-                    detail='Token inválido: audience no coincide'
-                )
-            except jwt.JWTError as e:
-                print(f"[AUTH] ❌ JWT Error: {e}")
-                raise HTTPException(
-                    status_code=401,
-                    detail=f'Token inválido: {str(e)}'
-                )
-        
-        # ========== MÉTODO 2: Verificación con API de Supabase ==========
-        else:
-            print("[AUTH] ⚠️  JWT Secret no configurado, usando API de Supabase")
-            
-            if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
-                raise HTTPException(
-                    status_code=500,
-                    detail='Configuración de Supabase incompleta'
-                )
-            
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    f"{SUPABASE_URL}/auth/v1/user",
-                    headers={
-                        "Authorization": f"Bearer {token}",
-                        "apikey": SUPABASE_SERVICE_ROLE_KEY
-                    },
-                    timeout=5.0  # 5 segundos timeout
-                )
-                
-                if response.status_code == 401:
-                    print("[AUTH] ❌ Token rechazado por Supabase")
-                    raise HTTPException(
-                        status_code=401,
-                        detail='Token inválido o expirado'
-                    )
-                elif response.status_code != 200:
-                    print(f"[AUTH] ❌ Error de Supabase: {response.status_code}")
-                    raise HTTPException(
-                        status_code=500,
-                        detail='Error verificando token con Supabase'
-                    )
-                
-                user_data = response.json()
-                user_id = user_data.get('id')
-                email = user_data.get('email')
-                role = user_data.get('role', 'authenticated')
-                
-                if not user_id:
-                    raise HTTPException(
-                        status_code=401,
-                        detail='Respuesta de Supabase inválida'
-                    )
-                
-                print(f"[AUTH] ✅ Usuario verificado vía API: {email} (ID: {user_id[:8]}...)")
-                
-                return {
-                    "user_id": user_id,
-                    "email": email,
-                    "role": role,
-                    "tier": "free",
-                    "balance": 500.0
-                }
-    
-    except HTTPException:
-        # Re-raise HTTP exceptions (already formatted)
-        raise
-    except httpx.TimeoutException:
-        print("[AUTH] ❌ Timeout verificando con Supabase")
-        raise HTTPException(
-            status_code=504,
-            detail='Timeout verificando autenticación'
-        )
-    except Exception as e:
-        print(f"[AUTH] ❌ Error inesperado: {type(e).__name__}: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail=f'Error interno de autenticación: {str(e)}'
-        )
-
-
-# Alias for backwards compatibility
-validar_supabase_jwt = verificar_token_supabase
-
-
 
 
 # ===================================================================
@@ -1688,9 +1571,7 @@ async def validate_preflight(request: Request):
 
 @app.post("/api/portal/validate")
 async def validar_archivo_portal(
-    file: UploadFile = File(...),
-    x_user_id: str = Header(None, alias="X-User-ID"),
-    request: Request = None
+    file: UploadFile = File(...)
 ):
     """
     PUBLIC ENDPOINT - Validate file structure before upload
@@ -1745,12 +1626,20 @@ async def validar_archivo_portal(
         print(f"✅ File validated: {file.filename} - {total_rows} rows, {len(columns)} columns")
         print(f"📋 Columns detected: {columns}")
         
+        # ✅ LIMPIEZA: validate solo checa estructura, no reutiliza archivo
+        # El upload volverá a subir el archivo, así que borramos el temp
+        try:
+            os.remove(file_path)
+            print(f"🗑️ Temp file cleaned: {file_path}")
+        except Exception as cleanup_error:
+            print(f"⚠️ Failed to cleanup temp file: {cleanup_error}")
+        
         # Let CORSMiddleware handle headers; just return JSON
         return {
             "success": True,
             "file_id": file_id,
             "file_name": file.filename,
-            "row_count": total_rows,
+            "rowCount": total_rows,
             "columns": columns,
             "message": "File validated successfully. Ready for analysis."
         }
@@ -2620,6 +2509,170 @@ async def obtener_estadisticas(user: Dict = Depends(validar_supabase_jwt)):
         "current_balance": user["balance"],
         "tier": user["tier"]
     }
+
+# ===================================================================
+# PORTAL ENDPOINTS
+# ===================================================================
+
+@app.get("/api/portal/history")
+async def obtener_historial_portal(
+    user: Dict = Depends(validar_supabase_jwt),
+    limit: int = 50
+):
+    """Get user analysis history for portal view"""
+    try:
+        # Intentar obtener de Supabase primero
+        if supabase_admin:
+            result = supabase_admin.table("analysis_history")\
+                .select("*")\
+                .eq("user_id", user["user_id"])\
+                .order("created_at", desc=True)\
+                .limit(limit)\
+                .execute()
+        
+            return {"historial": result.data or []}
+    
+        # Fallback a in-memory
+        historial = [
+            {
+                "analysis_id": aid,
+                "timestamp": data["timestamp"],
+                "total_transacciones": data["resultados"]["resumen"]["total_transacciones"],
+                "costo": data.get("costo", 0),
+                "pagado": data.get("pagado", True),
+                "file_name": data.get("file_name", "Sin nombre"),
+                "created_at": data["timestamp"].isoformat() if hasattr(data["timestamp"], "isoformat") else str(data["timestamp"])
+            }
+            for aid, data in ANALYSIS_HISTORY.items()
+            if data["user_id"] == user["user_id"]
+        ]
+        return {"historial": sorted(historial, key=lambda x: x.get("timestamp", ""), reverse=True)[:limit]}
+
+    except Exception as e:
+        print(f"❌ Error obteniendo historial portal: {e}")
+        return {"historial": []}
+
+@app.get("/api/portal/pending-payments")
+async def obtener_pagos_pendientes(user: Dict = Depends(validar_supabase_jwt)):
+    """Get pending payments for user"""
+    try:
+        # Intentar obtener de Supabase
+        if supabase_admin:
+            result = supabase_admin.table("analysis_history")\
+                .select("*")\
+                .eq("user_id", user["user_id"])\
+                .eq("pagado", False)\
+                .order("created_at", desc=True)\
+                .execute()
+            return {"pending_payments": result.data or []}
+
+        # Fallback a in-memory
+        pendientes = [
+            {
+                "analysis_id": aid,
+                "timestamp": data["timestamp"],
+                "costo": data.get("costo", 0),
+                "file_name": data.get("file_name", "Sin nombre"),
+                "created_at": data["timestamp"].isoformat() if hasattr(data["timestamp"], "isoformat") else str(data["timestamp"])
+            }
+            for aid, data in ANALYSIS_HISTORY.items()
+            if data["user_id"] == user["user_id"] and not data.get("pagado", True)
+        ]
+        return {"pending_payments": sorted(pendientes, key=lambda x: x.get("timestamp", ""), reverse=True)}
+
+    except Exception as e:
+        print(f"❌ Error obteniendo pagos pendientes: {e}")
+        return {"pending_payments": []}
+
+@app.get("/api/portal/balance")
+async def obtener_balance_usuario(user: Dict = Depends(validar_supabase_jwt)):
+    """Get current user balance"""
+    try:
+        if supabase_admin:
+            result = supabase_admin.table("usuarios")\
+                .select("balance")\
+                .eq("id", user["user_id"])\
+                .single()\
+                .execute()
+            
+            if result.data:
+                return {"balance": result.data.get("balance", 0)}
+        
+        # Fallback
+        return {"balance": 0}
+    
+    except Exception as e:
+        print(f"❌ Error obteniendo balance: {e}")
+        return {"balance": 0}
+
+@app.get("/api/portal/analysis/{analysis_id}/result")
+async def obtener_resultado_analisis(
+    analysis_id: str,
+    user: Dict = Depends(validar_supabase_jwt)
+):
+    """Get processed CSV result for an analysis (authenticated)"""
+    try:
+        # Verificar ownership desde DB
+        if supabase_admin:
+            result = supabase_admin.table("analysis_history")\
+                .select("processed_file_path, file_name, user_id")\
+                .eq("analysis_id", analysis_id)\
+                .single()\
+                .execute()
+            
+            if not result.data:
+                raise HTTPException(status_code=404, detail="Análisis no encontrado")
+            
+            # Normalizar a string para evitar type mismatch
+            if str(result.data["user_id"]) != str(user["user_id"]):
+                raise HTTPException(status_code=403, detail="No autorizado")
+            
+            # Validar path traversal
+            from pathlib import Path
+            rel = Path(result.data["processed_file_path"])
+            if rel.is_absolute() or ".." in rel.parts:
+                raise HTTPException(status_code=400, detail="Ruta inválida")
+            
+            file_path = (BASE_DIR / rel).resolve()
+            base = BASE_DIR.resolve()
+            if not str(file_path).startswith(str(base)):
+                raise HTTPException(status_code=400, detail="Ruta inválida")
+            
+            if not file_path.exists():
+                raise HTTPException(status_code=404, detail="Archivo no encontrado")
+            
+            return FileResponse(
+                path=file_path,
+                media_type="text/csv",
+                filename=result.data["file_name"].replace(".csv", "_analizado.csv")
+            )
+        
+        # Fallback a in-memory
+        if analysis_id not in ANALYSIS_HISTORY:
+            raise HTTPException(status_code=404, detail="Análisis no encontrado")
+        
+        analysis = ANALYSIS_HISTORY[analysis_id]
+        
+        # Normalizar a string para evitar type mismatch
+        if str(analysis["user_id"]) != str(user["user_id"]):
+            raise HTTPException(status_code=403, detail="No autorizado")
+        
+        file_path = BASE_DIR / f"outputs/enriched/processed/{analysis_id}.csv"
+        
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail="Archivo no encontrado")
+        
+        return FileResponse(
+            path=file_path,
+            media_type="text/csv",
+            filename=f"{analysis_id}_analizado.csv"
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Error obteniendo resultado: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     import uvicorn

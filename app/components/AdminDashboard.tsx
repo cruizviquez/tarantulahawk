@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Users, DollarSign, Activity, Key, Settings, TrendingUp, Search, Filter, Download } from 'lucide-react';
+import { formatDateShortES } from '../lib/dateFormatter';
 
 interface UserProfile {
   id: string;
@@ -369,8 +370,8 @@ export default function AdminDashboard() {
             )}
 
             <div className="text-xs text-gray-500">
-              Creado: {new Date(selectedUser.created_at).toLocaleDateString('es-MX')} • 
-              Última actividad: {new Date(selectedUser.last_activity).toLocaleDateString('es-MX')}
+              Creado: {formatDateShortES(selectedUser.created_at)} • 
+              Última actividad: {formatDateShortES(selectedUser.last_activity)}
             </div>
           </div>
         </div>
