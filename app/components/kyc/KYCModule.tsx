@@ -2,9 +2,10 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Users, Search, Plus, FileText, Shield, AlertTriangle, 
-  CheckCircle, XCircle, Upload, Eye, Edit, Trash2, Download, AlertCircle, Info
+  CheckCircle, XCircle, Upload, Eye, Edit, Trash2, Download, AlertCircle, Info,
+  RefreshCcw
 } from 'lucide-react';
-import { supabase } from '../../lib/supabaseClient';
+import { getSupabaseBrowserClient } from '../../lib/supabaseBrowser';
 import { formatDateES } from '../../lib/dateFormatter';
 import {
   validarRFC,
@@ -28,8 +29,8 @@ interface Cliente {
   rfc: string;
   tipo_persona: 'fisica' | 'moral';
   sector_actividad: string;
-  nivel_riesgo: 'bajo' | 'medio' | 'alto' | 'critico' | 'pendiente';
-  score_ebr: number;
+  nivel_riesgo: 'bajo' | 'medio' | 'alto' | 'critico' | 'pendiente' | 'en_revision';
+  score_ebr: number | null;
   es_pep: boolean;
   en_lista_69b: boolean;
   en_lista_ofac: boolean;
@@ -48,7 +49,19 @@ interface ClienteFormData {
   origen_recursos: string;
 }
 
+interface ValidacionListasResult {
+  validaciones: {
+    ofac?: { encontrado?: boolean; total?: number; error?: string };
+    csnu?: { encontrado?: boolean; total?: number; error?: string };
+    lista_69b?: { en_lista?: boolean | null; advertencia?: string; nota?: string; error?: string };
+  };
+  score_riesgo: number;
+  aprobado: boolean;
+  alertas: string[];
+}
+
 const KYCModule = () => {
+  const supabase = getSupabaseBrowserClient();
   const [view, setView] = useState<'lista' | 'nuevo' | 'detalle'>('lista');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRiesgo, setFilterRiesgo] = useState<string>('todos');
@@ -57,6 +70,11 @@ const KYCModule = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [duplicateNotice, setDuplicateNotice] = useState<string | null>(null);
+  const [validacionListas, setValidacionListas] = useState<ValidacionListasResult | null>(null);
+  const [validandoListas, setValidandoListas] = useState(false);
+  const [lastValidations, setLastValidations] = useState<Record<string, string>>({});
+  const [lastValidationInfo, setLastValidationInfo] = useState<{ label: string; ts: string } | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [fieldWarnings, setFieldWarnings] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState<ClienteFormData>({
@@ -72,6 +90,23 @@ const KYCModule = () => {
   const getAuthToken = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     return session?.access_token;
+  };
+
+  // Helper: separar nombre completo en partes
+  const splitNombreCompleto = (nombreCompleto: string) => {
+    const partes = (nombreCompleto || '').trim().split(/\s+/);
+    const nombre = partes[0] || '';
+    const apellido_paterno = partes[1] || '';
+    const apellido_materno = partes.slice(2).join(' ');
+    return { nombre, apellido_paterno, apellido_materno };
+  };
+
+  const formatDateTime = (iso: string) => {
+    try {
+      return new Date(iso).toLocaleString('es-MX', { hour12: false });
+    } catch {
+      return iso;
+    }
   };
 
   // Cargar clientes al montar el componente
@@ -94,18 +129,42 @@ const KYCModule = () => {
         return;
       }
 
-      const response = await fetch('/api/kyc/clientes', {
+      const requestUrl = '/api/kyc/clientes';
+      console.log('GET /api/kyc/clientes');
+
+      const response = await fetch(requestUrl, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
+      }).catch((fetchError) => {
+        const origin = typeof window !== 'undefined' ? window.location.origin : 'window unavailable';
+        const errorWithResponse = fetchError as { response?: Response };
+        const responseInfo = errorWithResponse.response ? {
+          url: errorWithResponse.response.url,
+          status: errorWithResponse.response.status,
+        } : null;
+        console.error('Fetch error:', fetchError, { origin, responseInfo });
+        throw new Error(`Error de conexión: ${fetchError.message}`);
       });
 
-      if (!response.ok) {
-        throw new Error('Error al cargar clientes');
+      const contentType = response.headers.get('content-type') || '';
+      const isJson = contentType.includes('application/json');
+      const isHtml = contentType.includes('text/html');
+
+      if (!response.ok || isHtml) {
+        const payload = isJson ? await response.json().catch(() => null) : await response.text().catch(() => null);
+        const payloadStr = typeof payload === 'string' ? payload : null;
+        const looksHtml = isHtml || (payloadStr ? payloadStr.trim().toLowerCase().startsWith('<!doctype') || payloadStr.trim().toLowerCase().startsWith('<html') : false);
+        const msg =
+          (payload && typeof payload === 'object' && (payload.detail || payload.error)) ||
+          (looksHtml ? `El servidor devolvió HTML (posible error ${response.status || '500'}). Puede ser backend caído o configuración Supabase/env faltante. Revisa logs de Next.` : null) ||
+          (payloadStr ? payloadStr.slice(0, 200) : null) ||
+          `Error HTTP ${response.status}`;
+        throw new Error(msg);
       }
 
-      const data = await response.json();
-      setClientes(data.clientes || []);
+      const data = isJson ? await response.json() : null;
+      setClientes(data?.clientes || []);
     } catch (err) {
       console.error('Error cargando clientes:', err);
       setError(err instanceof Error ? err.message : 'Error desconocido');
@@ -114,6 +173,78 @@ const KYCModule = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const validarListas = async (datos: ClienteFormData) => {
+    setValidandoListas(true);
+    setValidacionListas(null);
+    try {
+      const token = await getAuthToken();
+      if (!token) {
+        setError('Por favor inicia sesión para validar en listas');
+        return;
+      }
+
+      const { nombre, apellido_paterno, apellido_materno } = splitNombreCompleto(datos.nombre_completo);
+
+      const response = await fetch('/api/kyc/validar-listas', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ nombre, apellido_paterno, apellido_materno, rfc: datos.rfc })
+      });
+
+      const contentType = response.headers.get('content-type') || '';
+      const isJson = contentType.includes('application/json');
+      const payload = isJson ? await response.json().catch(() => null) : await response.text().catch(() => null);
+
+      if (!response.ok) {
+        const msg =
+          (payload && typeof payload === 'object' && (payload.detail || payload.error)) ||
+          (typeof payload === 'string' && payload.slice(0, 200)) ||
+          `Error HTTP ${response.status}`;
+        setError(`No se pudo validar en listas: ${msg}`);
+        return;
+      }
+
+      setValidacionListas(payload as ValidacionListasResult);
+    } catch (e) {
+      setError('No se pudo validar en listas (conexión)');
+    } finally {
+      setValidandoListas(false);
+    }
+  };
+
+  const validarListasCliente = async (cliente: Cliente) => {
+    const ts = new Date().toISOString();
+    await validarListas({
+      tipo_persona: cliente.tipo_persona,
+      nombre_completo: cliente.nombre_completo,
+      rfc: cliente.rfc,
+      curp: undefined,
+      sector_actividad: cliente.sector_actividad,
+      origen_recursos: ''
+    });
+    setLastValidations((prev) => ({ ...prev, [cliente.cliente_id]: ts }));
+    setLastValidationInfo({ label: cliente.nombre_completo, ts });
+  };
+
+  const onDuplicateAccept = () => {
+    setDuplicateNotice(null);
+    setError(null);
+    setFieldErrors({});
+    setFieldWarnings({});
+    setFormData({
+      tipo_persona: 'fisica',
+      nombre_completo: '',
+      rfc: '',
+      curp: '',
+      sector_actividad: '',
+      origen_recursos: ''
+    });
+    setView('lista');
   };
 
   const crearCliente = async () => {
@@ -157,17 +288,43 @@ const KYCModule = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(formData),
+      }).catch((fetchError) => {
+        const origin = typeof window !== 'undefined' ? window.location.origin : 'window unavailable';
+        const errorWithResponse = fetchError as { response?: Response };
+        const responseInfo = errorWithResponse.response ? {
+          url: errorWithResponse.response.url,
+          status: errorWithResponse.response.status,
+        } : null;
+        console.error('Fetch error:', fetchError, { origin, responseInfo });
+        throw new Error(`Error de conexión: ${fetchError.message}`);
       });
 
+      const contentType = response.headers.get('content-type') || '';
+      const isJson = contentType.includes('application/json');
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Error al crear cliente');
+        const payload = isJson ? await response.json().catch(() => null) : await response.text().catch(() => null);
+        const msg =
+          (payload && typeof payload === 'object' && (payload.detail || payload.error)) ||
+          (typeof payload === 'string' && payload.slice(0, 200)) ||
+          `Error HTTP ${response.status}`;
+        
+        // Manejo especial para error de duplicado (409)
+        if (response.status === 409) {
+          setError(null);
+          setDuplicateNotice(`⚠️ ${msg}\n\nEste RFC ya está registrado en tu lista de clientes.`);
+          return;
+        }
+        
+        // Para otros errores, lanzar excepción que será capturada por el catch
+        throw new Error(msg);
       }
 
-      const data = await response.json();
+      const data = isJson ? await response.json() : null;
       
       if (data.success) {
         setSuccess(`✅ Cliente creado exitosamente\nEstado: ${data.estado}\n${data.mensaje}`);
+        await validarListas(formData);
         setView('lista');
         cargarClientes();
         // Reset form
@@ -234,6 +391,7 @@ const KYCModule = () => {
       case 'alto': return 'bg-orange-500/20 text-orange-300 border-orange-500/30';
       case 'medio': return 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30';
       case 'bajo': return 'bg-green-500/20 text-green-300 border-green-500/30';
+      case 'en_revision': return 'bg-blue-500/20 text-blue-300 border-blue-500/30';
       default: return 'bg-gray-500/20 text-gray-300 border-gray-500/30';
     }
   };
@@ -244,6 +402,7 @@ const KYCModule = () => {
       case 'alto': return '🟠';
       case 'medio': return '🟡';
       case 'bajo': return '🟢';
+      case 'en_revision': return '🔄';
       default: return '⚪';
     }
   };
@@ -274,13 +433,58 @@ const KYCModule = () => {
             </p>
           </div>
           <button
-            onClick={() => setView('nuevo')}
+            onClick={() => { setValidacionListas(null); setDuplicateNotice(null); setError(null); setView('nuevo'); }}
             className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-all"
           >
             <Plus className="w-5 h-5" />
             Nuevo Cliente
           </button>
         </div>
+
+        {validacionListas && (
+          <div className="bg-gray-800/60 border border-gray-700 rounded-lg p-4">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-sm text-gray-400">Resultado de validación en listas</p>
+                {lastValidationInfo && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Última validación: {formatDateTime(lastValidationInfo.ts)} · {lastValidationInfo.label}
+                  </p>
+                )}
+                <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm text-white">
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-1 rounded text-xs ${validacionListas.validaciones?.ofac?.encontrado ? 'bg-red-500/20 text-red-300' : 'bg-emerald-500/20 text-emerald-200'}`}>
+                      OFAC: {validacionListas.validaciones?.ofac?.encontrado ? `${validacionListas.validaciones?.ofac?.total || 0} coincidencia(s)` : 'Limpio'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-1 rounded text-xs ${validacionListas.validaciones?.csnu?.encontrado ? 'bg-orange-500/20 text-orange-200' : 'bg-emerald-500/20 text-emerald-200'}`}>
+                      ONU/CSNU: {validacionListas.validaciones?.csnu?.encontrado ? `${validacionListas.validaciones?.csnu?.total || 0} coincidencia(s)` : 'Limpio'}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-1 rounded text-xs ${validacionListas.validaciones?.lista_69b?.en_lista ? 'bg-red-500/20 text-red-300' : 'bg-emerald-500/20 text-emerald-200'}`}>
+                      Lista 69-B: {validacionListas.validaciones?.lista_69b?.en_lista === null ? 'No disponible' : validacionListas.validaciones?.lista_69b?.en_lista ? 'En lista' : 'No encontrado'}
+                    </span>
+                  </div>
+                </div>
+                {validacionListas.alertas?.length > 0 && (
+                  <ul className="mt-2 text-xs text-red-300 list-disc list-inside space-y-1">
+                    {validacionListas.alertas.map((a: string, idx: number) => (
+                      <li key={idx}>{a}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div className="text-right">
+                <div className={`text-sm font-semibold ${validacionListas.aprobado ? 'text-emerald-300' : 'text-red-300'}`}>
+                  {validacionListas.aprobado ? 'Aprobado' : 'Observaciones'}
+                </div>
+                <div className="text-xs text-gray-400">Score riesgo: {validacionListas.score_riesgo}/100</div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Estadísticas rápidas */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -348,6 +552,7 @@ const KYCModule = () => {
               <option value="medio">Medio</option>
               <option value="bajo">Bajo</option>
               <option value="pendiente">Pendiente</option>
+              <option value="en_revision">En revisión</option>
             </select>
 
             <button className="flex items-center gap-2 px-4 py-2 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-500/30 transition-all">
@@ -397,7 +602,9 @@ const KYCModule = () => {
                         <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getRiesgoColor(cliente.nivel_riesgo)}`}>
                           {getRiesgoIcon(cliente.nivel_riesgo)} {cliente.nivel_riesgo.toUpperCase()}
                         </span>
-                        <span className="text-xs text-gray-500">EBR: {cliente.score_ebr.toFixed(3)}</span>
+                        <span className="text-xs text-gray-500">
+                          EBR: {cliente.score_ebr !== null ? cliente.score_ebr.toFixed(3) : 'N/A'}
+                        </span>
                       </div>
                     </td>
                     <td className="px-4 py-3">
@@ -426,6 +633,20 @@ const KYCModule = () => {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex justify-end gap-2">
+                        <button
+                          onClick={() => validarListasCliente(cliente)}
+                          className={`p-2 ${validandoListas ? 'opacity-60 cursor-not-allowed' : 'text-emerald-300 hover:bg-emerald-500/20'} rounded transition-colors`}
+                          title="Validar en listas"
+                          disabled={validandoListas}
+                        >
+                          <RefreshCcw className="w-4 h-4" />
+                        </button>
+                        {lastValidations[cliente.cliente_id] && (
+                          <div className="text-right text-[11px] leading-tight text-gray-500">
+                            <div>Últ. validación</div>
+                            <div className="text-gray-400">{formatDateTime(lastValidations[cliente.cliente_id])}</div>
+                          </div>
+                        )}
                         <button
                           onClick={() => {
                             setSelectedCliente(cliente);
@@ -466,7 +687,7 @@ const KYCModule = () => {
       <div className="space-y-6">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => setView('lista')}
+            onClick={() => { setValidacionListas(null); setDuplicateNotice(null); setError(null); setView('lista'); }}
             className="text-emerald-400 hover:text-emerald-300 flex items-center gap-2"
           >
             ← Volver
@@ -480,6 +701,23 @@ const KYCModule = () => {
             <div>
               <p className="font-medium">Error en el formulario</p>
               <p className="text-sm mt-1">{error}</p>
+            </div>
+          </div>
+        )}
+
+        {duplicateNotice && (
+          <div className="bg-orange-500/15 border border-orange-500/40 rounded-lg p-4 text-orange-200">
+            <div className="flex justify-between items-start gap-3">
+              <div>
+                <p className="font-semibold text-orange-100">Cliente ya existente</p>
+                <p className="text-sm whitespace-pre-line mt-1">{duplicateNotice}</p>
+              </div>
+              <button
+                onClick={onDuplicateAccept}
+                className="px-3 py-1 rounded bg-orange-500 text-white text-sm hover:bg-orange-600 transition-colors"
+              >
+                Aceptar
+              </button>
             </div>
           </div>
         )}

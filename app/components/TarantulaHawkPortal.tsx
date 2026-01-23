@@ -283,7 +283,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
         columns,
       });
 
-      const requiredColumns = ['monto', 'fecha', 'tipo_operacion', 'cliente_id', 'sector_actividad'];
+      const requiredColumns = ['monto', 'fecha', 'tipo_operacion', 'cliente_id'];
       const missingColumns = requiredColumns.filter(
         (col) => !columns.some((c: string) => c.toLowerCase().trim() === col.toLowerCase())
       );
@@ -333,7 +333,7 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
       return;
     }
 
-    const requiredColumns = ['monto', 'fecha', 'tipo_operacion', 'cliente_id', 'sector_actividad'];
+    const requiredColumns = ['monto', 'fecha', 'tipo_operacion', 'cliente_id'];
     const missingColumns = requiredColumns.filter((col) => !detectedColumns.includes(col.toLowerCase()));
     if (missingColumns.length > 0) {
       setStatusMessage({ type: 'error', message: `No se puede procesar: faltan columnas ${missingColumns.join(', ')}` });

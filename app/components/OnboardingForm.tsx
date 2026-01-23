@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { getSupabaseBrowserClient } from '../lib/supabaseClient';
 import { Turnstile } from '@marsidev/react-turnstile';
 
 // Inline logo for modal consistency
@@ -237,6 +237,7 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
       }
 
       // Ejecutar envío de Magic Link acorde al modo
+      const supabase = getSupabaseBrowserClient();
       const { error: signInError } = await supabase.auth.signInWithOtp({
         email: normalizedEmail,
         options: {
@@ -327,6 +328,7 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
                 onClick={async () => {
                   setLoading(true);
                   try {
+                    const supabase = getSupabaseBrowserClient();
                     const { error: loginError } = await supabase.auth.signInWithOtp({
                       email,
                       options: { emailRedirectTo: `${window.location.origin}/auth/redirect`, shouldCreateUser: false }

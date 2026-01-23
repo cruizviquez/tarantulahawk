@@ -2,7 +2,7 @@
 
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { supabase } from '../../lib/supabaseClient';
+import { getSupabaseBrowserClient } from '../../lib/supabaseClient';
 import OnboardingForm from '../../components/OnboardingForm';
 
 const TarantulaHawkLogo = ({ className = "w-16 h-16" }) => (
@@ -48,6 +48,7 @@ function LoginContent() {
   useEffect(() => {
     const checkSession = async () => {
       try {
+        const supabase = getSupabaseBrowserClient();
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
           router.push(returnTo);

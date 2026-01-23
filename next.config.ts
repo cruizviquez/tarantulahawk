@@ -9,19 +9,6 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react', '@supabase/ssr'],
   },
-  async rewrites() {
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_API_URL || 'http://localhost:8000';
-    return [
-      {
-        source: '/api/portal/:path*',
-        destination: `${backendUrl}/api/portal/:path*`,
-      },
-      {
-        source: '/outputs/:path*',
-        destination: `${backendUrl}/outputs/:path*`,
-      },
-    ];
-  },
   webpack: (config, { dev, isServer }) => {
     // Optimize for production builds
     if (!dev && !isServer) {

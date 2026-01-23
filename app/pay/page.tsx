@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from 'react';
 import Script from 'next/script';
-import { supabase } from '@/app/lib/supabaseClient';
+import { getSupabaseBrowserClient } from '@/app/lib/supabaseClient';
 
 export default function PayPage() {
   const [clientId, setClientId] = useState<string | null>(null);

@@ -44,7 +44,10 @@ export function validarRFC(rfc: string, tipoPersona: 'fisica' | 'moral'): Valida
 
 /**
  * Validar formato de CURP
- * 18 caracteres: XXXXXX######HDFLRN##
+ * 18 caracteres: AAAA######H[EE]CCCHD (donde EE es estado de nacimiento)
+ * Ejemplo: RUCF758728HDFZVS08
+ *          0123456789012345678
+ *          Posiciones: 4 letras + 6 dígitos + H/M + 2 letras estado + 3 letras + 2 caracteres
  */
 export function validarCURP(curp: string): ValidationResult {
   const curp_clean = curp.trim().toUpperCase();
@@ -60,12 +63,30 @@ export function validarCURP(curp: string): ValidationResult {
     };
   }
 
-  // Validar formato: 6 letras + 6 números + 8 caracteres alphanumericos
-  const curp_pattern = /^[A-ZÑ&]{6}\d{6}[A-Z]{6}\d{3}$/;
+  // Validar formato: 4 letras + 6 dígitos + H/M + 2 letras estado + 3 letras consonantes + 1 carácter homoclave (letra o dígito) + 1 dígito de verificación
+  // Formato: AAAA######H[EE]CCC[A-Z0-9]D
+  const curp_pattern = /^[A-Z]{4}\d{6}[HM][A-Z]{2}[A-Z]{3}[A-Z0-9]{2}$/;
   if (!curp_pattern.test(curp_clean)) {
     return {
       valid: false,
-      error: 'Formato de CURP inválido'
+      error: 'Formato de CURP inválido. Debe ser: 4 letras + 6 dígitos + H/M + 2 letras estado + 3 letras + 2 caracteres finales'
+    };
+  }
+
+  // Validar código de estado (posiciones 11-12, índice 11-13 en 0-based substring)
+  // RUCF758728HDFZVS08 → DF en posiciones 11-12
+  // DF (Distrito Federal) es válido junto con CM (Ciudad de México)
+  const estado = curp_clean.substring(11, 13);
+  const estados_validos = [
+    'AS', 'BC', 'BS', 'CC', 'CL', 'CM', 'CS', 'CH', 'DF', 'DG', 'GT', 'GR',
+    'HG', 'JC', 'MC', 'MN', 'MS', 'NT', 'NL', 'OC', 'PL', 'QT', 'QR', 'SP',
+    'SL', 'SR', 'TC', 'TS', 'TL', 'VZ', 'YN', 'ZS', 'NE' // NE = Nacido en el Extranjero
+  ];
+
+  if (!estados_validos.includes(estado)) {
+    return {
+      valid: false,
+      error: `Código de estado inválido: ${estado}. DF y CM son válidos para CDMX.`
     };
   }
 

@@ -92,8 +92,9 @@ class CURPValidator:
                 "curp": None
             }
         
-        # Patrón CURP
-        patron = r'^[A-Z]{4}\d{6}[HM][A-Z]{5}[A-Z0-9]\d$'
+        # Patrón CURP: 4 letras + 6 dígitos + H/M + 2 letras estado + 3 letras consonantes + homoclave + dígito
+        # Formato: AAAA######HEEECCC#D (ejemplo: RUCF758728HDFZVS08)
+        patron = r'^[A-Z]{4}\d{6}[HM][A-Z]{2}[A-Z]{3}[A-Z0-9]\d$'
         
         if not re.match(patron, curp):
             return {
@@ -102,16 +103,37 @@ class CURPValidator:
                 "curp": None
             }
         
-        # Extraer datos
+        # Extraer datos (índices 0-based)
         sexo = curp[10]  # H o M
-        estado = curp[11:13]
+        estado = curp[11:13]  # Posiciones 11-12 del CURP (índice 11-12)
+        
+        # Validar código de estado (acepta DF y CM para CDMX)
+        estados_validos = {
+            'AS', 'BC', 'BS', 'CC', 'CL', 'CM', 'CS', 'CH', 'DF', 'DG', 'GT', 'GR',
+            'HG', 'JC', 'MC', 'MN', 'MS', 'NT', 'NL', 'OC', 'PL', 'QT', 'QR', 'SP',
+            'SL', 'SR', 'TC', 'TS', 'TL', 'VZ', 'YN', 'ZS', 'NE'  # NE = Nacido en el Extranjero
+        }
+        
+        if estado not in estados_validos:
+            return {
+                "valido": False,
+                "error": f"Código de estado inválido: {estado}. DF y CM son válidos para CDMX.",
+                "curp": None
+            }
+        
+        # Normalizar nombre del estado (para display)
+        estado_nombre = estado
+        if estado == 'DF':
+            estado_nombre = 'DF (Distrito Federal / CDMX)'
+        elif estado == 'CM':
+            estado_nombre = 'CM (Ciudad de México)'
         
         return {
             "valido": True,
             "curp": curp,
             "formato_correcto": True,
             "sexo": "Hombre" if sexo == "H" else "Mujer",
-            "estado_nacimiento": estado,
+            "estado_nacimiento": estado_nombre,
             "nota": "Formato válido - Certificación RENAPO recomendada",
             "advertencia": "Esta validación es solo de formato. Para certificación oficial, consultar RENAPO."
         }

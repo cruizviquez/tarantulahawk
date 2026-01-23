@@ -147,6 +147,14 @@ export async function middleware(request: NextRequest) {
   
   // === API ROUTE PROTECTION ===
   if (isApiRoute) {
+    // Bypass middleware auth for /api/portal/*, /api/history/*, /api/kyc/* - Route Handlers use proxyToBackend() which validates auth
+    if (pathname.startsWith('/api/portal') || pathname.startsWith('/api/kyc') || pathname.startsWith('/api/history')) {
+      trace('api-portal-bypass');
+      const response = NextResponse.next();
+      response.headers.set('X-Middleware-Trace', 'api-portal-bypass');
+      return addSecurityHeaders(response);
+    }
+    
     const isPublicApi = PUBLIC_API_PREFIXES.some(prefix => pathname.startsWith(prefix));
     if (isPublicApi) {
       trace('api-public-allow');

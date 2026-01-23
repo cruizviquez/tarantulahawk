@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { supabase } from '../lib/supabaseClient';
+import { getSupabaseBrowserClient } from '../lib/supabaseClient';
 
 /**
  * Handles Supabase links that redirect to the Site URL with URL hash params

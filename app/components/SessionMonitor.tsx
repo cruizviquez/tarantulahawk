@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { supabase } from '@/app/lib/supabaseClient'
+import { getSupabaseBrowserClient } from '@/app/lib/supabaseClient'
 
 interface SessionMonitorProps {
   userId: string
@@ -45,6 +45,7 @@ export default function SessionMonitor({
 
   const handleLogout = async () => {
     try {
+      const supabase = getSupabaseBrowserClient();
       await supabase.auth.signOut()
       localStorage.clear()
       sessionStorage.clear()

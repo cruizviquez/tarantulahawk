@@ -1,11 +1,297 @@
+nohup: ignoring input
 
 > tarantulahawk@0.1.0 dev
 > next dev
 
-   ▲ Next.js 15.5.5
+   ▲ Next.js 15.5.9
    - Local:        http://localhost:3000
-   - Network:      http://10.0.2.43:3000
-   - Environments: .env.local
+   - Network:      http://10.0.4.81:3000
+   - Environments: .env.local, .env
+   - Experiments (use with caution):
+     · optimizePackageImports
 
  ✓ Starting...
- ✓ Ready in 8.7s
+ ✓ Ready in 9.8s
+ ○ Compiling /middleware ...
+ ✓ Compiled /middleware in 2.8s (162 modules)
+<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (131kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
+[MW] init {"path":"/","isApiRoute":false,"authValid":true}
+[MW] page-public-allow {"path":"/"}
+ ○ Compiling / ...
+ ✓ Compiled / in 43.1s (795 modules)
+ GET / 200 in 46155ms
+[MW] init {"path":"/api/turnstile/verify","isApiRoute":true,"authValid":true}
+[MW] api-public-allow {"path":"/api/turnstile/verify"}
+ ○ Compiling /api/turnstile/verify ...
+ ✓ Compiled /api/turnstile/verify in 1080ms (783 modules)
+ POST /api/turnstile/verify 200 in 3940ms
+[MW] init {"path":"/","isApiRoute":false,"authValid":true}
+[MW] page-public-allow {"path":"/"}
+ GET / 200 in 4540ms
+[MW] init {"path":"/api/turnstile/verify","isApiRoute":true,"authValid":true}
+[MW] api-public-allow {"path":"/api/turnstile/verify"}
+ POST /api/turnstile/verify 200 in 2061ms
+[MW] init {"path":"/auth/callback","isApiRoute":false,"authValid":true}
+[MW] page-public-allow {"path":"/auth/callback"}
+ ○ Compiling /auth/callback ...
+ ✓ Compiled /auth/callback in 881ms (785 modules)
+[AUTH] Processing Magic Link
+[AUTH] Session created for: 41dcb67b-e4e5-4749-9c11-accb3090868d
+ GET /auth/callback?token_hash=pkce_9ea211fe182db1a7ae56e63b18bbaf8cabb50aa0584e00f3f1fe453b&type=magiclink 307 in 4808ms
+[MW] init {"path":"/dashboard","isApiRoute":false,"authValid":true}
+[MW] protected-allow {"path":"/dashboard"}
+[MW] page-default-allow {"path":"/dashboard"}
+ ○ Compiling /dashboard ...
+ ✓ Compiled /dashboard in 2.5s (908 modules)
+ GET /dashboard 200 in 6756ms
+[MW] init {"path":"/api/portal/pending-payments","isApiRoute":true,"authValid":true}
+[MW] api-portal-bypass {"path":"/api/portal/pending-payments"}
+(node:4178) [DEP0060] DeprecationWarning: The `util._extend` API is deprecated. Please use Object.assign() instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+[MW] init {"path":"/api/portal/history","isApiRoute":true,"authValid":true}
+[MW] api-portal-bypass {"path":"/api/portal/history"}
+ ✓ Compiled in 2.1s (887 modules)
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+[MW] init {"path":"/","isApiRoute":false,"authValid":true}
+[MW] page-public-allow {"path":"/"}
+[MW] init {"path":"/dashboard","isApiRoute":false,"authValid":true}
+[MW] protected-allow {"path":"/dashboard"}
+[MW] page-default-allow {"path":"/dashboard"}
+ GET / 200 in 8820ms
+ GET /dashboard 200 in 8624ms
+[MW] init {"path":"/dashboard","isApiRoute":false,"authValid":true}
+[MW] protected-allow {"path":"/dashboard"}
+[MW] page-default-allow {"path":"/dashboard"}
+[MW] init {"path":"/","isApiRoute":false,"authValid":true}
+[MW] page-public-allow {"path":"/"}
+ ○ Compiling /_not-found ...
+ ✓ Compiled /_not-found in 4.5s (1054 modules)
+ GET /dashboard 404 in 4391ms
+ GET / 404 in 4391ms
+[MW] init {"path":"/dashboard","isApiRoute":false,"authValid":true}
+[MW] protected-allow {"path":"/dashboard"}
+[MW] page-default-allow {"path":"/dashboard"}
+[MW] init {"path":"/","isApiRoute":false,"authValid":true}
+[MW] page-public-allow {"path":"/"}
+ GET /dashboard 200 in 7275ms
+[MW] init {"path":"/dashboard","isApiRoute":false,"authValid":true}
+[MW] protected-allow {"path":"/dashboard"}
+[MW] page-default-allow {"path":"/dashboard"}
+ ✓ Compiled in 3.6s (892 modules)
+ GET / 200 in 12143ms
+[MW] init {"path":"/","isApiRoute":false,"authValid":true}
+[MW] page-public-allow {"path":"/"}
+ GET /dashboard 200 in 6378ms
+ GET / 200 in 2855ms
+ ✓ Compiled in 1723ms (892 modules)
+ ✓ Compiled in 1121ms (892 modules)
+[MW] init {"path":"/api/portal/pending-payments","isApiRoute":true,"authValid":true}
+[MW] api-portal-bypass {"path":"/api/portal/pending-payments"}
+[MW] init {"path":"/api/portal/history","isApiRoute":true,"authValid":true}
+[MW] api-portal-bypass {"path":"/api/portal/history"}
+[MW] init {"path":"/api/kyc/clientes","isApiRoute":true,"authValid":true}
+[MW] api-portal-bypass {"path":"/api/kyc/clientes"}
+ ○ Compiling /api/kyc/clientes ...
+ ⨯ ./app/api/kyc/clientes/route.ts:3:1
+Module not found: Can't resolve '../../../lib/auth/serverAuth'
+  1 | import { NextRequest, NextResponse } from 'next/server';
+  2 | import { getSupabaseServerClient } from '../../../lib/supabaseServer';
+> 3 | import { verifyAuth } from '../../../lib/auth/serverAuth';
+    | ^
+  4 |
+  5 | /**
+  6 |  * GET /api/kyc/clientes
+
+https://nextjs.org/docs/messages/module-not-found
+ ⨯ ./app/api/kyc/clientes/route.ts:3:1
+Module not found: Can't resolve '../../../lib/auth/serverAuth'
+  1 | import { NextRequest, NextResponse } from 'next/server';
+  2 | import { getSupabaseServerClient } from '../../../lib/supabaseServer';
+> 3 | import { verifyAuth } from '../../../lib/auth/serverAuth';
+    | ^
+  4 |
+  5 | /**
+  6 |  * GET /api/kyc/clientes
+
+https://nextjs.org/docs/messages/module-not-found
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+[MW] init {"path":"/dashboard","isApiRoute":false,"authValid":true}
+[MW] protected-allow {"path":"/dashboard"}
+[MW] page-default-allow {"path":"/dashboard"}
+[MW] init {"path":"/","isApiRoute":false,"authValid":true}
+[MW] page-public-allow {"path":"/"}
+[MW] init {"path":"/api/kyc/clientes","isApiRoute":true,"authValid":true}
+[MW] api-portal-bypass {"path":"/api/kyc/clientes"}
+[MW] init {"path":"/dashboard","isApiRoute":false,"authValid":true}
+[MW] protected-allow {"path":"/dashboard"}
+[MW] page-default-allow {"path":"/dashboard"}
+[MW] init {"path":"/","isApiRoute":false,"authValid":true}
+[MW] page-public-allow {"path":"/"}
+ ⨯ ./app/api/kyc/clientes/route.ts:3:1
+Module not found: Can't resolve '../../../lib/auth/serverAuth'
+  1 | import { NextRequest, NextResponse } from 'next/server';
+  2 | import { getSupabaseServerClient } from '../../../lib/supabaseServer';
+> 3 | import { verifyAuth } from '../../../lib/auth/serverAuth';
+    | ^
+  4 |
+  5 | /**
+  6 |  * GET /api/kyc/clientes
+
+https://nextjs.org/docs/messages/module-not-found
+ ⨯ ./app/api/kyc/clientes/route.ts:3:1
+Module not found: Can't resolve '../../../lib/auth/serverAuth'
+  1 | import { NextRequest, NextResponse } from 'next/server';
+  2 | import { getSupabaseServerClient } from '../../../lib/supabaseServer';
+> 3 | import { verifyAuth } from '../../../lib/auth/serverAuth';
+    | ^
+  4 |
+  5 | /**
+  6 |  * GET /api/kyc/clientes
+
+https://nextjs.org/docs/messages/module-not-found
+ GET /api/kyc/clientes 500 in 31756ms
+ GET /dashboard 500 in 26872ms
+ GET / 500 in 26873ms
+ GET /api/kyc/clientes 500 in 10520ms
+ GET / 200 in 5415ms
+ GET /dashboard 200 in 5712ms
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename '/workspaces/tarantulahawk/.next/cache/webpack/client-development-fallback/0.pack.gz_' -> '/workspaces/tarantulahawk/.next/cache/webpack/client-development-fallback/0.pack.gz'
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename '/workspaces/tarantulahawk/.next/cache/webpack/client-development-fallback/0.pack.gz_' -> '/workspaces/tarantulahawk/.next/cache/webpack/client-development-fallback/0.pack.gz'
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+ ⚠ Fast Refresh had to perform a full reload. Read more: https://nextjs.org/docs/messages/fast-refresh-reload
+[MW] init {"path":"/","isApiRoute":false,"authValid":true}
+[MW] page-public-allow {"path":"/"}
+ ⚠ ./app/api/kyc/clientes/route.ts
+Attempted import error: 'getSupabaseServerClient' is not exported from '../../../lib/supabaseServer' (imported as 'getSupabaseServerClient').
+
+Import trace for requested module:
+./app/api/kyc/clientes/route.ts
+
+./app/api/kyc/clientes/route.ts
+Attempted import error: 'getSupabaseServerClient' is not exported from '../../../lib/supabaseServer' (imported as 'getSupabaseServerClient').
+
+Import trace for requested module:
+./app/api/kyc/clientes/route.ts
+[MW] init {"path":"/dashboard","isApiRoute":false,"authValid":true}
+[MW] protected-allow {"path":"/dashboard"}
+[MW] page-default-allow {"path":"/dashboard"}
+ GET / 200 in 8566ms
+ GET /dashboard 200 in 7999ms
+ ✓ Compiled /_error in 1475ms (628 modules)
+[MW] init {"path":"/api/portal/pending-payments","isApiRoute":true,"authValid":true}
+[MW] api-portal-bypass {"path":"/api/portal/pending-payments"}
+[MW] init {"path":"/api/portal/history","isApiRoute":true,"authValid":true}
+[MW] api-portal-bypass {"path":"/api/portal/history"}
+[MW] init {"path":"/api/kyc/clientes","isApiRoute":true,"authValid":true}
+[MW] api-portal-bypass {"path":"/api/kyc/clientes"}
+ ○ Compiling /api/kyc/clientes ...
+ ⚠ ./app/api/kyc/clientes/route.ts
+Attempted import error: 'getSupabaseServerClient' is not exported from '../../../lib/supabaseServer' (imported as 'getSupabaseServerClient').
+
+Import trace for requested module:
+./app/api/kyc/clientes/route.ts
+
+./app/api/kyc/clientes/route.ts
+Attempted import error: 'getSupabaseServerClient' is not exported from '../../../lib/supabaseServer' (imported as 'getSupabaseServerClient').
+
+Import trace for requested module:
+./app/api/kyc/clientes/route.ts
+Error en GET /api/kyc/clientes: TypeError: (0 , _lib_supabaseServer__WEBPACK_IMPORTED_MODULE_1__.getSupabaseServerClient) is not a function
+    at GET (app/api/kyc/clientes/route.ts:20:45)
+  18 |     }
+  19 |
+> 20 |     const supabase = getSupabaseServerClient();
+     |                                             ^
+  21 |
+  22 |     // Obtener clientes del usuario
+  23 |     const { data: clientes, error } = await supabase
+ GET /api/kyc/clientes 500 in 3281ms
+[MW] init {"path":"/api/kyc/clientes","isApiRoute":true,"authValid":true}
+[MW] api-portal-bypass {"path":"/api/kyc/clientes"}
+Error en GET /api/kyc/clientes: TypeError: (0 , _lib_supabaseServer__WEBPACK_IMPORTED_MODULE_1__.getSupabaseServerClient) is not a function
+    at GET (app/api/kyc/clientes/route.ts:20:45)
+  18 |     }
+  19 |
+> 20 |     const supabase = getSupabaseServerClient();
+     |                                             ^
+  21 |
+  22 |     // Obtener clientes del usuario
+  23 |     const { data: clientes, error } = await supabase
+ GET /api/kyc/clientes 500 in 2188ms
+ ✓ Compiled /api/kyc/clientes in 277ms (649 modules)
+[MW] init {"path":"/dashboard","isApiRoute":false,"authValid":true}
+[MW] protected-allow {"path":"/dashboard"}
+[MW] page-default-allow {"path":"/dashboard"}
+[MW] init {"path":"/","isApiRoute":false,"authValid":true}
+[MW] page-public-allow {"path":"/"}
+ GET /dashboard 200 in 5309ms
+ GET / 200 in 5287ms
+ ✓ Compiled in 1375ms (628 modules)
+[MW] init {"path":"/api/kyc/clientes","isApiRoute":true,"authValid":true}
+[MW] api-portal-bypass {"path":"/api/kyc/clientes"}
+ ✓ Compiled /api/kyc/clientes in 198ms (649 modules)
+Error obteniendo clientes: {
+  code: '42703',
+  details: null,
+  hint: null,
+  message: 'column clientes.usuario_id does not exist'
+}
+ GET /api/kyc/clientes 500 in 2359ms
+[MW] init {"path":"/api/kyc/clientes","isApiRoute":true,"authValid":true}
+[MW] api-portal-bypass {"path":"/api/kyc/clientes"}
+Error obteniendo clientes: {
+  code: '42703',
+  details: null,
+  hint: null,
+  message: 'column clientes.usuario_id does not exist'
+}
+ GET /api/kyc/clientes 500 in 3016ms
+ ✓ Compiled in 1154ms (649 modules)
+[MW] init {"path":"/","isApiRoute":false,"authValid":true}
+[MW] page-public-allow {"path":"/"}
+ GET / 200 in 2647ms
+ ✓ Compiled in 1349ms (628 modules)
+[MW] init {"path":"/api/kyc/clientes","isApiRoute":true,"authValid":true}
+[MW] api-portal-bypass {"path":"/api/kyc/clientes"}
+ ✓ Compiled /api/kyc/clientes in 203ms (649 modules)
+ GET /api/kyc/clientes 200 in 3350ms
+[MW] init {"path":"/api/kyc/clientes","isApiRoute":true,"authValid":true}
+[MW] api-portal-bypass {"path":"/api/kyc/clientes"}
+ GET /api/kyc/clientes 200 in 2479ms
+ ✓ Compiled in 2.4s (1140 modules)
+ ✓ Compiled in 920ms (1140 modules)
+[MW] init {"path":"/api/kyc/clientes","isApiRoute":true,"authValid":true}
+[MW] api-portal-bypass {"path":"/api/kyc/clientes"}
+ ○ Compiling /api/kyc/clientes ...
+ ✓ Compiled /api/kyc/clientes in 733ms (649 modules)
+ GET /api/kyc/clientes 200 in 3272ms
+[MW] init {"path":"/api/kyc/clientes","isApiRoute":true,"authValid":true}
+[MW] api-portal-bypass {"path":"/api/kyc/clientes"}
+ GET /api/kyc/clientes 200 in 1785ms
+[Error: ENOENT: no such file or directory, stat '/workspaces/tarantulahawk/.next/cache/webpack/server-development/9.pack.gz'] {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'stat',
+  path: '/workspaces/tarantulahawk/.next/cache/webpack/server-development/9.pack.gz'
+}
+ ⨯ unhandledRejection: [Error: ENOENT: no such file or directory, stat '/workspaces/tarantulahawk/.next/cache/webpack/server-development/9.pack.gz'] {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'stat',
+  path: '/workspaces/tarantulahawk/.next/cache/webpack/server-development/9.pack.gz'
+}
+ ⨯ unhandledRejection:  [Error: ENOENT: no such file or directory, stat '/workspaces/tarantulahawk/.next/cache/webpack/server-development/9.pack.gz'] {
+  errno: -2,
+  code: 'ENOENT',
+  syscall: 'stat',
+  path: '/workspaces/tarantulahawk/.next/cache/webpack/server-development/9.pack.gz'
+}
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, stat '/workspaces/tarantulahawk/.next/cache/webpack/server-development/9.pack.gz'
+Attention: Next.js now collects completely anonymous telemetry regarding usage.
+This information is used to shape Next.js' roadmap and prioritize features.
+You can learn more, including how to opt-out if you'd not like to participate in this anonymous program, by visiting the following URL:
+https://nextjs.org/telemetry
+
+[?25h

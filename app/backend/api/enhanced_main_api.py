@@ -172,7 +172,7 @@ app.add_middleware(
         "http://localhost:3001",
         "https://localhost:3001",
     ],
-    allow_origin_regex=r"https://.*\.github\.dev",
+    allow_origin_regex=r"^https://.*\.(app\.)?github\.dev$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
