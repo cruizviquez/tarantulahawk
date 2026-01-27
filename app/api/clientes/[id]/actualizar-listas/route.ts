@@ -1,7 +1,6 @@
 // app/api/clientes/[id]/actualizar-listas/route.ts
 import { createClient } from '@supabase/supabase-js';
 import { NextRequest, NextResponse } from 'next/server';
-import { validarListas } from '@/lib/lista-validators';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || '',
@@ -15,7 +14,7 @@ const supabase = createClient(
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Verificar autenticación
@@ -24,7 +23,7 @@ export async function POST(
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
 
-    const clienteId = params.id;
+    const { id: clienteId } = await params;
     if (!clienteId) {
       return NextResponse.json({ error: 'ID de cliente requerido' }, { status: 400 });
     }
@@ -43,18 +42,30 @@ export async function POST(
       );
     }
 
-    // Validar en listas
-    const resultado = await validarListas(
-      {
-        tipo_persona: cliente.tipo_persona,
-        nombre_completo: cliente.nombre_completo,
-        rfc: cliente.rfc,
-        curp: cliente.curp,
-        sector_actividad: cliente.sector_actividad,
-        origen_recursos: cliente.origen_recursos || ''
+    // Llamar al endpoint de validación de listas
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const validarListasResponse = await fetch(`${baseUrl}/api/kyc/validar-listas`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': authHeader
       },
-      clienteId
-    );
+      body: JSON.stringify({
+        nombre: cliente.nombre_completo.split(' ')[0],
+        apellido_paterno: cliente.nombre_completo.split(' ')[1] || '',
+        apellido_materno: cliente.nombre_completo.split(' ').slice(2).join(' '),
+        rfc: cliente.rfc
+      })
+    });
+
+    if (!validarListasResponse.ok) {
+      return NextResponse.json(
+        { error: 'Error validando listas' },
+        { status: 500 }
+      );
+    }
+
+    const resultado = await validarListasResponse.json();
 
     // Verificar si fue encontrado en listas críticas
     const encontradoEnListas = 

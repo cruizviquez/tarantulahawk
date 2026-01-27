@@ -17,7 +17,7 @@ const BUCKET_DOCUMENTOS = 'kyc-documentos';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const authHeader = request.headers.get('Authorization');
@@ -26,7 +26,7 @@ export async function GET(
     }
     const token = authHeader.replace('Bearer ', '');
 
-    const clienteId = params.id;
+    const { id: clienteId } = await params;
     if (!clienteId) {
       return NextResponse.json({ error: 'ID de cliente requerido' }, { status: 400 });
     }
@@ -62,15 +62,16 @@ export async function GET(
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const authHeader = request.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
+    const token = authHeader.replace('Bearer ', '');
 
-    const clienteId = params.id;
+    const { id: clienteId } = await params;
     if (!clienteId) {
       return NextResponse.json({ error: 'ID de cliente requerido' }, { status: 400 });
     }

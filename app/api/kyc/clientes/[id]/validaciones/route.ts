@@ -9,7 +9,7 @@ import { getAuthenticatedUserId } from '../../../../../lib/api-auth';
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const userId = await getAuthenticatedUserId(request);
@@ -17,7 +17,7 @@ export async function PUT(
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
 
-    const clienteId = params.id;
+    const { id: clienteId } = await params;
     const {
       nivel_riesgo,
       score_ebr,

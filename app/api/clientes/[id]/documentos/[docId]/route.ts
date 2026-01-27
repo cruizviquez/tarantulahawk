@@ -7,7 +7,7 @@ import { toISOStringCDMX } from '@/app/lib/timezoneHelper';
 // Eliminar (soft delete) un documento con registro de auditoría
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string; docId: string } }
+  { params }: { params: Promise<{ id: string; docId: string }> }
 ) {
   const auth = await validateAuth(request);
   if (auth.error || !auth.user.id) {
@@ -15,8 +15,7 @@ export async function DELETE(
   }
 
   try {
-    const clienteId = params.id;
-    const documentoId = params.docId;
+    const { id: clienteId, docId: documentoId } = await params;
 
     if (!clienteId || !documentoId) {
       return NextResponse.json({ error: 'cliente_id y documento_id requeridos' }, { status: 400 });

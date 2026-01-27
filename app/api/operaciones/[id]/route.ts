@@ -7,14 +7,14 @@ import { toISOStringCDMX } from '@/app/lib/timezoneHelper';
 // Actualiza una operación existente y recalcula clasificación PLD
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const auth = await validateAuth(request);
   if (auth.error || !auth.user.id) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const operacionId = params.id;
+  const { id: operacionId } = await params;
   if (!operacionId) {
     return NextResponse.json({ error: 'operacion_id requerido' }, { status: 400 });
   }
@@ -138,7 +138,7 @@ export async function PATCH(
 // Eliminar (soft delete) una operación con registro de auditoría
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   const auth = await validateAuth(request);
   if (auth.error || !auth.user.id) {
@@ -146,7 +146,7 @@ export async function DELETE(
   }
 
   try {
-    const operacionId = params.id;
+    const { id: operacionId } = await params;
     if (!operacionId) {
       return NextResponse.json({ error: 'operacion_id requerido' }, { status: 400 });
     }

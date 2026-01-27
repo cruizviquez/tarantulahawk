@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
 
     // Enriquecer cada cliente con el conteo dinámico de operaciones activas (no eliminadas)
     const clientesEnriquecidos = await Promise.all(
-      (clientes || []).map(async (cliente) => {
+      (clientes || []).map(async (cliente: any) => {
         const { count, error: countError } = await supabase
           .from('operaciones')
           .select('*', { count: 'exact', head: true })

@@ -9,7 +9,7 @@ import { getAuthenticatedUserId } from '../../../../lib/api-auth';
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   console.log('🔵 PUT /api/kyc/clientes/[id] iniciado');
   try {
@@ -21,7 +21,7 @@ export async function PUT(
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
 
-    const clienteId = params.id;
+    const { id: clienteId } = await params;
     const url = new URL(request.url);
     const action = url.searchParams.get('action');
     

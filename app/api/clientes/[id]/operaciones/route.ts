@@ -14,7 +14,7 @@ const supabase = createClient(
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Verificar autenticación
@@ -23,7 +23,7 @@ export async function GET(
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
 
-    const clienteId = params.id;
+    const { id: clienteId } = await params;
     if (!clienteId) {
       return NextResponse.json({ error: 'ID de cliente requerido' }, { status: 400 });
     }

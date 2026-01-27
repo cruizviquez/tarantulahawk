@@ -8,14 +8,14 @@ import { getServiceSupabase } from '../../../../lib/supabaseServer';
  * Seguridad: solo el dueño del expediente puede solicitar la URL.
  * Query opcional: ?expires=SECONDS (por defecto 600 = 10 minutos)
  */
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const userId = await getAuthenticatedUserId(request);
     if (!userId) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
 
-    const clienteId = params.id;
+    const { id: clienteId } = await params;
     if (!clienteId) {
       return NextResponse.json({ error: 'Falta id de cliente' }, { status: 400 });
     }
