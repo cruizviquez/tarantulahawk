@@ -1,0 +1,653 @@
+{
+  "version": "1.0.0",
+  "descripcion": "Sujetos Obligados bajo LFPIORPI 2025 - UMAs base y clasificación",
+  "ultima_actualizacion": "2026-01-27",
+  "uma_diaria": 113.14,
+  "notas_version": [
+    "v1.0: Extracción de LFPIORPI Art. 3 y Art. 17",
+    "Define UMA base por tipo de sujeto obligado",
+    "Mapping con actividades vulnerables en config_modelos.json"
+  ],
+
+  "sujetos_obligados": {
+    "instituciones_credito": {
+      "id": "IC",
+      "nombre": "Instituciones de Crédito",
+      "articulo": "Art. 3 LFPIORPI",
+      "uma_base": 645,
+      "ejemplos": [
+        "Bancos",
+        "Bancos Privados",
+        "Casa de Cambio",
+        "Sociedad Cooperativa de Ahorro y Préstamo",
+        "Financieras"
+      ],
+      "obligaciones_clave": [
+        "Identificación de cliente",
+        "Monitoreo de operaciones",
+        "Reporte operaciones sospechosas 24h",
+        "Aviso mensual si supera umbrales",
+        "Custodia 10 años"
+      ],
+      "es_activo": true
+    },
+
+    "casa_bolsa": {
+      "id": "CB",
+      "nombre": "Casa de Bolsa",
+      "articulo": "Art. 3 LFPIORPI",
+      "uma_base": 645,
+      "ejemplos": [
+        "Operadores Bursátiles",
+        "Intermediarios de Valores",
+        "Agentes de Bolsa"
+      ],
+      "obligaciones_clave": [
+        "Identificación de cliente",
+        "Monitoreo de operaciones bursátiles",
+        "Reporte operaciones sospechosas 24h",
+        "Aviso mensual si supera umbrales",
+        "Custodia 10 años"
+      ],
+      "es_activo": true
+    },
+
+    "casa_cambio": {
+      "id": "CCO",
+      "nombre": "Cajas de Ahorro y Prestamistas Privados",
+      "articulo": "Art. 3 LFPIORPI",
+      "uma_base": 645,
+      "ejemplos": [
+        "Cajas Populares",
+        "Cajas de Ahorro",
+        "Prestamistas Regulados",
+        "Cooperativas Financieras"
+      ],
+      "obligaciones_clave": [
+        "Identificación de cliente",
+        "Monitoreo de operaciones",
+        "Reporte operaciones sospechosas 24h",
+        "Aviso mensual",
+        "Custodia 10 años"
+      ],
+      "es_activo": true
+    },
+
+    "seguros": {
+      "id": "SE",
+      "nombre": "Instituciones de Seguros y Fianzas",
+      "articulo": "Art. 3 LFPIORPI",
+      "uma_base": 645,
+      "ejemplos": [
+        "Aseguradora",
+        "Afianzadora",
+        "Reaseguradora",
+        "Ejecutora de Fianzas"
+      ],
+      "obligaciones_clave": [
+        "Identificación de cliente",
+        "Monitoreo de operaciones",
+        "Reporte operaciones sospechosas 24h",
+        "Aviso mensual",
+        "Custodia 10 años"
+      ],
+      "es_activo": true
+    },
+
+    "fondos_garantia": {
+      "id": "FG",
+      "nombre": "Fondos y Fideicomisos de Garantía",
+      "articulo": "Art. 3 LFPIORPI",
+      "uma_base": 645,
+      "ejemplos": [
+        "Fondos de Garantía",
+        "Fideicomiso FOBAPROA",
+        "Fondos de Reserva"
+      ],
+      "obligaciones_clave": [
+        "Identificación de cliente",
+        "Monitoreo de operaciones",
+        "Reporte operaciones sospechosas 24h"
+      ],
+      "es_activo": true
+    },
+
+    "casas_empeño": {
+      "id": "CE",
+      "nombre": "Casas de Empeño",
+      "articulo": "Art. 3 LFPIORPI",
+      "uma_base": 645,
+      "ejemplos": [
+        "Casa de Empeño Regulada",
+        "Prestamista Prendario"
+      ],
+      "operaciones_monitoreadas": [
+        "Empeño de artículos",
+        "Venta de artículos pignorados"
+      ],
+      "obligaciones_clave": [
+        "Identificación de cliente",
+        "Monitoreo de operaciones",
+        "Reporte operaciones sospechosas 24h"
+      ],
+      "es_activo": true
+    },
+
+    "administrador_fondos": {
+      "id": "AF",
+      "nombre": "Administrador de Fondos de Pensiones y Jubilación",
+      "articulo": "Art. 3 LFPIORPI",
+      "uma_base": 645,
+      "ejemplos": [
+        "AFP (Administrador de Fondos de Pensión)",
+        "Gestor de Retiro"
+      ],
+      "obligaciones_clave": [
+        "Identificación de cliente",
+        "Monitoreo de operaciones",
+        "Reporte operaciones sospechosas 24h"
+      ],
+      "es_activo": true
+    },
+
+    "empresa_factoraje": {
+      "id": "EF",
+      "nombre": "Empresas de Factoraje",
+      "articulo": "Art. 3 LFPIORPI",
+      "uma_base": 645,
+      "ejemplos": [
+        "Factoría",
+        "Empresa de Factoraje Financiero"
+      ],
+      "operaciones_monitoreadas": [
+        "Compra de cartera",
+        "Financiamiento de factura"
+      ],
+      "obligaciones_clave": [
+        "Identificación de cliente",
+        "Monitoreo de operaciones",
+        "Reporte operaciones sospechosas 24h"
+      ],
+      "es_activo": true
+    },
+
+    "arrendadora_financiera": {
+      "id": "ARF",
+      "nombre": "Arrendadora Financiera",
+      "articulo": "Art. 3 LFPIORPI",
+      "uma_base": 645,
+      "ejemplos": [
+        "Empresa de Leasing",
+        "Arrendadora de Equipo"
+      ],
+      "operaciones_monitoreadas": [
+        "Arrendamiento de bienes",
+        "Financiamiento de equipo"
+      ],
+      "obligaciones_clave": [
+        "Identificación de cliente",
+        "Monitoreo de operaciones",
+        "Reporte operaciones sospechosas 24h"
+      ],
+      "es_activo": true
+    },
+
+    "transmisora_dinero": {
+      "id": "TD",
+      "nombre": "Transmisoras de Dinero",
+      "articulo": "Art. 3 LFPIORPI",
+      "uma_base": 645,
+      "ejemplos": [
+        "Servicio de Remesas",
+        "Money Transfer",
+        "Transferencia Internacional"
+      ],
+      "operaciones_monitoreadas": [
+        "Envío de dinero nacional",
+        "Envío de dinero internacional"
+      ],
+      "obligaciones_clave": [
+        "Identificación de cliente",
+        "Monitoreo de operaciones",
+        "Reporte operaciones sospechosas 24h",
+        "Información del beneficiario"
+      ],
+      "es_activo": true
+    },
+
+    "casinos_juegos": {
+      "id": "CJ",
+      "nombre": "Casinos y Juegos de Azar (Art. 17 I)",
+      "articulo": "Art. 17 I LFPIORPI",
+      "uma_base": 3210,
+      "actividad_vulnerable": "I_juegos",
+      "ejemplos": [
+        "Casino",
+        "Sala de Poker",
+        "Casa de Juego",
+        "Operador de Apuestas"
+      ],
+      "umbrales": {
+        "identificacion_uma": 3210,
+        "aviso_uma": 6420,
+        "efectivo_max_uma": 1605
+      },
+      "obligaciones_clave": [
+        "Identificación reforzada",
+        "Conocimiento beneficiario controlador",
+        "Monitoreo operaciones",
+        "Reporte sospechosas 24h",
+        "Aviso mensual supera umbral",
+        "Límite efectivo"
+      ],
+      "es_activo": true
+    },
+
+    "notarios": {
+      "id": "NOT",
+      "nombre": "Notarios Públicos - Derechos sobre Inmuebles (Art. 17 XII A)",
+      "articulo": "Art. 17 XII A LFPIORPI",
+      "uma_base": 8025,
+      "actividad_vulnerable": "XII_A_notarios_derechos_inmuebles",
+      "ejemplos": [
+        "Notario Público",
+        "Notaría (actos inmobiliarios)"
+      ],
+      "operaciones_monitoreadas": [
+        "Compraventa inmuebles",
+        "Donación de inmuebles",
+        "Hipotecas",
+        "Herencias inmobiliarias",
+        "Poderes sobre inmuebles"
+      ],
+      "umbrales": {
+        "identificacion_uma": 0,
+        "aviso_uma": 8025,
+        "efectivo_max_uma": 8025
+      },
+      "obligaciones_clave": [
+        "Identificación cliente",
+        "Beneficiario controlador",
+        "Monitoreo operaciones inmobiliarias",
+        "Reporte sospechosas 24h",
+        "Aviso mensual",
+        "Límite efectivo"
+      ],
+      "es_activo": true
+    },
+
+    "corredores": {
+      "id": "COR",
+      "nombre": "Corredores Públicos - Constitución Personas Morales (Art. 17 XII B)",
+      "articulo": "Art. 17 XII B LFPIORPI",
+      "uma_base": 8025,
+      "actividad_vulnerable": "XII_B_corredores",
+      "ejemplos": [
+        "Corredor Público",
+        "Intermediario de Constitución"
+      ],
+      "operaciones_monitoreadas": [
+        "Constitución de Sociedad",
+        "Constitución de Asociación",
+        "Cambio de Estructura Corporativa",
+        "Intermediación Mercantil"
+      ],
+      "umbrales": {
+        "identificacion_uma": 0,
+        "aviso_uma": 8025,
+        "efectivo_max_uma": 0
+      },
+      "obligaciones_clave": [
+        "Identificación socios",
+        "Beneficiario controlador",
+        "Monitoreo operaciones",
+        "Reporte sospechosas 24h",
+        "Aviso mensual"
+      ],
+      "es_activo": true
+    },
+
+    "joyeria_metales": {
+      "id": "JOY",
+      "nombre": "Joyería y Comercio de Metales Preciosos (Art. 17 VI)",
+      "articulo": "Art. 17 VI LFPIORPI",
+      "uma_base": 1605,
+      "actividad_vulnerable": "VI_joyeria_metales",
+      "ejemplos": [
+        "Joyería",
+        "Comerciante de Metales Preciosos",
+        "Relojería de Lujo",
+        "Platería"
+      ],
+      "umbrales": {
+        "identificacion_uma": 1605,
+        "aviso_uma": 3210,
+        "efectivo_max_uma": 3210
+      },
+      "obligaciones_clave": [
+        "Identificación cliente",
+        "Monitoreo de operaciones",
+        "Reporte sospechosas 24h",
+        "Aviso mensual",
+        "Límite efectivo"
+      ],
+      "es_activo": true
+    },
+
+    "inmobiliario": {
+      "id": "INM",
+      "nombre": "Industria Inmobiliaria - Venta/Compra Inmuebles (Art. 17 V)",
+      "articulo": "Art. 17 V LFPIORPI",
+      "uma_base": 8025,
+      "actividad_vulnerable": "V_inmuebles",
+      "ejemplos": [
+        "Inmobiliaria",
+        "Corredor Inmobiliario",
+        "Desarrollador Inmobiliario",
+        "Agencia de Vienes Raíces"
+      ],
+      "umbrales": {
+        "identificacion_uma": 8025,
+        "aviso_uma": 16050,
+        "efectivo_max_uma": 8025
+      },
+      "obligaciones_clave": [
+        "Identificación reforzada",
+        "Beneficiario controlador",
+        "Monitoreo operaciones",
+        "Reporte sospechosas 24h",
+        "Aviso mensual",
+        "Límite efectivo"
+      ],
+      "es_activo": true
+    },
+
+    "desarrollo_inmobiliario": {
+      "id": "DES_INM",
+      "nombre": "Desarrollo Inmobiliario (Art. 17 V bis)",
+      "articulo": "Art. 17 V bis LFPIORPI",
+      "uma_base": 8025,
+      "actividad_vulnerable": "V_bis_desarrollo_inmobiliario",
+      "ejemplos": [
+        "Constructora",
+        "Desarrolladora Inmobiliaria",
+        "Promotora Inmobiliaria"
+      ],
+      "operaciones_monitoreadas": [
+        "Venta de lotes",
+        "Venta de viviendas",
+        "Financiamiento de construcción",
+        "Entrega de inmueble"
+      ],
+      "umbrales": {
+        "identificacion_uma": 8025,
+        "aviso_uma": 16050,
+        "efectivo_max_uma": 8025
+      },
+      "obligaciones_clave": [
+        "Identificación reforzada",
+        "Beneficiario controlador",
+        "Monitoreo operaciones",
+        "Reporte sospechosas 24h",
+        "Aviso mensual",
+        "Límite efectivo"
+      ],
+      "es_activo": true
+    },
+
+    "vehiculos": {
+      "id": "VEH",
+      "nombre": "Comercialización de Vehículos (Art. 17 VIII)",
+      "articulo": "Art. 17 VIII LFPIORPI",
+      "uma_base": 1605,
+      "actividad_vulnerable": "VIII_vehiculos",
+      "ejemplos": [
+        "Concesionario de Autos",
+        "Distribuidor de Vehículos",
+        "Empresa Alquiler Vehículos",
+        "Vendedor de Motos"
+      ],
+      "umbrales": {
+        "identificacion_uma": 1605,
+        "aviso_uma": 3210,
+        "efectivo_max_uma": 3210
+      },
+      "obligaciones_clave": [
+        "Identificación cliente",
+        "Monitoreo de operaciones",
+        "Reporte sospechosas 24h",
+        "Aviso mensual",
+        "Límite efectivo"
+      ],
+      "es_activo": true
+    },
+
+    "arte_antiguedades": {
+      "id": "ART",
+      "nombre": "Comercio de Arte y Objetos de Colección (Art. 17 VII)",
+      "articulo": "Art. 17 VII LFPIORPI",
+      "uma_base": 1605,
+      "actividad_vulnerable": "VII_obras_arte",
+      "ejemplos": [
+        "Galería de Arte",
+        "Casa de Subastas",
+        "Anticuario",
+        "Comerciante de Objetos de Colección",
+        "Dealer de Arte"
+      ],
+      "umbrales": {
+        "identificacion_uma": 1605,
+        "aviso_uma": 3210,
+        "efectivo_max_uma": 0
+      },
+      "obligaciones_clave": [
+        "Identificación cliente",
+        "Monitoreo de operaciones",
+        "Reporte sospechosas 24h",
+        "Aviso mensual"
+      ],
+      "es_activo": true
+    },
+
+    "blindaje": {
+      "id": "BLD",
+      "nombre": "Blindaje de Vehículos (Art. 17 IX)",
+      "articulo": "Art. 17 IX LFPIORPI",
+      "uma_base": 1605,
+      "actividad_vulnerable": "IX_blindaje",
+      "ejemplos": [
+        "Empresa de Blindaje",
+        "Taller de Blindaje",
+        "Proveedor de Kit de Blindaje"
+      ],
+      "umbrales": {
+        "identificacion_uma": 1605,
+        "aviso_uma": 3210,
+        "efectivo_max_uma": 0
+      },
+      "obligaciones_clave": [
+        "Identificación cliente",
+        "Monitoreo de operaciones",
+        "Reporte sospechosas 24h",
+        "Aviso mensual"
+      ],
+      "es_activo": true
+    },
+
+    "traslado_valores": {
+      "id": "TRA",
+      "nombre": "Traslado y Custodia de Valores (Art. 17 X)",
+      "articulo": "Art. 17 X LFPIORPI",
+      "uma_base": 3210,
+      "actividad_vulnerable": "X_traslado_valores",
+      "ejemplos": [
+        "Empresa de Seguridad (traslado de valores)",
+        "Bóveda de Seguridad",
+        "Custodia de Efectivo",
+        "Servicio Blindado"
+      ],
+      "umbrales": {
+        "identificacion_uma": 3210,
+        "aviso_uma": 3210,
+        "efectivo_max_uma": 3210
+      },
+      "obligaciones_clave": [
+        "Identificación reforzada",
+        "Monitoreo de operaciones",
+        "Reporte sospechosas 24h",
+        "Aviso mensual",
+        "Límite efectivo"
+      ],
+      "es_activo": true
+    },
+
+    "servicios_profesionales": {
+      "id": "PROF",
+      "nombre": "Servicios Profesionales para Operaciones Art. 17 (Art. 17 XI)",
+      "articulo": "Art. 17 XI LFPIORPI",
+      "uma_base": 8025,
+      "actividad_vulnerable": "XI_servicios_profesionales",
+      "ejemplos": [
+        "Contador",
+        "Auditor",
+        "Abogado Especializado",
+        "Asesor Fiscal",
+        "Consultor Empresarial"
+      ],
+      "umbrales": {
+        "identificacion_uma": 0,
+        "aviso_uma": 8025,
+        "efectivo_max_uma": 0
+      },
+      "obligaciones_clave": [
+        "Identificación cliente",
+        "Conocimiento beneficiario controlador",
+        "Monitoreo operaciones",
+        "Reporte sospechosas 24h",
+        "Aviso mensual"
+      ],
+      "es_activo": true
+    },
+
+    "arrendamiento_inmuebles": {
+      "id": "ARREN",
+      "nombre": "Arrendamiento de Inmuebles (Art. 17 XV)",
+      "articulo": "Art. 17 XV LFPIORPI",
+      "uma_base": 1605,
+      "actividad_vulnerable": "XV_arrendamiento_inmuebles",
+      "ejemplos": [
+        "Arrendador de Inmuebles",
+        "Gestoría Inmobiliaria",
+        "Empresa de Administración de Rentas"
+      ],
+      "umbrales": {
+        "identificacion_uma": 1605,
+        "aviso_uma": 3210,
+        "efectivo_max_uma": 3210
+      },
+      "obligaciones_clave": [
+        "Identificación cliente",
+        "Monitoreo de operaciones",
+        "Reporte sospechosas 24h",
+        "Aviso mensual",
+        "Límite efectivo"
+      ],
+      "es_activo": true
+    },
+
+    "activos_virtuales": {
+      "id": "CRIPTO",
+      "nombre": "Operaciones con Activos Virtuales (Art. 17 XVI - Reforma jul-2025)",
+      "articulo": "Art. 17 XVI LFPIORPI",
+      "uma_base": 645,
+      "actividad_vulnerable": "XVI_activos_virtuales",
+      "ejemplos": [
+        "Exchange de Criptomonedas",
+        "Custodio de Criptoactivos",
+        "Plataforma DeFi",
+        "Billetera Digital",
+        "Casa de Cambio Cripto"
+      ],
+      "umbrales": {
+        "identificacion_uma": 645,
+        "aviso_uma": 210,
+        "efectivo_max_uma": 210
+      },
+      "obligaciones_clave": [
+        "Identificación reforzada",
+        "Beneficiario controlador",
+        "Monitoreo operaciones",
+        "Reporte sospechosas 24h",
+        "Aviso mensual",
+        "Límite efectivo (reforma)",
+        "Trazabilidad blockchain"
+      ],
+      "es_activo": true,
+      "nota_reforma": "Incluido en reforma LFPIORPI julio 2025"
+    }
+  },
+
+  "categorias_sujetos": {
+    "instituciones_financieras": {
+      "descripcion": "Art. 3 LFPIORPI - Instituciones reguladas por ley",
+      "sujetos": [
+        "instituciones_credito",
+        "casa_bolsa",
+        "casa_cambio",
+        "seguros",
+        "fondos_garantia",
+        "casas_empeño",
+        "administrador_fondos",
+        "empresa_factoraje",
+        "arrendadora_financiera",
+        "transmisora_dinero"
+      ]
+    },
+    "actividades_vulnerables": {
+      "descripcion": "Art. 17 LFPIORPI - Actividades designadas con mayor riesgo",
+      "sujetos": [
+        "casinos_juegos",
+        "notarios",
+        "corredores",
+        "joyeria_metales",
+        "inmobiliario",
+        "desarrollo_inmobiliario",
+        "vehiculos",
+        "arte_antiguedades",
+        "blindaje",
+        "traslado_valores",
+        "servicios_profesionales",
+        "arrendamiento_inmuebles",
+        "activos_virtuales"
+      ]
+    }
+  },
+
+  "mapeo_a_config_modelos": {
+    "descripcion": "Vinculación entre sujetos obligados y umbrales en config_modelos.json",
+    "guia": {
+      "instituciones_credito": "uma_base 645 (general)",
+      "casinos_juegos": "I_juegos (3210/6420/1605)",
+      "notarios": "XII_A_notarios_derechos_inmuebles (0/8025/8025)",
+      "corredores": "XII_B_corredores (0/8025/0)",
+      "joyeria_metales": "VI_joyeria_metales (1605/3210/3210)",
+      "inmobiliario": "V_inmuebles (8025/16050/8025)",
+      "desarrollo_inmobiliario": "V_bis_desarrollo_inmobiliario (8025/16050/8025)",
+      "vehiculos": "VIII_vehiculos (1605/3210/3210)",
+      "arte_antiguedades": "VII_obras_arte (1605/3210/0)",
+      "blindaje": "IX_blindaje (1605/3210/0)",
+      "traslado_valores": "X_traslado_valores (3210/3210/3210)",
+      "servicios_profesionales": "XI_servicios_profesionales (0/8025/0)",
+      "arrendamiento_inmuebles": "XV_arrendamiento_inmuebles (1605/3210/3210)",
+      "activos_virtuales": "XVI_activos_virtuales (645/210/210)"
+    }
+  },
+
+  "notas_legales": {
+    "responsabilidad": "Cada sujeto obligado es responsable de cumplir con LFPIORPI independientemente",
+    "oficial_cumplimiento": "Debe designar oficial de cumplimiento e instancia de evaluación de riesgos",
+    "umbrales_por_actividad": "Los umbrales varían según la actividad vulnerable que realice, no por tipo de sujeto",
+    "combinacion": "Un sujeto puede realizar múltiples actividades vulnerables → usar UMAs máximas",
+    "reforma_2025": "Julio 2025 amplía obligaciones y reduce algunos umbrales (ej: cripto)"
+  }
+}

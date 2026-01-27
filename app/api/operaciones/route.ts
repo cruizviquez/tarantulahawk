@@ -54,19 +54,27 @@ export async function POST(request: NextRequest) {
     // Generar folio: OP-YYYY-### por usuario
     const now = new Date();
     const year = now.getUTCFullYear();
-    const { data: existing, error: countErr } = await supabase
+    
+    // Obtener la última operación del año para el usuario
+    const { data: lastOp, error: lastOpErr } = await supabase
       .from('operaciones')
-      .select('operacion_id', { count: 'exact', head: true })
+      .select('folio_interno')
       .eq('user_id', auth.user.id)
       .gte('created_at', `${year}-01-01`)
-      .lte('created_at', `${year}-12-31`);
+      .lte('created_at', `${year}-12-31`)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
 
-    if (countErr) {
-      return NextResponse.json({ error: countErr.message }, { status: 500 });
+    // Extraer número de secuencia del último folio o comenzar en 1
+    let seq = 1;
+    if (lastOp && lastOp.folio_interno) {
+      const match = lastOp.folio_interno.match(/OP-\d+-(\d+)/);
+      if (match && match[1]) {
+        seq = parseInt(match[1], 10) + 1;
+      }
     }
-
-    const nextNum = ((existing && 'count' in existing ? (existing as any).count : null) ?? (existing as any)) ?? 0;
-    const seq = (typeof nextNum === 'number' ? nextNum : 0) + 1;
+    
     const folio_interno = `OP-${year}-${String(seq).padStart(3, '0')}`;
 
     // Convertir monto MXN a USD si es necesario (default rate: 17.5)

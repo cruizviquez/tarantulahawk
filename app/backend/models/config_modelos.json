@@ -19,16 +19,19 @@
     "uma_diaria": 113.14,
     "uma_mxn": 113.14,
     "vigencia_uma": "2025-02-01",
+    "reforma_julio_2025": "Inclusión listas 69B, CSNU, UIF + Reforma cripto",
     
     "umbrales": {
       "_general": {
+        "identificacion_UMA": 0,
         "aviso_UMA": 645,
-        "efectivo_max_UMA": 645,
+        "efectivo_max_UMA": 999999999,
         "es_actividad_vulnerable": false,
         "descripcion": "Umbral general - NO aplica a servicios generales"
       },
       
       "servicios_generales": {
+        "identificacion_UMA": 0,
         "aviso_UMA": 999999999,
         "efectivo_max_UMA": 999999999,
         "es_actividad_vulnerable": false,
@@ -36,11 +39,11 @@
       },
       
       "I_juegos": {
-        "identificacion_UMA": 325,
-        "aviso_UMA": 645,
-        "efectivo_max_UMA": 0,
+        "identificacion_UMA": 3210,
+        "aviso_UMA": 6420,
+        "efectivo_max_UMA": 1605,
         "es_actividad_vulnerable": true,
-        "descripcion": "Juegos con apuesta, concursos o sorteos"
+        "descripcion": "Juegos con apuesta, concursos o sorteos (Art. 17 I)"
       },
       
       "II_tarjetas_servicios": {
@@ -48,7 +51,7 @@
         "aviso_UMA": 1285,
         "efectivo_max_UMA": 0,
         "es_actividad_vulnerable": true,
-        "descripcion": "Tarjetas de servicios y de crédito"
+        "descripcion": "Tarjetas de servicios y de crédito (Art. 17 II)"
       },
       
       "II_tarjetas_prepago": {
@@ -56,7 +59,7 @@
         "aviso_UMA": 645,
         "efectivo_max_UMA": 0,
         "es_actividad_vulnerable": true,
-        "descripcion": "Tarjetas prepagadas"
+        "descripcion": "Tarjetas prepagadas (Art. 17 II bis)"
       },
       
       "III_cheques_viajero": {
@@ -64,7 +67,7 @@
         "aviso_UMA": 645,
         "efectivo_max_UMA": 0,
         "es_actividad_vulnerable": true,
-        "descripcion": "Cheques de viajero"
+        "descripcion": "Cheques de viajero (Art. 17 III)"
       },
       
       "IV_mutuo": {
@@ -72,55 +75,55 @@
         "aviso_UMA": 1605,
         "efectivo_max_UMA": 0,
         "es_actividad_vulnerable": true,
-        "descripcion": "Mutuo / préstamos / crédito"
+        "descripcion": "Mutuo/préstamos/crédito sin garantía inmobiliaria (Art. 17 IV)"
       },
       
       "V_inmuebles": {
-        "identificacion_UMA": 0,
-        "aviso_UMA": 8025,
+        "identificacion_UMA": 8025,
+        "aviso_UMA": 16050,
         "efectivo_max_UMA": 8025,
         "es_actividad_vulnerable": true,
-        "descripcion": "Inmuebles (construcción / intermediación)"
+        "descripcion": "Venta/compra de inmuebles (Art. 17 V)"
       },
       
       "V_bis_desarrollo_inmobiliario": {
-        "identificacion_UMA": 0,
-        "aviso_UMA": 8025,
+        "identificacion_UMA": 8025,
+        "aviso_UMA": 16050,
         "efectivo_max_UMA": 8025,
         "es_actividad_vulnerable": true,
-        "descripcion": "Desarrollo inmobiliario"
+        "descripcion": "Desarrollo inmobiliario (Art. 17 V bis)"
       },
       
       "VI_joyeria_metales": {
-        "identificacion_UMA": 805,
-        "aviso_UMA": 1605,
-        "efectivo_max_UMA": 0,
+        "identificacion_UMA": 1605,
+        "aviso_UMA": 3210,
+        "efectivo_max_UMA": 3210,
         "es_actividad_vulnerable": true,
-        "descripcion": "Metales preciosos, joyas, relojes"
+        "descripcion": "Metales preciosos, joyas, relojes (Art. 17 VI)"
       },
       
       "VII_obras_arte": {
-        "identificacion_UMA": 2410,
-        "aviso_UMA": 4815,
+        "identificacion_UMA": 1605,
+        "aviso_UMA": 3210,
         "efectivo_max_UMA": 0,
         "es_actividad_vulnerable": true,
-        "descripcion": "Obras de arte"
+        "descripcion": "Obras de arte y objetos de colección (Art. 17 VII)"
       },
       
       "VIII_vehiculos": {
-        "identificacion_UMA": 3210,
-        "aviso_UMA": 6420,
+        "identificacion_UMA": 1605,
+        "aviso_UMA": 3210,
         "efectivo_max_UMA": 3210,
         "es_actividad_vulnerable": true,
-        "descripcion": "Comercialización de vehículos"
+        "descripcion": "Comercialización de vehículos (Art. 17 VIII)"
       },
       
       "IX_blindaje": {
-        "identificacion_UMA": 2410,
-        "aviso_UMA": 4815,
+        "identificacion_UMA": 1605,
+        "aviso_UMA": 3210,
         "efectivo_max_UMA": 0,
         "es_actividad_vulnerable": true,
-        "descripcion": "Blindaje de vehículos"
+        "descripcion": "Blindaje de vehículos (Art. 17 IX)"
       },
       
       "X_traslado_valores": {
@@ -128,7 +131,7 @@
         "aviso_UMA": 3210,
         "efectivo_max_UMA": 3210,
         "es_actividad_vulnerable": true,
-        "descripcion": "Traslado y custodia de valores"
+        "descripcion": "Traslado y custodia de valores (Art. 17 X)"
       },
       
       "XI_servicios_profesionales": {
@@ -136,15 +139,15 @@
         "aviso_UMA": 8025,
         "efectivo_max_UMA": 0,
         "es_actividad_vulnerable": true,
-        "descripcion": "Servicios profesionales para operaciones Art. 17"
+        "descripcion": "Servicios profesionales para operaciones Art. 17 (Art. 17 XI)"
       },
       
       "XII_A_notarios_derechos_inmuebles": {
         "identificacion_UMA": 0,
         "aviso_UMA": 8025,
-        "efectivo_max_UMA": 0,
+        "efectivo_max_UMA": 8025,
         "es_actividad_vulnerable": true,
-        "descripcion": "Notarios - derechos sobre inmuebles"
+        "descripcion": "Notarios - derechos sobre inmuebles (Art. 17 XII A)"
       },
       
       "XII_B_corredores": {
@@ -152,7 +155,7 @@
         "aviso_UMA": 8025,
         "efectivo_max_UMA": 0,
         "es_actividad_vulnerable": true,
-        "descripcion": "Corredores públicos - constitución de personas morales"
+        "descripcion": "Corredores públicos - const. personas morales (Art. 17 XII B)"
       },
       
       "XV_arrendamiento_inmuebles": {
@@ -160,15 +163,15 @@
         "aviso_UMA": 3210,
         "efectivo_max_UMA": 3210,
         "es_actividad_vulnerable": true,
-        "descripcion": "Arrendamiento de inmuebles"
+        "descripcion": "Arrendamiento de inmuebles (Art. 17 XV)"
       },
       
       "XVI_activos_virtuales": {
-        "identificacion_UMA": 0,
+        "identificacion_UMA": 645,
         "aviso_UMA": 210,
         "efectivo_max_UMA": 210,
         "es_actividad_vulnerable": true,
-        "descripcion": "Operaciones con activos virtuales (reforma jul-2025)"
+        "descripcion": "Operaciones con activos virtuales (Art. 17 XVI - Reforma jul-2025)"
       }
     },
     
@@ -177,20 +180,195 @@
       "V_bis_desarrollo_inmobiliario",
       "VI_joyeria_metales",
       "X_traslado_valores",
-      "XVI_activos_virtuales"
+      "XVI_activos_virtuales",
+      "XII_A_notarios_derechos_inmuebles"
     ]
+  },
+  
+  "clasificaciones_lfpiorpi": {
+    "descripcion": "CORRECCIONES 2025: NO existen 'relevante/inusual/preocupante' en LFPIORPI",
+    "regla_unica": "Supera umbral de aviso (Art. 23) = Reportar al SAT",
+    "nota": "EBR/ML pueden clasificar RELEVANTE/INUSUAL para valor agregado (análisis riesgo)"
+  },
+  
+  "avisos_uif": {
+    "aviso_mensual": {
+      "articulo": 23,
+      "que": "Operaciones que superen umbral de aviso Art. 17",
+      "cuando": "Antes del día 17 del mes siguiente",
+      "donde": "Portal SAT (SPPLD)",
+      "formato": "XML oficial UIF"
+    },
+    "aviso_24_horas": {
+      "articulo": 24,
+      "que": "Cliente en listas UIF/OFAC/CSNU/69B O indicios procedencia ilícita",
+      "cuando": "Dentro de 24 horas de detectar",
+      "donde": "Portal SAT (SPPLD)",
+      "formato": "XML oficial UIF",
+      "bloqueador": true,
+      "nota": "Si cliente en listas → BLOQUEAR operación inmediatamente"
+    },
+    "informe_ausencia": {
+      "articulo": "25 Reglas",
+      "que": "Si mes no tuvo operaciones sujeto aviso",
+      "cuando": "Antes del día 17 del mes siguiente",
+      "donde": "Portal SAT (SPPLD)"
+    }
+  },
+  
+  "validacion_operacion": {
+    "campos_obligatorios": [
+      "cliente_id",
+      "fecha_operacion",
+      "hora_operacion",
+      "actividad_vulnerable",
+      "tipo_operacion",
+      "monto",
+      "moneda",
+      "metodo_pago",
+      "producto_servicio"
+    ],
+    "campos_opcionales": [
+      "descripcion",
+      "factura_numero",
+      "referencia_pago",
+      "banco_origen",
+      "notas_internas"
+    ],
+    "validaciones_automaticas": [
+      "Bloquear si cliente en listas (UIF/OFAC/CSNU/69B)",
+      "Bloquear si efectivo > límite Art. 32",
+      "Alertar si supera umbral aviso (UMAs)",
+      "Alertar si acumulado 6m supera umbral",
+      "Alertar si indicios procedencia ilícita (24 hrs)",
+      "Análisis ML opcional (valor agregado)"
+    ]
+  },
+  
+  "reglas_negocio": {
+    "regla_1_umbral_aviso": {
+      "titulo": "Umbral de Aviso UIF (Art. 23)",
+      "descripcion": "Usar UMAs según actividad vulnerable",
+      "formula": "Si monto_umas >= umbral_aviso_umas → Aviso UIF",
+      "nota": "No es bloqueo, es reporte obligatorio"
+    },
+    "regla_2_acumulacion_6m": {
+      "titulo": "Acumulación 6 meses (Art. 17 párr. final + Art. 7 Reg.)",
+      "descripcion": "Llevar acumulación operaciones con cliente en período 6 meses",
+      "formula": "Si (acumulado_6m + operacion_nueva) >= umbral_aviso → Aviso UIF",
+      "nota": "Sumatorio de montos en QMAs durante últimos 6 meses"
+    },
+    "regla_3_listas_negras": {
+      "titulo": "Listas Negras → Aviso 24 horas + BLOQUEO (Art. 24)",
+      "descripcion": "Cliente en UIF, OFAC, CSNU, 69B (Reforma jul-2025)",
+      "listas_verificar": ["lista_uif", "lista_ofac", "lista_csnu", "lista_69b"],
+      "accion": "BLOQUEAR operación + Aviso 24 hrs a SAT",
+      "nota": "NO permitir realizar la operación si está en listas"
+    },
+    "regla_4_efectivo_prohibido": {
+      "titulo": "Efectivo Prohibido (Art. 32 LFPIORPI)",
+      "descripcion": "Límite efectivo en ciertas operaciones",
+      "limite_por_actividad": {
+        "inmobiliario": "8025 UMAs",
+        "vehiculos": "3210 UMAs",
+        "joyeria": "3210 UMAs",
+        "juegos_apuestas": "1605 UMAs"
+      },
+      "accion": "BLOQUEAR si efectivo > límite",
+      "mensaje": "Pago en efectivo prohibido para esta actividad"
+    },
+    "regla_5_indicios_ilicitos": {
+      "titulo": "Indicios Procedencia Ilícita → Aviso 24 hrs (Art. 24)",
+      "descripcion": "SUBJETIVO - Depende criterio usuario",
+      "senales": [
+        "2+ operaciones cercanas al umbral (posible estructuración)",
+        "Origen recursos NO documentado",
+        "Desviación extrema del perfil (3σ+)",
+        "Cliente en lista sospechosa (SAT, reportes internacionales)",
+        "Actividad inconsistente con perfil"
+      ],
+      "accion": "Aviso 24 horas a UIF si hay indicios comprobados"
+    }
   },
   
   "ml": {
     "modo": "binario",
     "clases": ["relevante", "inusual"],
-    "nota": "PREOCUPANTE se asigna por reglas LFPIORPI, no por ML"
+    "nota": "PREOCUPANTE se asigna por reglas LFPIORPI, no por ML",
+    "descripcion": "ML solo califica RELEVANTE/INUSUAL para valor agregado (EBR)"
   },
   
   "ebr": {
-    "descripcion": "Enfoque Basado en Riesgo - Solo decide entre relevante/inusual",
+    "descripcion": "Enfoque Basado en Riesgo - Score de riesgo del cliente",
+    "proposito": "Complementar análisis LFPIORPI con evaluación integral del cliente",
+    "nota": "Puede detectar riesgo ALTO/CRÍTICO sin alcanzar umbral legal",
     
-    "ponderaciones": {
+    "factores": {
+      "factor_1_listas_negras": {
+        "puntos_max": 30,
+        "componentes": {
+          "lista_ofac": 30,
+          "lista_uif": 30,
+          "lista_csnu": 30,
+          "lista_69b": 25,
+          "es_pep": 20
+        },
+        "descripcion": "Búsqueda en listas internacionales/nacionales"
+      },
+      "factor_2_actividad_economica": {
+        "puntos_max": 25,
+        "componentes": {
+          "joyeria_metales": 20,
+          "casinos_juegos": 25,
+          "criptomonedas": 25,
+          "inmobiliario": 18,
+          "vehiculos": 20,
+          "arte_antiguedades": 18,
+          "prestamos": 22,
+          "comercio_exterior": 15,
+          "blindaje": 15,
+          "default": 5
+        }
+      },
+      "factor_3_tipo_persona": {
+        "puntos_max": 10,
+        "componentes": {
+          "persona_moral": 8,
+          "beneficiario_no_identificado": 7,
+          "persona_fisica": 3
+        }
+      },
+      "factor_4_origen_recursos": {
+        "puntos_max": 15,
+        "componentes": {
+          "efectivo_negocio": 15,
+          "herencia": 8,
+          "prestamo_tercero": 12,
+          "actividad_profesional": 5,
+          "salario": 3,
+          "desconocido": 20
+        }
+      },
+      "factor_5_ubicacion_geografica": {
+        "puntos_max": 10,
+        "estados_alto_riesgo": ["Sinaloa", "Michoacán", "Guerrero", "Tamaulipas", "Jalisco"],
+        "componentes": {
+          "estado_alto_riesgo": 10,
+          "estado_bajo_riesgo": 2
+        }
+      },
+      "factor_6_monto_mensual": {
+        "puntos_max": 10,
+        "componentes": {
+          "mayores_500k": 10,
+          "mayores_200k": 7,
+          "mayores_100k": 5,
+          "menores_100k": 2
+        }
+      }
+    },
+    
+    "ponderaciones_alternativas": {
       "efectivo": {
         "puntos": 25,
         "descripcion": "Operación en efectivo"
@@ -238,37 +416,35 @@
     },
     
     "umbrales_clasificacion": {
-      "relevante_max": 40,
-      "inusual_max": 100,
-      "nota": "Score > 40 = inusual. PREOCUPANTE solo por reglas LFPIORPI."
+      "bajo": "0-29 puntos",
+      "medio": "30-49 puntos",
+      "alto": "50-79 puntos",
+      "critico": "80-100 puntos",
+      "nota": "Independiente de reglas LFPIORPI - es valor agregado para el usuario"
     },
     
     "elevacion_inusual_threshold": 50,
     "nota_elevacion": "Si ML dice relevante pero EBR >= 50, elevar a inusual"
   },
   
-  "validacion": {
-    "campos_obligatorios": [
-      "cliente_id",
-      "monto",
-      "fecha",
-      "tipo_operacion"
-    ],
-    "campos_opcionales": [
-      "sector_actividad",
-      "hora",
-      "estado"
-    ],
-    "tipos_operacion_validos": [
-      "efectivo",
-      "tarjeta",
-      "transferencia",
-      "transferencia_nacional",
-      "transferencia_internacional",
-      "cheque",
-      "deposito"
-    ]
-  },
+  "tipos_operacion_validos": [
+    "efectivo",
+    "tarjeta",
+    "transferencia",
+    "transferencia_nacional",
+    "transferencia_internacional",
+    "cheque",
+    "deposito",
+    "transferencia_bancaria",
+    "pago_servicios"
+  ],
+  
+  "monedas_validas": [
+    "MXN",
+    "USD",
+    "EUR",
+    "CNY"
+  ],
   
   "no_supervisado": {
     "weights": {
