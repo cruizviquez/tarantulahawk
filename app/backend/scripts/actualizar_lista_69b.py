@@ -99,6 +99,12 @@ class Lista69BDownloader:
             
             # Paso 1: Obtener página de descarga
             response = self.session.get(SAT_DOWNLOAD_URL, timeout=30)
+            
+            # Si el SAT responde 403/404, intentar método alternativo inmediato
+            if not response.ok:
+                Logger.warning(f"⚠️ SAT respondió {response.status_code}. Probando método alternativo...")
+                return self._descargar_metodo_alternativo()
+            
             response.raise_for_status()
             
             # Paso 2: Parsear HTML para encontrar enlace de descarga Excel
@@ -139,7 +145,8 @@ class Lista69BDownloader:
             
         except Exception as e:
             Logger.error(f"❌ Error al descargar desde SAT: {str(e)}")
-            return False
+            Logger.info("📋 Intentando método alternativo (URLs conocidas)...")
+            return self._descargar_metodo_alternativo()
     
     def _descargar_excel(self, url: str, tipo: str):
         """Descarga y procesa archivo Excel del SAT"""

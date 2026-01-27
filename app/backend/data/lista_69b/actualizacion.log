@@ -22,3 +22,119 @@
 [2026-01-20 04:09:49] [INFO] 📁 Archivos generados en: /workspaces/tarantulahawk/app/backend/data/lista_69b
 [2026-01-20 04:09:49] [INFO] 📋 Log disponible en: /workspaces/tarantulahawk/app/backend/data/lista_69b/actualizacion.log
 [2026-01-20 04:09:49] [INFO] ============================================================
+[2026-01-26 20:12:47] [INFO] ============================================================
+[2026-01-26 20:12:47] [INFO] 🚀 ACTUALIZADOR LISTA 69B SAT - INICIO
+[2026-01-26 20:12:47] [INFO] ============================================================
+[2026-01-26 20:12:47] [INFO] 🌐 Conectando al SAT para descargar Lista 69B...
+[2026-01-26 20:12:47] [ERROR] ❌ Error al descargar desde SAT: 403 Client Error: Forbidden for url: https://www.sat.gob.mx/consulta/92764/descarga-de-listados-completos
+[2026-01-26 20:12:47] [ERROR] ❌ No se pudo descargar la lista del SAT
+[2026-01-26 20:12:47] [WARNING] 💡 Sugerencia: Verificar URLs del SAT o descargar manualmente
+[2026-01-26 20:12:47] [WARNING] 💡 URL: https://www.sat.gob.mx/consulta/92764/descarga-de-listados-completos
+[2026-01-26 20:12:47] [INFO] ============================================================
+[2026-01-26 20:12:47] [INFO] 📁 Archivos generados en: /workspaces/tarantulahawk/app/backend/data/lista_69b
+[2026-01-26 20:12:47] [INFO] 📋 Log disponible en: /workspaces/tarantulahawk/app/backend/data/lista_69b/actualizacion.log
+[2026-01-26 20:12:47] [INFO] ============================================================
+[2026-01-26 20:15:02] [INFO] ============================================================
+[2026-01-26 20:15:02] [INFO] 🚀 ACTUALIZADOR LISTA 69B SAT - INICIO
+[2026-01-26 20:15:02] [INFO] ============================================================
+[2026-01-26 20:15:02] [INFO] 🌐 Conectando al SAT para descargar Lista 69B...
+[2026-01-26 20:15:02] [WARNING] ⚠️ SAT respondió 403. Probando método alternativo...
+[2026-01-26 20:15:02] [INFO] 📥 Intentando descargar desde URL conocida (definitivos)...
+[2026-01-26 20:15:02] [ERROR] ❌ Error al procesar Excel: 404 Client Error: Not Found for url: https://www.sat.gob.mx/cs/Satellite?blobcol=urldata&blobkey=id&blobtable=MungoBlobs&blobwhere=1461173659796&ssbinary=true
+[2026-01-26 20:15:02] [INFO] 📥 Intentando descargar desde URL conocida (presuntos)...
+[2026-01-26 20:15:03] [ERROR] ❌ Error al procesar Excel: 404 Client Error: Not Found for url: https://www.sat.gob.mx/cs/Satellite?blobcol=urldata&blobkey=id&blobtable=MungoBlobs&blobwhere=1461173659795&ssbinary=true
+[2026-01-26 20:15:03] [INFO] 📊 Total de RFCs únicos: 0
+[2026-01-26 20:15:03] [SUCCESS] ✅ Guardado JSON: /workspaces/tarantulahawk/app/backend/data/lista_69b/lista_69b.json
+[2026-01-26 20:15:03] [SUCCESS] ✅ Guardado TXT: /workspaces/tarantulahawk/app/backend/data/lista_69b/lista_69b_rfcs.txt
+[2026-01-26 20:15:03] [SUCCESS] ✅ Guardado metadata: /workspaces/tarantulahawk/app/backend/data/lista_69b/metadata.json
+[2026-01-26 20:15:03] [INFO] 
+============================================================
+[2026-01-26 20:15:03] [INFO] 📈 RESUMEN DE ACTUALIZACIÓN
+[2026-01-26 20:15:03] [INFO] ============================================================
+[2026-01-26 20:15:03] [INFO] Total RFCs: 0
+[2026-01-26 20:15:03] [INFO] Fecha: 2026-01-26T20:15:03.018385
+[2026-01-26 20:15:03] [INFO] ============================================================
+
+[2026-01-26 20:15:03] [SUCCESS] ✅ ACTUALIZACIÓN COMPLETADA EXITOSAMENTE
+[2026-01-26 20:15:03] [INFO] ============================================================
+[2026-01-26 20:15:03] [INFO] 📁 Archivos generados en: /workspaces/tarantulahawk/app/backend/data/lista_69b
+[2026-01-26 20:15:03] [INFO] 📋 Log disponible en: /workspaces/tarantulahawk/app/backend/data/lista_69b/actualizacion.log
+[2026-01-26 20:15:03] [INFO] ============================================================
+[2026-01-26 21:30:26] [INFO] ============================================================
+[2026-01-26 21:30:26] [INFO] 🚀 ACTUALIZADOR LISTA 69B SAT - INICIO
+[2026-01-26 21:30:26] [INFO] ============================================================
+[2026-01-26 21:30:26] [INFO] 🌐 Conectando al SAT para descargar Lista 69B...
+[2026-01-26 21:30:27] [WARNING] ⚠️ SAT respondió 403. Probando método alternativo...
+[2026-01-26 21:30:27] [INFO] 📥 Intentando descargar desde URL conocida (definitivos)...
+[2026-01-26 21:30:27] [ERROR] ❌ Error al procesar Excel: 404 Client Error: Not Found for url: https://www.sat.gob.mx/cs/Satellite?blobcol=urldata&blobkey=id&blobtable=MungoBlobs&blobwhere=1461173659796&ssbinary=true
+[2026-01-26 21:30:27] [INFO] 📥 Intentando descargar desde URL conocida (presuntos)...
+[2026-01-26 21:30:27] [ERROR] ❌ Error al procesar Excel: 404 Client Error: Not Found for url: https://www.sat.gob.mx/cs/Satellite?blobcol=urldata&blobkey=id&blobtable=MungoBlobs&blobwhere=1461173659795&ssbinary=true
+[2026-01-26 21:30:27] [INFO] 📊 Total de RFCs únicos: 0
+[2026-01-26 21:30:27] [SUCCESS] ✅ Guardado JSON: /workspaces/tarantulahawk/app/backend/data/lista_69b/lista_69b.json
+[2026-01-26 21:30:27] [SUCCESS] ✅ Guardado TXT: /workspaces/tarantulahawk/app/backend/data/lista_69b/lista_69b_rfcs.txt
+[2026-01-26 21:30:27] [SUCCESS] ✅ Guardado metadata: /workspaces/tarantulahawk/app/backend/data/lista_69b/metadata.json
+[2026-01-26 21:30:27] [INFO] 
+============================================================
+[2026-01-26 21:30:27] [INFO] 📈 RESUMEN DE ACTUALIZACIÓN
+[2026-01-26 21:30:27] [INFO] ============================================================
+[2026-01-26 21:30:27] [INFO] Total RFCs: 0
+[2026-01-26 21:30:27] [INFO] Fecha: 2026-01-26T21:30:27.607261
+[2026-01-26 21:30:27] [INFO] ============================================================
+
+[2026-01-26 21:30:27] [SUCCESS] ✅ ACTUALIZACIÓN COMPLETADA EXITOSAMENTE
+[2026-01-26 21:30:27] [INFO] ============================================================
+[2026-01-26 21:30:27] [INFO] 📁 Archivos generados en: /workspaces/tarantulahawk/app/backend/data/lista_69b
+[2026-01-26 21:30:27] [INFO] 📋 Log disponible en: /workspaces/tarantulahawk/app/backend/data/lista_69b/actualizacion.log
+[2026-01-26 21:30:27] [INFO] ============================================================
+[2026-01-26 21:41:47] [INFO] ============================================================
+[2026-01-26 21:41:47] [INFO] 🚀 ACTUALIZADOR LISTA 69B SAT - INICIO
+[2026-01-26 21:41:47] [INFO] ============================================================
+[2026-01-26 21:41:47] [INFO] 🌐 Conectando al SAT para descargar Lista 69B...
+[2026-01-26 21:41:47] [WARNING] ⚠️ SAT respondió 403. Probando método alternativo...
+[2026-01-26 21:41:47] [INFO] 📥 Intentando descargar desde URL conocida (definitivos)...
+[2026-01-26 21:41:48] [ERROR] ❌ Error al procesar Excel: 404 Client Error: Not Found for url: https://www.sat.gob.mx/cs/Satellite?blobcol=urldata&blobkey=id&blobtable=MungoBlobs&blobwhere=1461173659796&ssbinary=true
+[2026-01-26 21:41:48] [INFO] 📥 Intentando descargar desde URL conocida (presuntos)...
+[2026-01-26 21:41:48] [ERROR] ❌ Error al procesar Excel: 404 Client Error: Not Found for url: https://www.sat.gob.mx/cs/Satellite?blobcol=urldata&blobkey=id&blobtable=MungoBlobs&blobwhere=1461173659795&ssbinary=true
+[2026-01-26 21:41:48] [INFO] 📊 Total de RFCs únicos: 0
+[2026-01-26 21:41:48] [SUCCESS] ✅ Guardado JSON: /workspaces/tarantulahawk/app/backend/data/lista_69b/lista_69b.json
+[2026-01-26 21:41:48] [SUCCESS] ✅ Guardado TXT: /workspaces/tarantulahawk/app/backend/data/lista_69b/lista_69b_rfcs.txt
+[2026-01-26 21:41:48] [SUCCESS] ✅ Guardado metadata: /workspaces/tarantulahawk/app/backend/data/lista_69b/metadata.json
+[2026-01-26 21:41:48] [INFO] 
+============================================================
+[2026-01-26 21:41:48] [INFO] 📈 RESUMEN DE ACTUALIZACIÓN
+[2026-01-26 21:41:48] [INFO] ============================================================
+[2026-01-26 21:41:48] [INFO] Total RFCs: 0
+[2026-01-26 21:41:48] [INFO] Fecha: 2026-01-26T21:41:48.401939
+[2026-01-26 21:41:48] [INFO] ============================================================
+
+[2026-01-26 21:41:48] [SUCCESS] ✅ ACTUALIZACIÓN COMPLETADA EXITOSAMENTE
+[2026-01-26 21:41:48] [INFO] ============================================================
+[2026-01-26 21:41:48] [INFO] 📁 Archivos generados en: /workspaces/tarantulahawk/app/backend/data/lista_69b
+[2026-01-26 21:41:48] [INFO] 📋 Log disponible en: /workspaces/tarantulahawk/app/backend/data/lista_69b/actualizacion.log
+[2026-01-26 21:41:48] [INFO] ============================================================
+[2026-01-26 21:49:23] [INFO] ============================================================
+[2026-01-26 21:49:23] [INFO] 🚀 ACTUALIZADOR LISTA 69B SAT - INICIO
+[2026-01-26 21:49:23] [INFO] ============================================================
+[2026-01-26 21:49:23] [INFO] 🌐 Conectando al SAT para descargar Lista 69B...
+[2026-01-26 21:49:24] [WARNING] ⚠️ SAT respondió 403. Probando método alternativo...
+[2026-01-26 21:49:24] [INFO] 📥 Intentando descargar desde URL conocida (definitivos)...
+[2026-01-26 21:49:24] [ERROR] ❌ Error al procesar Excel: 404 Client Error: Not Found for url: https://www.sat.gob.mx/cs/Satellite?blobcol=urldata&blobkey=id&blobtable=MungoBlobs&blobwhere=1461173659796&ssbinary=true
+[2026-01-26 21:49:24] [INFO] 📥 Intentando descargar desde URL conocida (presuntos)...
+[2026-01-26 21:49:24] [ERROR] ❌ Error al procesar Excel: 404 Client Error: Not Found for url: https://www.sat.gob.mx/cs/Satellite?blobcol=urldata&blobkey=id&blobtable=MungoBlobs&blobwhere=1461173659795&ssbinary=true
+[2026-01-26 21:49:24] [INFO] 📊 Total de RFCs únicos: 0
+[2026-01-26 21:49:24] [SUCCESS] ✅ Guardado JSON: /workspaces/tarantulahawk/app/backend/data/lista_69b/lista_69b.json
+[2026-01-26 21:49:24] [SUCCESS] ✅ Guardado TXT: /workspaces/tarantulahawk/app/backend/data/lista_69b/lista_69b_rfcs.txt
+[2026-01-26 21:49:24] [SUCCESS] ✅ Guardado metadata: /workspaces/tarantulahawk/app/backend/data/lista_69b/metadata.json
+[2026-01-26 21:49:24] [INFO] 
+============================================================
+[2026-01-26 21:49:24] [INFO] 📈 RESUMEN DE ACTUALIZACIÓN
+[2026-01-26 21:49:24] [INFO] ============================================================
+[2026-01-26 21:49:24] [INFO] Total RFCs: 0
+[2026-01-26 21:49:24] [INFO] Fecha: 2026-01-26T21:49:24.761074
+[2026-01-26 21:49:24] [INFO] ============================================================
+
+[2026-01-26 21:49:24] [SUCCESS] ✅ ACTUALIZACIÓN COMPLETADA EXITOSAMENTE
+[2026-01-26 21:49:24] [INFO] ============================================================
+[2026-01-26 21:49:24] [INFO] 📁 Archivos generados en: /workspaces/tarantulahawk/app/backend/data/lista_69b
+[2026-01-26 21:49:24] [INFO] 📋 Log disponible en: /workspaces/tarantulahawk/app/backend/data/lista_69b/actualizacion.log
+[2026-01-26 21:49:24] [INFO] ============================================================

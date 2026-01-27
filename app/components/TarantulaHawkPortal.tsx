@@ -562,18 +562,6 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
               </button>
 
               <button
-                onClick={() => setActiveTab('monitoring')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
-                  activeTab === 'monitoring'
-                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                    : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                <Activity className="w-4 h-4" />
-                Monitoreo
-              </button>
-
-              <button
                 onClick={() => setActiveTab('reportes-uif')}
                 className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
                   activeTab === 'reportes-uif'
@@ -583,18 +571,6 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
               >
                 <FileText className="w-4 h-4" />
                 Reportes UIF
-              </button>
-
-              <button
-                onClick={() => setActiveTab('history')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
-                  activeTab === 'history'
-                    ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                    : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                <Clock className="w-4 h-4" />
-                Historial
               </button>
 
               {isAdmin && (
@@ -678,17 +654,6 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
 
                 <button
                   onClick={() => {
-                    setActiveTab('monitoring');
-                    setMobileMenuOpen(false);
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 text-gray-400 hover:text-white"
-                >
-                  <Activity className="w-4 h-4" />
-                  Monitoreo
-                </button>
-
-                <button
-                  onClick={() => {
                     setActiveTab('reportes-uif');
                     setMobileMenuOpen(false);
                   }}
@@ -696,16 +661,6 @@ const TarantulaHawkPortal = ({ user: initialUser }: TarantulaHawkPortalProps) =>
                 >
                   <FileText className="w-4 h-4" />
                   Reportes UIF
-                </button>
-                <button
-                  onClick={() => {
-                    setActiveTab('history');
-                    setMobileMenuOpen(false);
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 text-gray-400 hover:text-white"
-                >
-                  <Clock className="w-4 h-4" />
-                  Historial
                 </button>
                 {isAdmin && (
                   <button

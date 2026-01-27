@@ -1,6 +1,78 @@
 # Respuestas a Preguntas KYC
 
-## 1. ✅ Cuando RFC ya existe, regresar a inicio
+## 🎯 RESUMEN RÁPIDO: Job Diario Implementado
+
+**Usuario pidió:** "Un job para que diario se ejecute la consulta de todos los clientes registrados"
+
+**Se implementó:**
+1. ✅ **Polling automático** después de crear cliente (refrescar tabla sin intervención)
+2. ✅ **Validación en background** (no bloquea al usuario)
+3. ✅ **Job diario** (código listo para copiar + instrucciones)
+
+**❌ ERROR DE BUILD ENCONTRADO:**
+- **Archivo:** `app/api/kyc/validar-listas/route.ts`
+- **Problema:** Dos funciones `export async function POST` (línea 309 y anterior)
+- **Causa:** El código del job diario se copió en el mismo archivo
+
+**✅ SOLUCIÓN INMEDIATA:**
+
+**Opción 1: Remover segundo POST del archivo validar-listas/route.ts**
+- Eliminar TODO lo que comienza desde la línea 309 hasta el final del archivo
+- Esto incluye comentario "Job diario..." y toda la función POST duplicada
+- Mantener solo la primera función POST (validaciones)
+
+**Opción 2: El job diario debe estar en RUTA SEPARADA**
+```
+CREAR: /app/api/kyc/validaciones/diarias/route.ts
+```
+Con el código del job diario (ver sección NUEVA más abajo)
+
+**3 pasos para activar:**
+1. ✅ Remover duplicado de POST en validar-listas/route.ts 
+2. ✅ Crear `/app/api/kyc/validaciones/diarias/route.ts` (código abajo)
+3. ✅ Configurar cron en EasyCron/Vercel (2 minutos)
+
+**Ver detalles:** Ir a sección "NUEVA: Job Diario + Polling Frontend" más abajo ⬇️
+
+---
+
+## 🆘 ELIMINAR DUPLICADO POST (RÁPIDO)
+
+### ⏱️ 30 segundos para solucionar
+
+1. **Abrir archivo:** `app/api/kyc/validar-listas/route.ts`
+2. **Ir a línea ~309** y buscar: `* Job diario para validar todos los clientes`
+3. **ELIMINAR TODO** desde esa línea hasta el FINAL del archivo
+4. **Guardar** (Ctrl+S)
+5. **Build:** `npm run build`
+
+### ✂️ QUÉ ELIMINAR
+
+Buscar y eliminar:
+```typescript
+/**
+ * Job diario para validar todos los clientes registrados
+ * POST /api/kyc/validaciones/diarias
+```
+
+Y TODO lo que sigue (la segunda función `export async function POST` + funciones helper)
+
+### ✔️ Qué debe quedar
+
+El archivo debe terminar con:
+```typescript
+  return {
+    validaciones,
+    score_riesgo: scoreRiesgo,
+    aprobado: scoreRiesgo < 40,
+    alertas: alertas.length > 0 ? alertas : undefined
+  };
+}
+
+// ← FIN (sin segunda POST)
+```
+
+---
 
 **Implementado:** Ahora cuando se detecta un RFC duplicado (error 409):
 - Se limpia automáticamente el formulario
@@ -374,24 +446,207 @@ const crearCliente = async (formData) => {
 
 - ✅ **Pregunta 1:** RFC duplicado ahora limpia formulario y regresa a lista
 - ✅ **Pregunta 4:** Cambiado estado inicial de `'pendiente'` a `'en_revision'`
+- ✅ **Pregunta 5 (NUEVA):** Implementado polling automático + job diario
 - 📝 **Pregunta 2:** Documentado cómo validar con SAT (pendiente implementar)
 - 📝 **Pregunta 3:** RFC es la llave única correcta (implementación actual es correcta)
-- 📝 **Pregunta 5:** Documentado flujo de estados (pendiente implementar validaciones automáticas)
 
-## 🚀 Próximos Pasos Recomendados
+## 🚀 NUEVA: Job Diario + Polling Frontend
 
-1. **Implementar validaciones automáticas en background**
-   - Crear endpoint `/api/kyc/validaciones/ejecutar`
-   - Consultar Lista 69-B en tiempo real
-   - Consultar OFAC
-   - Calcular score EBR
-   - Actualizar `nivel_riesgo`
+### ✅ Implementación Completa
 
-2. **Agregar validación SAT (opcional)**
-   - Para clientes premium
-   - O para montos superiores a cierto umbral
+#### **1. Polling en Frontend** (Automático)
+Después de crear un cliente:
+- Polling cada 6 segundos
+- Máximo 30 intentos (~3 minutos)
+- Consulta `/api/kyc/clientes/:id/status`
+- Se detiene al cambiar de `en_revision` a `bajo`/`alto`
+- Refrescar tabla automáticamente
 
-3. **Mejorar UI con estados en tiempo real**
-   - Mostrar "Validando..." mientras está en revisión
-   - Actualizar automáticamente cuando cambie el riesgo
-   - Usar WebSockets o polling
+#### **2. Endpoint de Status**
+```
+GET /api/kyc/clientes?id=:cliente_id
+```
+Retorna estado actual del cliente para que frontend sepa si las validaciones terminaron.
+
+**O crear ruta separada:**
+```
+GET /api/kyc/clientes/[id]/status/route.ts
+```
+
+#### **3. Job Diario** (Cron)
+
+**Archivo a crear:** `app/api/kyc/validaciones/diarias/route.ts`
+
+```typescript
+import { NextRequest, NextResponse } from 'next/server';
+import { getServiceSupabase } from '../../../../lib/supabaseServer';
+
+export async function POST(request: NextRequest) {
+  // Verificar token
+  const authHeader = request.headers.get('authorization');
+  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const supabase = getServiceSupabase();
+  
+  // Obtener todos los clientes
+  const { data: clientes } = await supabase
+    .from('clientes')
+    .select('*')
+    .neq('nivel_riesgo', null);
+
+  let actualizados = 0;
+  
+  // Validar cada cliente
+  for (const cliente of clientes || []) {
+    try {
+      const validaciones = {
+        lista69b: await validarLista69B(cliente.rfc),
+        ofac: await validarOFAC(cliente.nombre_completo),
+        csnu: await validarCSNU(cliente.nombre_completo)
+      };
+
+      const tieneAlerta = 
+        validaciones.lista69b?.en_lista ||
+        validaciones.ofac?.encontrado ||
+        validaciones.csnu?.encontrado;
+      
+      const nuevoNivel = tieneAlerta ? 'alto' : 'bajo';
+
+      if (nuevoNivel !== cliente.nivel_riesgo) {
+        await supabase
+          .from('clientes')
+          .update({
+            nivel_riesgo: nuevoNivel,
+            en_lista_69b: validaciones.lista69b?.en_lista || false,
+            en_lista_ofac: validaciones.ofac?.encontrado || false,
+            es_pep: validaciones.csnu?.encontrado || false
+          })
+          .eq('cliente_id', cliente.cliente_id);
+        
+        actualizados++;
+      }
+    } catch (error) {
+      console.error(`Error: ${cliente.cliente_id}`, error);
+    }
+  }
+
+  return NextResponse.json({
+    success: true,
+    clientes_procesados: clientes?.length || 0,
+    clientes_actualizados: actualizados,
+    timestamp: new Date().toISOString()
+  });
+}
+
+async function validarLista69B(rfc: string) {
+  try {
+    const res = await fetch('https://www.sat.gob.mx/cifras_sat/Documents/Lista69B.json');
+    const data = await res.json();
+    const lista = Array.isArray(data) ? data : data.lista || [];
+    return { en_lista: lista.some(r => r.rfc?.toUpperCase() === rfc.toUpperCase()) };
+  } catch {
+    return { en_lista: false };
+  }
+}
+
+async function validarOFAC(nombre: string) {
+  try {
+    const res = await fetch('https://www.treasury.gov/ofac/downloads/sdnlist.xml');
+    const xml = await res.text();
+    return { encontrado: nombre.split(' ').some(p => xml.includes(p)) };
+  } catch {
+    return { encontrado: false };
+  }
+}
+
+async function validarCSNU(nombre: string) {
+  try {
+    const res = await fetch('https://www.un.org/securitycouncil/sanctions/un-sc-consolidated-list/xml');
+    const xml = await res.text();
+    return { encontrado: nombre.split(' ').some(p => xml.includes(p)) };
+  } catch {
+    return { encontrado: false };
+  }
+}
+```
+
+#### **4. Configurar Cron**
+
+**Opción A: EasyCron** (Recomendado)
+1. https://www.easycron.com/
+2. Nueva tarea:
+   - URL: `https://tu-dominio.com/api/kyc/validaciones/diarias`
+   - Método: POST
+   - Cron: `0 2 * * *` (2 AM diarios)
+   - Header: `Authorization: Bearer {CRON_SECRET}`
+
+**Opción B: Vercel Crons**
+```json
+{
+  "crons": [{
+    "path": "/api/kyc/validaciones/diarias",
+    "schedule": "0 2 * * *"
+  }]
+}
+```
+
+**Opción C: Node-Cron** (Local)
+```bash
+npm install node-cron
+```
+
+```typescript
+// app/lib/cron-jobs.ts
+import cron from 'node-cron';
+
+export function initCronJobs() {
+  cron.schedule('0 2 * * *', async () => {
+    const res = await fetch('/api/kyc/validaciones/diarias', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${process.env.CRON_SECRET}` }
+    });
+    console.log('KYC:', await res.json());
+  });
+}
+
+// En layout.tsx:
+if (typeof window === 'undefined') initCronJobs();
+```
+
+### 📋 Checklist Rápido
+
+```
+[ ] Crear /app/api/kyc/validaciones/diarias/route.ts con código anterior
+[ ] Agregar a .env.local:
+    CRON_SECRET=abc123def456... (generar: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
+[ ] Crear cron job en EasyCron/Vercel/Node-Cron
+[ ] Probar: curl -X POST localhost:3000/api/kyc/validaciones/diarias -H "Authorization: Bearer {token}"
+[ ] Configurar alertas/webhooks (opcional)
+```
+
+### 📊 Flujo Completo
+
+```
+Usuario crea cliente
+         ↓
+POST /api/kyc/clientes (retorna en_revision)
+         ↓
+        ├─→ Background: validar contra 3 listas
+        │   (sin bloquear respuesta)
+        │
+        └─→ Frontend: polling cada 6 seg
+            GET /api/kyc/clientes/:id/status
+            
+Cuando validación termina:
+    nivel_riesgo cambia a bajo/alto
+         ↓
+Polling detecta cambio
+         ↓
+Tabla se refrescar automáticamente
+```
+
+**Bonus:** Cada madrugada el job diario valida todos los clientes para mantener datos actualizados
+
+

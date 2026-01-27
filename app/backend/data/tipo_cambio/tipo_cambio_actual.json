@@ -1,0 +1,6 @@
+{
+  "tasa_mxn_usd": 0.0576,
+  "fecha_actualizacion": "2026-01-26T18:31:42.560272-06:00",
+  "fuente": "exchangerate-api.com",
+  "descripcion": "1 MXN = tasa_mxn_usd USD (para convertir: cantidad_mxn / tasa = cantidad_usd)"
+}

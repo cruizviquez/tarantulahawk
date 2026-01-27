@@ -1,0 +1,15 @@
+{
+  "total_peps": 1,
+  "fecha_actualizacion": "2026-01-26T21:49:27.169425",
+  "fuentes": [
+    "Portal Transparencia",
+    "datos.gob.mx",
+    "local"
+  ],
+  "categorias": {
+    "federal": 0,
+    "estatal": 0,
+    "municipal": 0
+  },
+  "advertencia": "Lista en desarrollo - Complementar con Declaranet y fuentes oficiales"
+}

@@ -1,12 +1,14 @@
 // components/kyc/KYCModule.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Users, Search, Plus, FileText, Shield, AlertTriangle, 
   CheckCircle, XCircle, Upload, Eye, Edit, Trash2, Download, AlertCircle, Info,
-  RefreshCcw
+  RefreshCcw, TrendingUp, AlertOctagon, Clock, DollarSign
 } from 'lucide-react';
 import { getSupabaseBrowserClient } from '../../lib/supabaseBrowser';
 import { formatDateES } from '../../lib/dateFormatter';
+import { getTimeCDMX } from '../../lib/timezoneHelper';
+import { daysSince, formatDateShortCDMX, formatTimeCDMX } from '../../lib/dateHelpers';
 import {
   validarRFC,
   validarCURP,
@@ -27,15 +29,22 @@ interface Cliente {
   cliente_id: string;
   nombre_completo: string;
   rfc: string;
+  curp?: string;
   tipo_persona: 'fisica' | 'moral';
   sector_actividad: string;
-  nivel_riesgo: 'bajo' | 'medio' | 'alto' | 'critico' | 'pendiente' | 'en_revision';
+  origen_recursos?: string;
+  nivel_riesgo: 'bajo' | 'medio' | 'alto' | 'critico' | 'pendiente';
   score_ebr: number | null;
   es_pep: boolean;
   en_lista_69b: boolean;
   en_lista_ofac: boolean;
+  en_lista_uif?: boolean;
+  en_lista_peps?: boolean;
+  en_lista_csnu?: boolean;
   estado_expediente: string;
   created_at: string;
+  updated_at?: string;
+  fecha_ultima_busqueda_listas?: string;
   num_operaciones?: number;
   monto_total?: number;
 }
@@ -49,20 +58,103 @@ interface ClienteFormData {
   origen_recursos: string;
 }
 
+interface Operacion {
+  operacion_id?: string;
+  folio_interno: string;
+  fecha_operacion: string;
+  hora_operacion: string;
+  tipo_operacion: string;
+  monto: number;
+  moneda: string;
+  monto_usd?: number;
+  metodo_pago: string;
+  clasificacion_pld: string;
+  alertas?: string[];
+  descripcion?: string;
+  referencia_factura?: string;
+  producto_servicio?: string;
+  banco_origen?: string;
+  numero_cuenta?: string;
+  notas_internas?: string;
+}
+
+interface ResumenOperaciones {
+  total_operaciones: number;
+  monto_total_mxn: number;
+  monto_total_usd: number;
+  monto_6meses_mxn: number;
+  clasificaciones: {
+    relevante: number;
+    preocupante: number;
+    normal: number;
+  };
+  ultima_operacion?: {
+    folio: string;
+    fecha: string;
+    hora: string;
+    monto: number;
+    moneda: string;
+  };
+}
+
 interface ValidacionListasResult {
   validaciones: {
     ofac?: { encontrado?: boolean; total?: number; error?: string };
     csnu?: { encontrado?: boolean; total?: number; error?: string };
     lista_69b?: { en_lista?: boolean | null; advertencia?: string; nota?: string; error?: string };
+    uif?: { encontrado?: boolean; total?: number; error?: string };
+    peps_mexico?: { encontrado?: boolean; total?: number; error?: string };
+    gafi?: { encontrado?: boolean; total?: number; error?: string };
+    fgr?: { encontrado?: boolean; total?: number; error?: string };
+    interpol?: { encontrado?: boolean; total?: number; error?: string };
+    fbi?: { encontrado?: boolean; total?: number; error?: string };
   };
   score_riesgo: number;
+  nivel_riesgo?: string;
   aprobado: boolean;
   alertas: string[];
+  timestamp?: string;
 }
+
+// Opciones de campos según normativa PLD/LFPIORPI
+const SECTORES_ACTIVIDAD = [
+  'Tecnología',
+  'Financiero/Seguros',
+  'Construcción',
+  'Retail/Comercio',
+  'Inmobiliario',
+  'Automotriz',
+  'Joyería/Metales Preciosos',
+  'Casinos/Juegos de Azar',
+  'Servicios Profesionales',
+  'Salud',
+  'Educación',
+  'Turismo/Hotelería',
+  'Transporte',
+  'Agricultura/Ganadería',
+  'Manufactura',
+  'Minería',
+  'Energía',
+  'Otro'
+];
+
+const ORIGENES_RECURSOS = [
+  'Nómina/Sueldo',
+  'Negocio Propio/Actividad Empresarial',
+  'Honorarios Profesionales',
+  'Arrendamiento',
+  'Inversiones/Rendimientos',
+  'Pensión/Jubilación',
+  'Herencia/Donación',
+  'Venta de Activos',
+  'Premios/Sorteos',
+  'Ahorro Previo',
+  'Otro'
+];
 
 const KYCModule = () => {
   const supabase = getSupabaseBrowserClient();
-  const [view, setView] = useState<'lista' | 'nuevo' | 'detalle'>('lista');
+  const [view, setView] = useState<'lista' | 'nuevo' | 'detalle' | 'operaciones'>('lista');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRiesgo, setFilterRiesgo] = useState<string>('todos');
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
@@ -77,6 +169,8 @@ const KYCModule = () => {
   const [lastValidationInfo, setLastValidationInfo] = useState<{ label: string; ts: string } | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [fieldWarnings, setFieldWarnings] = useState<Record<string, string>>({});
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedCliente, setEditedCliente] = useState<Cliente | null>(null);
   const [formData, setFormData] = useState<ClienteFormData>({
     tipo_persona: 'fisica',
     nombre_completo: '',
@@ -85,6 +179,62 @@ const KYCModule = () => {
     sector_actividad: '',
     origen_recursos: ''
   });
+
+  // TAB DETALLE: Control de pestaña
+  const [detailTab, setDetailTab] = useState<'datosGenerales' | 'operaciones' | 'documentos' | 'validaciones'>('datosGenerales');
+  
+  // MODAL BLOQUEO: Cuando cliente está en listas
+  const [showBlockModal, setShowBlockModal] = useState(false);
+  const [blockModalMessage, setBlockModalMessage] = useState('');
+  
+  // MODAL eliminar documento/operación con RAZÓN DE AUDITORÍA
+  const [showDeleteReasonModal, setShowDeleteReasonModal] = useState(false);
+  const [deleteReasonType, setDeleteReasonType] = useState<'documento' | 'operacion' | null>(null);
+  const [deleteReasonText, setDeleteReasonText] = useState('');
+  const [itemToDelete, setItemToDelete] = useState<{ id: string; folio?: string; nombre?: string } | null>(null);
+  const [editingOperacionId, setEditingOperacionId] = useState<string | null>(null);
+  
+  // CHECKBOXES para seleccionar documentos/operaciones a eliminar
+  const [selectedDocumentsToDelete, setSelectedDocumentsToDelete] = useState<string[]>([]);
+  const [selectedOperacionesToDelete, setSelectedOperacionesToDelete] = useState<string[]>([]);
+  
+  // OPERACIONES: Historial y resumen
+  const [operacionesDelCliente, setOperacionesDelCliente] = useState<Operacion[]>([]);
+  const [resumenOps, setResumenOps] = useState<ResumenOperaciones | null>(null);
+  const [cargandoOps, setCargandoOps] = useState(false);
+
+  // DOCUMENTOS: Listado de documentos cargados
+  const [documentosDelCliente, setDocumentosDelCliente] = useState<Array<{
+    documento_id: string;
+    nombre: string;
+    tipo: string;
+    archivo_url: string;
+    fecha_carga: string;
+  }>>([]);
+  const [subiendoDocumento, setSubiendoDocumento] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Formulario de nueva operación
+  const [operacionForm, setOperacionForm] = useState(() => {
+    const timeCDMX = getTimeCDMX();
+    return {
+      fecha_operacion: timeCDMX.date,
+      hora_operacion: timeCDMX.time,
+      folio_interno: '', // Auto-generado en el servidor
+      tipo_operacion: 'venta',
+      monto: '',
+      moneda: 'MXN',
+      metodo_pago: 'transferencia',
+      descripcion: '',
+      referencia_factura: '',
+      producto_servicio: '',
+      banco_origen: '',
+      numero_cuenta: '',
+      notas_internas: ''
+    };
+  });
+  const [creandoOperacion, setCreandoOperacion] = useState(false);
+  const [operacionResultado, setOperacionResultado] = useState<{ folio?: string; clasificacion?: string; alertas?: string[] } | null>(null);
 
   // Función para obtener el token de autenticación
   const getAuthToken = async () => {
@@ -115,6 +265,20 @@ const KYCModule = () => {
       cargarClientes();
     }
   }, [view]);
+
+  // Cargar operaciones cuando se abre la vista de detalle
+  useEffect(() => {
+    if (view === 'detalle' && selectedCliente) {
+      cargarOperacionesDelCliente(selectedCliente.cliente_id);
+    }
+  }, [view, selectedCliente]);
+
+  // Cargar documentos cuando se abre la pestaña de documentos
+  useEffect(() => {
+    if (view === 'detalle' && detailTab === 'documentos' && selectedCliente) {
+      cargarDocumentosDelCliente(selectedCliente.cliente_id);
+    }
+  }, [view, detailTab, selectedCliente]);
 
   const cargarClientes = async () => {
     setLoading(true);
@@ -175,14 +339,14 @@ const KYCModule = () => {
     }
   };
 
-  const validarListas = async (datos: ClienteFormData) => {
+  const validarListas = async (datos: ClienteFormData, clienteId?: string) => {
     setValidandoListas(true);
     setValidacionListas(null);
     try {
       const token = await getAuthToken();
       if (!token) {
         setError('Por favor inicia sesión para validar en listas');
-        return;
+        return null;
       }
 
       const { nombre, apellido_paterno, apellido_materno } = splitNombreCompleto(datos.nombre_completo);
@@ -206,29 +370,273 @@ const KYCModule = () => {
           (typeof payload === 'string' && payload.slice(0, 200)) ||
           `Error HTTP ${response.status}`;
         setError(`No se pudo validar en listas: ${msg}`);
-        return;
+        return null;
       }
 
-      setValidacionListas(payload as ValidacionListasResult);
+      const resultado = payload as ValidacionListasResult;
+      setValidacionListas(resultado);
+
+      // Si se proporciona un cliente_id, guardar los resultados en la BD
+      if (clienteId) {
+        await guardarValidacionesEnDB(clienteId, resultado, token);
+      }
+
+      return resultado;
     } catch (e) {
       setError('No se pudo validar en listas (conexión)');
+      return null;
     } finally {
       setValidandoListas(false);
     }
   };
 
+  const guardarValidacionesEnDB = async (clienteId: string, validacionListas: ValidacionListasResult, token: string) => {
+    try {
+      // Normalizar nivel de riesgo a valores permitidos: bajo, medio, alto, critico, pendiente
+      const normalizarNivelRiesgo = (nivel?: string): string => {
+        if (!nivel) return 'pendiente';
+        const nivelLower = nivel.toLowerCase().trim();
+        
+        // Mapeo de posibles valores
+        const mapeo: Record<string, string> = {
+          'bajo': 'bajo',
+          'low': 'bajo',
+          'medio': 'medio',
+          'medium': 'medio',
+          'moderado': 'medio',
+          'alto': 'alto',
+          'high': 'alto',
+          'critico': 'critico',
+          'crítico': 'critico',
+          'critical': 'critico',
+          'pendiente': 'pendiente',
+          'pending': 'pendiente'
+        };
+        
+        return mapeo[nivelLower] || 'pendiente';
+      };
+
+      const mapeoValidaciones = {
+        nivel_riesgo: normalizarNivelRiesgo(validacionListas.nivel_riesgo),
+        score_ebr: validacionListas.score_riesgo !== undefined ? validacionListas.score_riesgo / 100 : null,
+        en_lista_ofac: validacionListas.validaciones?.ofac?.encontrado || false,
+        en_lista_69b: validacionListas.validaciones?.lista_69b?.en_lista || false,
+        en_lista_uif: validacionListas.validaciones?.uif?.encontrado || false,
+        en_lista_peps: validacionListas.validaciones?.peps_mexico?.encontrado || false,
+        en_lista_csnu: validacionListas.validaciones?.csnu?.encontrado || false,
+        es_pep: validacionListas.validaciones?.peps_mexico?.encontrado || false,
+        estado_expediente: validacionListas.aprobado ? 'aprobado' : 'pendiente_aprobacion',
+        fecha_ultima_busqueda_listas: new Date().toISOString(),
+        validaciones: validacionListas.validaciones
+      };
+
+      console.log('📤 Actualizando validaciones del cliente:', clienteId);
+      console.log('🎯 Nivel de riesgo original:', validacionListas.nivel_riesgo);
+      console.log('🎯 Nivel de riesgo normalizado:', normalizarNivelRiesgo(validacionListas.nivel_riesgo));
+      console.log('📋 Datos a enviar:', JSON.stringify(mapeoValidaciones, null, 2));
+      console.log('🔑 Token presente:', !!token);
+
+      // Usar endpoint más directo
+      const url = `/api/kyc/clientes/${clienteId}?action=validaciones`;
+      console.log('🌐 URL:', url);
+      
+      const response = await fetch(url, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(mapeoValidaciones)
+      });
+      
+      console.log('📡 Response status:', response.status, response.statusText);
+
+      const contentType = response.headers.get('content-type') || '';
+      const isJson = contentType.includes('application/json');
+
+      if (!response.ok) {
+        let errorMsg = 'Error al guardar validaciones';
+        console.error('❌ Response no OK. Status:', response.status);
+        console.error('❌ Content-Type:', contentType);
+        
+        if (isJson) {
+          try {
+            const errorData = await response.json();
+            console.error('❌ Error del servidor (completo):', JSON.stringify(errorData, null, 2));
+            
+            // Detectar error de columna faltante
+            if (errorData.code === 'PGRST204' || errorData.detail?.includes('column')) {
+              errorMsg = '⚠️ Base de datos desactualizada. Por favor, aplica la migración de columnas. Ver: FIX_COLUMNAS_LISTAS.md';
+              console.error('');
+              console.error('═══════════════════════════════════════════════════════════');
+              console.error('🔧 SOLUCIÓN: Ejecuta este SQL en Supabase Dashboard:');
+              console.error('═══════════════════════════════════════════════════════════');
+              console.error('ALTER TABLE clientes ADD COLUMN IF NOT EXISTS en_lista_uif BOOLEAN DEFAULT false;');
+              console.error('ALTER TABLE clientes ADD COLUMN IF NOT EXISTS en_lista_peps BOOLEAN DEFAULT false;');
+              console.error('═══════════════════════════════════════════════════════════');
+              console.error('Ver instrucciones completas en: FIX_COLUMNAS_LISTAS.md');
+              console.error('');
+            } else {
+              errorMsg = errorData.error || errorData.detail || errorData.message || errorMsg;
+            }
+            
+            // Si el objeto está vacío, usar un mensaje más descriptivo
+            if (Object.keys(errorData).length === 0) {
+              errorMsg = `Error ${response.status}: Respuesta vacía del servidor`;
+            }
+          } catch (parseErr) {
+            console.error('❌ No se pudo parsear error JSON:', parseErr);
+            errorMsg = `Error ${response.status}: No se pudo leer el error`;
+          }
+        } else {
+          const text = await response.text();
+          console.error('❌ Error (text):', text);
+          errorMsg = text || `Error ${response.status}: Sin mensaje`;
+        }
+        setError(`${errorMsg} (${response.status})`);
+        return;
+      }
+
+      const data = isJson ? await response.json() : null;
+      console.log('✅ Validaciones guardadas en BD:', data);
+      
+      // Recargar cliente actualizado desde la BD
+      if (data?.cliente) {
+        // Si hay un cliente seleccionado y es el mismo que se actualizó, actualizarlo
+        if (selectedCliente && selectedCliente.cliente_id === clienteId) {
+          setSelectedCliente(data.cliente);
+        }
+      }
+    } catch (err) {
+      console.error('❌ Error conectando con BD:', err);
+      setError(`Error de conexión: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
+
   const validarListasCliente = async (cliente: Cliente) => {
     const ts = new Date().toISOString();
-    await validarListas({
-      tipo_persona: cliente.tipo_persona,
-      nombre_completo: cliente.nombre_completo,
-      rfc: cliente.rfc,
-      curp: undefined,
-      sector_actividad: cliente.sector_actividad,
-      origen_recursos: ''
-    });
-    setLastValidations((prev) => ({ ...prev, [cliente.cliente_id]: ts }));
-    setLastValidationInfo({ label: cliente.nombre_completo, ts });
+    setValidandoListas(true);
+    try {
+      const resultado = await validarListas(
+        {
+          tipo_persona: cliente.tipo_persona,
+          nombre_completo: cliente.nombre_completo,
+          rfc: cliente.rfc,
+          curp: cliente.curp,
+          sector_actividad: cliente.sector_actividad,
+          origen_recursos: cliente.origen_recursos || ''
+        },
+        cliente.cliente_id // Pasar cliente_id para guardar en DB
+      );
+
+      if (resultado) {
+        // Actualizar cliente seleccionado en la UI
+        if (selectedCliente && selectedCliente.cliente_id === cliente.cliente_id) {
+          setSelectedCliente({
+            ...selectedCliente,
+            fecha_ultima_busqueda_listas: ts,
+            // Actualizar con los nuevos datos de validación
+            en_lista_ofac: resultado.validaciones?.ofac?.encontrado || false,
+            en_lista_69b: resultado.validaciones?.lista_69b?.en_lista || false,
+            en_lista_uif: resultado.validaciones?.uif?.encontrado || false,
+            en_lista_peps: resultado.validaciones?.peps_mexico?.encontrado || false,
+            en_lista_csnu: resultado.validaciones?.csnu?.encontrado || false,
+            es_pep: resultado.validaciones?.peps_mexico?.encontrado || false,
+            nivel_riesgo: (resultado.nivel_riesgo || 'pendiente') as any,
+            score_ebr: resultado.score_riesgo !== undefined ? resultado.score_riesgo / 100 : null,
+            estado_expediente: resultado.aprobado ? 'aprobado' : 'pendiente_aprobacion'
+          });
+        }
+
+        setLastValidations((prev) => ({ ...prev, [cliente.cliente_id]: ts }));
+        setLastValidationInfo({ label: cliente.nombre_completo, ts });
+      }
+    } catch (err) {
+      console.error('Error validando listas del cliente:', err);
+    } finally {
+      setValidandoListas(false);
+      // Refrescar lista de clientes después de validar
+      setTimeout(() => cargarClientes(), 1000);
+    }
+  };
+
+  const handleEditarCliente = () => {
+    setIsEditing(true);
+    setEditedCliente(selectedCliente ? { ...selectedCliente } : null);
+  };
+
+  const handleCancelarEdicion = () => {
+    setIsEditing(false);
+    setEditedCliente(null);
+  };
+
+  const handleGuardarEdicion = async () => {
+    if (!editedCliente || !selectedCliente) return;
+
+    try {
+      setLoading(true);
+      const { error: updateError } = await supabase
+        .from('clientes')
+        .update({
+          sector_actividad: editedCliente.sector_actividad,
+          origen_recursos: editedCliente.origen_recursos,
+          updated_at: new Date().toISOString()
+        })
+        .eq('cliente_id', selectedCliente.cliente_id);
+
+      if (updateError) throw updateError;
+
+      setSelectedCliente(editedCliente);
+      setIsEditing(false);
+      setSuccess('Cliente actualizado correctamente');
+      await cargarClientes();
+      setTimeout(() => setSuccess(null), 3000);
+    } catch (err: any) {
+      console.error('Error actualizando cliente:', err);
+      setError(err.message || 'Error al actualizar el cliente');
+      setTimeout(() => setError(null), 5000);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEliminarCliente = async () => {
+    if (!selectedCliente) return;
+    
+    if (!confirm('¿Está seguro de eliminar este cliente? El registro quedará marcado como eliminado para auditoría.')) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      // Soft delete - marcar como eliminado pero mantener registro
+      const { error: deleteError } = await supabase
+        .from('clientes')
+        .update({
+          estado_expediente: 'eliminado',
+          updated_at: new Date().toISOString()
+        })
+        .eq('cliente_id', selectedCliente.cliente_id);
+
+      if (deleteError) throw deleteError;
+
+      setSuccess('Cliente eliminado correctamente (registro preservado para auditoría)');
+      setTimeout(() => {
+        setView('lista');
+        setSuccess(null);
+      }, 2000);
+      await cargarClientes();
+    } catch (err: any) {
+      console.error('Error eliminando cliente:', err);
+      setError(err.message || 'Error al eliminar el cliente');
+      setTimeout(() => setError(null), 5000);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAdministrarExpediente = () => {
+    fileInputRef.current?.click();
   };
 
   const onDuplicateAccept = () => {
@@ -324,7 +732,8 @@ const KYCModule = () => {
       
       if (data.success) {
         setSuccess(`✅ Cliente creado exitosamente\nEstado: ${data.estado}\n${data.mensaje}`);
-        await validarListas(formData);
+        // Validar en listas y guardar resultados en BD
+        await validarListas(formData, data.cliente?.cliente_id);
         setView('lista');
         cargarClientes();
         // Reset form
@@ -349,6 +758,376 @@ const KYCModule = () => {
     }
   };
 
+  const crearOperacionCliente = async () => {
+    if (!selectedCliente) return;
+    setCreandoOperacion(true);
+    setError(null);
+    setSuccess(null);
+    setOperacionResultado(null);
+    try {
+      const token = await getAuthToken();
+      if (!token) {
+        setError('Por favor inicia sesión para registrar operaciones');
+        return;
+      }
+
+      if (!operacionForm.monto || Number(operacionForm.monto) <= 0) {
+        setError('Ingresa un monto mayor a 0');
+        setCreandoOperacion(false);
+        return;
+      }
+
+      const payload = {
+        cliente_id: selectedCliente.cliente_id,
+        fecha_operacion: operacionForm.fecha_operacion,
+        hora_operacion: operacionForm.hora_operacion,
+        tipo_operacion: operacionForm.tipo_operacion,
+        monto: Number(operacionForm.monto),
+        moneda: operacionForm.moneda,
+        metodo_pago: operacionForm.metodo_pago,
+        descripcion: operacionForm.descripcion || null,
+        referencia_factura: operacionForm.referencia_factura || null,
+        producto_servicio: operacionForm.producto_servicio || null,
+        banco_origen: operacionForm.banco_origen || null,
+        numero_cuenta: operacionForm.numero_cuenta || null,
+        notas_internas: operacionForm.notas_internas || null
+      };
+
+      const isEdit = Boolean(editingOperacionId);
+      const url = isEdit ? `/api/operaciones/${editingOperacionId}` : '/api/operaciones';
+      const method = isEdit ? 'PATCH' : 'POST';
+
+      const resp = await fetch(url, {
+        method,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const isJson = (resp.headers.get('content-type') || '').includes('application/json');
+      const data = isJson ? await resp.json() : null;
+      if (!resp.ok) {
+        throw new Error(data?.error || `Error HTTP ${resp.status}`);
+      }
+
+      const folio = data?.operacion?.folio_interno as string | undefined;
+      const clasif = data?.operacion?.clasificacion_pld as string | undefined;
+      const alertas = data?.operacion?.alertas as string[] | undefined;
+      setOperacionResultado({ folio, clasificacion: clasif, alertas });
+      setSuccess(isEdit ? `Operación actualizada: ${folio || 'Folio pendiente'}` : `Operación creada: ${folio || 'Folio pendiente'}`);
+
+      // Recargar operaciones del cliente y lista de clientes para actualizar contador
+      await cargarOperacionesDelCliente(selectedCliente.cliente_id);
+      await cargarClientes(); // Actualizar contador en lista
+
+      // Reset del formulario
+      const timeCDMX = getTimeCDMX();
+      setOperacionForm({
+        fecha_operacion: timeCDMX.date,
+        hora_operacion: timeCDMX.time,
+        folio_interno: '',
+        tipo_operacion: 'venta',
+        monto: '',
+        moneda: 'MXN',
+        metodo_pago: 'transferencia',
+        descripcion: '',
+        referencia_factura: '',
+        producto_servicio: '',
+        banco_origen: '',
+        numero_cuenta: '',
+        notas_internas: ''
+      });
+      setEditingOperacionId(null);
+    } catch (e: any) {
+      setError(e?.message || 'No se pudo crear la operación');
+    } finally {
+      setCreandoOperacion(false);
+    }
+  };
+
+  // ==================== ELIMINAR DOCUMENTOS U OPERACIONES CON AUDITORÍA ====================
+  const handleConfirmDelete = async () => {
+    if (!selectedCliente || !deleteReasonText.trim()) {
+      setError('Razón de eliminación es requerida');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      const token = await getAuthToken();
+      if (!token) {
+        setError('Sesión expirada. Por favor inicia sesión nuevamente');
+        return;
+      }
+
+      if (deleteReasonType === 'operacion') {
+        // Eliminar operaciones BATCH
+        for (const opId of selectedOperacionesToDelete) {
+          const resp = await fetch(`/api/operaciones/${opId}`, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              razon_eliminacion: deleteReasonText,
+              cliente_id: selectedCliente.cliente_id
+            })
+          });
+
+          if (!resp.ok) {
+            const data = await resp.json().catch(() => ({}));
+            throw new Error(data?.error || `Error al eliminar operación ${opId}`);
+          }
+        }
+
+        setSuccess(`${selectedOperacionesToDelete.length} operación(es) eliminada(s). Registro de auditoría guardado.`);
+        setSelectedOperacionesToDelete([]);
+
+        // Recargar operaciones y lista de clientes para actualizar contador
+        await cargarOperacionesDelCliente(selectedCliente.cliente_id);
+        await cargarClientes();
+      } else if (deleteReasonType === 'documento') {
+        // Eliminar documentos BATCH
+        for (const docId of selectedDocumentsToDelete) {
+          const resp = await fetch(`/api/clientes/${selectedCliente.cliente_id}/documentos/${docId}`, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              razon_eliminacion: deleteReasonText
+            })
+          });
+
+          if (!resp.ok) {
+            const data = await resp.json().catch(() => ({}));
+            throw new Error(data?.error || `Error al eliminar documento ${docId}`);
+          }
+        }
+
+        setSuccess(`${selectedDocumentsToDelete.length} documento(s) eliminado(s). Registro de auditoría guardado.`);
+        setSelectedDocumentsToDelete([]);
+
+        // Recargar documentos
+        await cargarDocumentosDelCliente(selectedCliente.cliente_id);
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Error durante la eliminación');
+    } finally {
+      setLoading(false);
+      setShowDeleteReasonModal(false);
+      setDeleteReasonText('');
+      setItemToDelete(null);
+      setDeleteReasonType(null);
+    }
+  };
+
+  // ==================== NUEVA OPERACIÓN: Flujo con verificación de listas ====================
+  const handleNuevaOperacion = async () => {
+    if (!selectedCliente) return;
+
+    // 1. Verificar edad de última búsqueda en listas
+    const ultimaBusqueda = selectedCliente.fecha_ultima_busqueda_listas;
+    const diasDesdeUltima = daysSince(ultimaBusqueda);
+
+    setError(null);
+    setSuccess(null);
+
+    // 2. Si > 30 días, re-verificar AUTOMÁTICAMENTE
+    if (diasDesdeUltima > 30) {
+      setLoading(true);
+      try {
+        const token = await getAuthToken();
+        if (!token) {
+          setError('Por favor inicia sesión');
+          setLoading(false);
+          return;
+        }
+
+        // Llamar endpoint de actualización de listas
+        const respActualizar = await fetch(
+          `/api/clientes/${selectedCliente.cliente_id}/actualizar-listas`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+
+        const dataAct = await respActualizar.json();
+
+        // Si encuentra en listas CRÍTICAS, BLOQUEAR
+        if (dataAct.encontrado_en_listas) {
+          setShowBlockModal(true);
+          setBlockModalMessage(
+            `⛔ CLIENTE BLOQUEADO\n\nEste cliente fue encontrado en listas negras:\n\n${
+              dataAct.alertas?.join('\n') || 'Listas críticas'
+            }\n\nNO SE PUEDEN REGISTRAR OPERACIONES.\nContacte al oficial de cumplimiento.`
+          );
+          setLoading(false);
+          return;
+        }
+
+        // Actualizar cliente seleccionado con nuevos datos
+        if (selectedCliente) {
+          setSelectedCliente({
+            ...selectedCliente,
+            fecha_ultima_busqueda_listas: dataAct.timestamp,
+            en_lista_ofac: dataAct.validaciones?.ofac?.encontrado || false,
+            en_lista_69b: dataAct.validaciones?.lista_69b?.en_lista || false,
+            en_lista_uif: dataAct.validaciones?.uif?.encontrado || false,
+            en_lista_peps: dataAct.validaciones?.peps_mexico?.encontrado || false,
+            en_lista_csnu: dataAct.validaciones?.csnu?.encontrado || false
+          });
+        }
+
+        setSuccess('✅ Listas actualizadas - Cliente limpio');
+      } catch (err: any) {
+        setError(`Error verificando listas: ${err?.message}`);
+        setLoading(false);
+        return;
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    // 3. Abrir formulario de nueva operación (si no está bloqueado)
+    setOperacionResultado(null);
+    setError(null);
+    setSuccess(null);
+    const timeCDMX = getTimeCDMX();
+    setOperacionForm({
+      fecha_operacion: timeCDMX.date,
+      hora_operacion: timeCDMX.time,
+      folio_interno: '',
+      tipo_operacion: 'venta',
+      monto: '',
+      moneda: 'MXN',
+      metodo_pago: 'transferencia',
+      descripcion: '',
+      referencia_factura: '',
+      producto_servicio: '',
+      banco_origen: '',
+      numero_cuenta: '',
+      notas_internas: ''
+    });
+    setView('operaciones');
+  };
+
+  // ==================== CARGAR OPERACIONES DEL CLIENTE ====================
+  const cargarOperacionesDelCliente = async (clienteId: string) => {
+    setCargandoOps(true);
+    try {
+      const token = await getAuthToken();
+      if (!token) return;
+
+      const resp = await fetch(`/api/clientes/${clienteId}/operaciones`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const data = await resp.json();
+      if (resp.ok && data.success) {
+        setOperacionesDelCliente(data.operaciones || []);
+        setResumenOps(data.resumen);
+      }
+    } catch (err) {
+      console.error('Error cargando operaciones:', err);
+    } finally {
+      setCargandoOps(false);
+    }
+  };
+
+  // ==================== SUBIR DOCUMENTO ====================
+  const manejarUploadDocumento = async (file: File) => {
+    if (!selectedCliente) return;
+    setSubiendoDocumento(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const token = await getAuthToken();
+      if (!token) {
+        setError('Por favor inicia sesión para subir documentos');
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('nombre', file.name);
+      formData.append('tipo', file.type || 'desconocido');
+
+      const resp = await fetch(`/api/clientes/${selectedCliente.cliente_id}/documentos`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      const isJson = (resp.headers.get('content-type') || '').includes('application/json');
+      const data = isJson ? await resp.json() : null;
+      if (!resp.ok) {
+        throw new Error(data?.error || 'Error al subir documento');
+      }
+
+      setSuccess(`Documento "${data?.documento?.nombre || file.name}" cargado`);
+      await cargarDocumentosDelCliente(selectedCliente.cliente_id);
+    } catch (err: any) {
+      console.error('Upload documento error:', err);
+      setError(err?.message || 'No se pudo subir el documento');
+    } finally {
+      setSubiendoDocumento(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const onFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      manejarUploadDocumento(file);
+    }
+  };
+
+  // ==================== CARGAR DOCUMENTOS DEL CLIENTE ====================
+  const cargarDocumentosDelCliente = async (clienteId: string) => {
+    try {
+      const token = await getAuthToken();
+      if (!token) return;
+
+      const resp = await fetch(`/api/clientes/${clienteId}/documentos`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const isJson = (resp.headers.get('content-type') || '').includes('application/json');
+      const data = isJson ? await resp.json() : null;
+      if (!resp.ok) {
+        throw new Error(data?.error || 'Error al cargar documentos');
+      }
+
+      setDocumentosDelCliente(data?.documentos || []);
+    } catch (err) {
+      console.error('Error cargando documentos:', err);
+      setError(err instanceof Error ? err.message : 'No se pudieron cargar documentos');
+    }
+  };
+
   // Mock data - En producción vendría de Supabase
   const mockClientes: Cliente[] = [
     {
@@ -362,8 +1141,12 @@ const KYCModule = () => {
       es_pep: false,
       en_lista_69b: false,
       en_lista_ofac: false,
+      en_lista_uif: false,
+      en_lista_peps: false,
+      en_lista_csnu: false,
       estado_expediente: 'aprobado',
       created_at: '2025-01-10T10:00:00Z',
+      fecha_ultima_busqueda_listas: '2025-01-26T16:35:52Z',
       num_operaciones: 12,
       monto_total: 450000
     },
@@ -378,8 +1161,12 @@ const KYCModule = () => {
       es_pep: false,
       en_lista_69b: false,
       en_lista_ofac: false,
+      en_lista_uif: false,
+      en_lista_peps: false,
+      en_lista_csnu: false,
       estado_expediente: 'aprobado',
       created_at: '2025-01-08T14:30:00Z',
+      fecha_ultima_busqueda_listas: '2025-01-26T09:29:32Z',
       num_operaciones: 5,
       monto_total: 180000
     }
@@ -391,7 +1178,7 @@ const KYCModule = () => {
       case 'alto': return 'bg-orange-500/20 text-orange-300 border-orange-500/30';
       case 'medio': return 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30';
       case 'bajo': return 'bg-green-500/20 text-green-300 border-green-500/30';
-      case 'en_revision': return 'bg-blue-500/20 text-blue-300 border-blue-500/30';
+      case 'pendiente': return 'bg-blue-500/20 text-blue-300 border-blue-500/30';
       default: return 'bg-gray-500/20 text-gray-300 border-gray-500/30';
     }
   };
@@ -402,7 +1189,7 @@ const KYCModule = () => {
       case 'alto': return '🟠';
       case 'medio': return '🟡';
       case 'bajo': return '🟢';
-      case 'en_revision': return '🔄';
+      case 'pendiente': return '⏳';
       default: return '⚪';
     }
   };
@@ -432,59 +1219,59 @@ const KYCModule = () => {
               Gestión de expedientes y cumplimiento normativo
             </p>
           </div>
-          <button
-            onClick={() => { setValidacionListas(null); setDuplicateNotice(null); setError(null); setView('nuevo'); }}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-all"
-          >
-            <Plus className="w-5 h-5" />
-            Nuevo Cliente
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => { 
+                setError(null); 
+                setValidandoListas(true);
+                // Validar todos los clientes
+                const validarTodos = async () => {
+                  try {
+                    for (const cliente of clientes) {
+                      if (cliente.estado_expediente !== 'eliminado') {
+                        await validarListasCliente(cliente);
+                      }
+                    }
+                    setValidandoListas(false);
+                  } catch (err) {
+                    console.error('Error validando todos:', err);
+                    setError('Error al validar clientes');
+                    setValidandoListas(false);
+                  }
+                };
+                validarTodos();
+              }}
+              disabled={validandoListas}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${
+                validandoListas
+                  ? 'bg-gray-700 text-gray-400 cursor-not-allowed opacity-60'
+                  : 'bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30'
+              }`}
+              title="Actualizar validaciones en listas para todos los clientes"
+            >
+              {validandoListas ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-amber-400 border-t-transparent"></div>
+                  Validando...
+                </>
+              ) : (
+                <>
+                  <RefreshCcw className="w-5 h-5" />
+                  Actualizar Listas
+                </>
+              )}
+            </button>
+            <button
+              onClick={() => { setValidacionListas(null); setDuplicateNotice(null); setError(null); setView('nuevo'); }}
+              className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-all"
+            >
+              <Plus className="w-5 h-5" />
+              Nuevo Cliente
+            </button>
+          </div>
         </div>
 
-        {validacionListas && (
-          <div className="bg-gray-800/60 border border-gray-700 rounded-lg p-4">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-sm text-gray-400">Resultado de validación en listas</p>
-                {lastValidationInfo && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    Última validación: {formatDateTime(lastValidationInfo.ts)} · {lastValidationInfo.label}
-                  </p>
-                )}
-                <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm text-white">
-                  <div className="flex items-center gap-2">
-                    <span className={`px-2 py-1 rounded text-xs ${validacionListas.validaciones?.ofac?.encontrado ? 'bg-red-500/20 text-red-300' : 'bg-emerald-500/20 text-emerald-200'}`}>
-                      OFAC: {validacionListas.validaciones?.ofac?.encontrado ? `${validacionListas.validaciones?.ofac?.total || 0} coincidencia(s)` : 'Limpio'}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`px-2 py-1 rounded text-xs ${validacionListas.validaciones?.csnu?.encontrado ? 'bg-orange-500/20 text-orange-200' : 'bg-emerald-500/20 text-emerald-200'}`}>
-                      ONU/CSNU: {validacionListas.validaciones?.csnu?.encontrado ? `${validacionListas.validaciones?.csnu?.total || 0} coincidencia(s)` : 'Limpio'}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`px-2 py-1 rounded text-xs ${validacionListas.validaciones?.lista_69b?.en_lista ? 'bg-red-500/20 text-red-300' : 'bg-emerald-500/20 text-emerald-200'}`}>
-                      Lista 69-B: {validacionListas.validaciones?.lista_69b?.en_lista === null ? 'No disponible' : validacionListas.validaciones?.lista_69b?.en_lista ? 'En lista' : 'No encontrado'}
-                    </span>
-                  </div>
-                </div>
-                {validacionListas.alertas?.length > 0 && (
-                  <ul className="mt-2 text-xs text-red-300 list-disc list-inside space-y-1">
-                    {validacionListas.alertas.map((a: string, idx: number) => (
-                      <li key={idx}>{a}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-              <div className="text-right">
-                <div className={`text-sm font-semibold ${validacionListas.aprobado ? 'text-emerald-300' : 'text-red-300'}`}>
-                  {validacionListas.aprobado ? 'Aprobado' : 'Observaciones'}
-                </div>
-                <div className="text-xs text-gray-400">Score riesgo: {validacionListas.score_riesgo}/100</div>
-              </div>
-            </div>
-          </div>
-        )}
+
 
         {/* Estadísticas rápidas */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -552,7 +1339,6 @@ const KYCModule = () => {
               <option value="medio">Medio</option>
               <option value="bajo">Bajo</option>
               <option value="pendiente">Pendiente</option>
-              <option value="en_revision">En revisión</option>
             </select>
 
             <button className="flex items-center gap-2 px-4 py-2 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-500/30 transition-all">
@@ -608,15 +1394,24 @@ const KYCModule = () => {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex justify-center gap-1">
+                      <div className="flex justify-center gap-1 flex-wrap">
                         {cliente.es_pep && (
                           <span className="px-2 py-1 bg-yellow-500/20 text-yellow-400 text-xs rounded">PEP</span>
+                        )}
+                        {cliente.en_lista_peps && (
+                          <span className="px-2 py-1 bg-yellow-500/20 text-yellow-400 text-xs rounded">PEPS</span>
+                        )}
+                        {cliente.en_lista_uif && (
+                          <span className="px-2 py-1 bg-red-500/20 text-red-400 text-xs rounded">UIF</span>
                         )}
                         {cliente.en_lista_69b && (
                           <span className="px-2 py-1 bg-red-500/20 text-red-400 text-xs rounded">69B</span>
                         )}
                         {cliente.en_lista_ofac && (
                           <span className="px-2 py-1 bg-red-500/20 text-red-400 text-xs rounded">OFAC</span>
+                        )}
+                        {cliente.en_lista_csnu && (
+                          <span className="px-2 py-1 bg-orange-500/20 text-orange-400 text-xs rounded">ONU</span>
                         )}
                       </div>
                     </td>
@@ -632,42 +1427,24 @@ const KYCModule = () => {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex justify-end gap-2">
-                        <button
-                          onClick={() => validarListasCliente(cliente)}
-                          className={`p-2 ${validandoListas ? 'opacity-60 cursor-not-allowed' : 'text-emerald-300 hover:bg-emerald-500/20'} rounded transition-colors`}
-                          title="Validar en listas"
-                          disabled={validandoListas}
-                        >
-                          <RefreshCcw className="w-4 h-4" />
-                        </button>
-                        {lastValidations[cliente.cliente_id] && (
+                      <div className="flex justify-end gap-3 items-center">
+                        {cliente.fecha_ultima_busqueda_listas && (
                           <div className="text-right text-[11px] leading-tight text-gray-500">
-                            <div>Últ. validación</div>
-                            <div className="text-gray-400">{formatDateTime(lastValidations[cliente.cliente_id])}</div>
+                            <div className="text-gray-400">Últ. validación</div>
+                            <div className="text-gray-300">{formatDateTime(cliente.fecha_ultima_busqueda_listas)}</div>
                           </div>
                         )}
                         <button
                           onClick={() => {
                             setSelectedCliente(cliente);
+                            setIsEditing(false);
+                            setEditedCliente(null);
                             setView('detalle');
                           }}
                           className="p-2 text-blue-400 hover:bg-blue-500/20 rounded transition-colors"
                           title="Ver expediente"
                         >
                           <Eye className="w-4 h-4" />
-                        </button>
-                        <button
-                          className="p-2 text-emerald-400 hover:bg-emerald-500/20 rounded transition-colors"
-                          title="Editar"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button
-                          className="p-2 text-red-400 hover:bg-red-500/20 rounded transition-colors"
-                          title="Eliminar"
-                        >
-                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </td>
@@ -683,6 +1460,59 @@ const KYCModule = () => {
 
   // ==================== VISTA: NUEVO CLIENTE ====================
   if (view === 'nuevo') {
+    // Si hay éxito o duplicado, mostrar modal centrado
+    if (success || duplicateNotice) {
+      return (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-gray-900 border border-gray-700 rounded-lg p-8 max-w-md w-full mx-4 space-y-6">
+            {success && (
+              <>
+                <div className="flex justify-center">
+                  <div className="p-3 bg-green-500/20 rounded-full">
+                    <CheckCircle className="w-12 h-12 text-green-400" />
+                  </div>
+                </div>
+                <div className="text-center space-y-2">
+                  <h3 className="text-xl font-bold text-white">¡Cliente creado exitosamente!</h3>
+                  <p className="text-gray-300 text-sm whitespace-pre-line">{success}</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setSuccess(null);
+                    setView('lista');
+                    cargarClientes();
+                  }}
+                  className="w-full px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors font-medium"
+                >
+                  Aceptar
+                </button>
+              </>
+            )}
+
+            {duplicateNotice && (
+              <>
+                <div className="flex justify-center">
+                  <div className="p-3 bg-orange-500/20 rounded-full">
+                    <AlertTriangle className="w-12 h-12 text-orange-400" />
+                  </div>
+                </div>
+                <div className="text-center space-y-2">
+                  <h3 className="text-xl font-bold text-white">Cliente ya existente</h3>
+                  <p className="text-gray-300 text-sm whitespace-pre-line">{duplicateNotice}</p>
+                </div>
+                <button
+                  onClick={onDuplicateAccept}
+                  className="w-full px-4 py-2 bg-orange-500 text-white rounded-lg hover:bg-orange-600 transition-colors font-medium"
+                >
+                  Aceptar
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="space-y-6">
         <div className="flex items-center gap-3">
@@ -701,33 +1531,6 @@ const KYCModule = () => {
             <div>
               <p className="font-medium">Error en el formulario</p>
               <p className="text-sm mt-1">{error}</p>
-            </div>
-          </div>
-        )}
-
-        {duplicateNotice && (
-          <div className="bg-orange-500/15 border border-orange-500/40 rounded-lg p-4 text-orange-200">
-            <div className="flex justify-between items-start gap-3">
-              <div>
-                <p className="font-semibold text-orange-100">Cliente ya existente</p>
-                <p className="text-sm whitespace-pre-line mt-1">{duplicateNotice}</p>
-              </div>
-              <button
-                onClick={onDuplicateAccept}
-                className="px-3 py-1 rounded bg-orange-500 text-white text-sm hover:bg-orange-600 transition-colors"
-              >
-                Aceptar
-              </button>
-            </div>
-          </div>
-        )}
-
-        {success && (
-          <div className="bg-green-500/20 border border-green-500 rounded-lg p-4 text-green-300 flex items-start gap-3">
-            <CheckCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-            <div>
-              <p className="font-medium">¡Éxito!</p>
-              <p className="text-sm mt-1">{success}</p>
             </div>
           </div>
         )}
@@ -933,15 +1736,9 @@ const KYCModule = () => {
                 }`}
               >
                 <option value="">Seleccionar...</option>
-                <option value="Construcción">Construcción</option>
-                <option value="Comercio">Comercio</option>
-                <option value="Servicios Profesionales">Servicios Profesionales</option>
-                <option value="Transporte">Transporte</option>
-                <option value="Bienes Raíces">Bienes Raíces</option>
-                <option value="Financiero">Financiero</option>
-                <option value="Tecnología">Tecnología</option>
-                <option value="Manufactura">Manufactura</option>
-                <option value="Otro">Otro</option>
+                {SECTORES_ACTIVIDAD.map(sector => (
+                  <option key={sector} value={sector}>{sector}</option>
+                ))}
               </select>
               {fieldErrors.sector_actividad && (
                 <p className="text-xs text-red-400 flex items-center gap-1 mt-1">
@@ -955,14 +1752,14 @@ const KYCModule = () => {
               <label className="block text-sm font-medium text-gray-300 mb-2">
                 Origen de Recursos *
               </label>
-              <textarea
+              <select
                 required
                 value={formData.origen_recursos}
                 onChange={(e) => {
                   const valor = e.target.value;
                   setFormData({ ...formData, origen_recursos: valor });
                   // Validar en tiempo real
-                  if (valor.length > 0) {
+                  if (valor) {
                     const resultado = validarOrigenRecursos(valor);
                     if (!resultado.valid) {
                       setFieldErrors({ ...fieldErrors, origen_recursos: resultado.error || '' });
@@ -972,22 +1769,22 @@ const KYCModule = () => {
                     }
                   }
                 }}
-                className={`w-full bg-gray-900/50 border rounded-lg px-4 py-2 text-white focus:outline-none transition-colors resize-none ${
+                className={`w-full bg-gray-900/50 border rounded-lg px-4 py-2 text-white focus:outline-none transition-colors ${
                   fieldErrors.origen_recursos
                     ? 'border-red-500 focus:border-red-500'
                     : 'border-gray-700 focus:border-emerald-500'
                 }`}
-                placeholder="Ej: Ingresos por ventas, honorarios profesionales, etc."
-                rows={3}
-              />
-              <div className="flex justify-between mt-1">
-                <p className="text-xs text-gray-500">{formData.origen_recursos.length}/200</p>
-                {fieldErrors.origen_recursos && (
-                  <p className="text-xs text-red-400 flex items-center gap-1">
-                    <AlertCircle className="w-3 h-3" /> {fieldErrors.origen_recursos}
-                  </p>
-                )}
-              </div>
+              >
+                <option value="">Seleccionar...</option>
+                {ORIGENES_RECURSOS.map(origen => (
+                  <option key={origen} value={origen}>{origen}</option>
+                ))}
+              </select>
+              {fieldErrors.origen_recursos && (
+                <p className="text-xs text-red-400 flex items-center gap-1 mt-1">
+                  <AlertCircle className="w-3 h-3" /> {fieldErrors.origen_recursos}
+                </p>
+              )}
             </div>
 
             {/* Botones */}
@@ -1054,24 +1851,1045 @@ const KYCModule = () => {
               <p className="text-gray-400 text-sm">RFC: {selectedCliente.rfc}</p>
             </div>
           </div>
+        </div>
 
-          <div className="flex gap-2">
-            <button className="flex items-center gap-2 px-4 py-2 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-500/30 transition-all">
-              <FileText className="w-4 h-4" />
-              Exportar Expediente
+        <div className="bg-gray-800/40 border border-gray-700 rounded-lg p-6 space-y-6">
+          {/* Mensajes de éxito/error */}
+          {success && (
+            <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-4 py-3 rounded-lg">
+              {success}
+            </div>
+          )}
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg">
+              {error}
+            </div>
+          )}
+
+          {/* TABS NAVIGATION */}
+          <div className="flex gap-2 border-b border-gray-700 -mx-6 px-6 pt-0">
+            <button
+              onClick={() => setDetailTab('datosGenerales')}
+              className={`px-4 py-3 font-medium text-sm transition-all border-b-2 ${
+                detailTab === 'datosGenerales'
+                  ? 'text-emerald-400 border-emerald-500'
+                  : 'text-gray-400 border-transparent hover:text-gray-300'
+              }`}
+            >
+              📋 Datos Generales
             </button>
+            <button
+              onClick={() => setDetailTab('operaciones')}
+              className={`px-4 py-3 font-medium text-sm transition-all border-b-2 ${
+                detailTab === 'operaciones'
+                  ? 'text-emerald-400 border-emerald-500'
+                  : 'text-gray-400 border-transparent hover:text-gray-300'
+              }`}
+            >
+              📊 Operaciones ({resumenOps?.total_operaciones || 0})
+            </button>
+            <button
+              onClick={() => setDetailTab('documentos')}
+              className={`px-4 py-3 font-medium text-sm transition-all border-b-2 ${
+                detailTab === 'documentos'
+                  ? 'text-emerald-400 border-emerald-500'
+                  : 'text-gray-400 border-transparent hover:text-gray-300'
+              }`}
+            >
+              📁 Documentos
+            </button>
+            <button
+              onClick={() => setDetailTab('validaciones')}
+              className={`px-4 py-3 font-medium text-sm transition-all border-b-2 ${
+                detailTab === 'validaciones'
+                  ? 'text-emerald-400 border-emerald-500'
+                  : 'text-gray-400 border-transparent hover:text-gray-300'
+              }`}
+            >
+              ✅ Validaciones en Listas
+            </button>
+          </div>
+
+          {/* TAB 1: DATOS GENERALES */}
+          {detailTab === 'datosGenerales' && (
+            <div className="space-y-6">
+              {/* Datos generales */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Nombre - NO EDITABLE (dato básico obligatorio PLD) */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1 flex items-center gap-2">
+                Nombre completo / Razón social
+                <span className="text-xs text-gray-500">(No editable)</span>
+              </label>
+              <input 
+                type="text" 
+                className="w-full bg-gray-900/80 border border-gray-600 rounded-lg px-4 py-2 text-gray-400 cursor-not-allowed" 
+                value={selectedCliente.nombre_completo} 
+                disabled 
+              />
+            </div>
+            
+            {/* RFC - NO EDITABLE (dato básico obligatorio PLD) */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1 flex items-center gap-2">
+                RFC
+                <span className="text-xs text-gray-500">(No editable)</span>
+              </label>
+              <input 
+                type="text" 
+                className="w-full bg-gray-900/80 border border-gray-600 rounded-lg px-4 py-2 text-gray-400 cursor-not-allowed" 
+                value={selectedCliente.rfc} 
+                disabled 
+              />
+            </div>
+            
+            {/* CURP - NO EDITABLE (dato básico obligatorio PLD) */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1 flex items-center gap-2">
+                CURP
+                <span className="text-xs text-gray-500">(No editable)</span>
+              </label>
+              <input 
+                type="text" 
+                className="w-full bg-gray-900/80 border border-gray-600 rounded-lg px-4 py-2 text-gray-400 cursor-not-allowed" 
+                value={selectedCliente.curp || 'N/A'} 
+                disabled 
+              />
+            </div>
+            
+            {/* Tipo de persona - NO EDITABLE */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1 flex items-center gap-2">
+                Tipo de persona
+                <span className="text-xs text-gray-500">(No editable)</span>
+              </label>
+              <input 
+                type="text" 
+                className="w-full bg-gray-900/80 border border-gray-600 rounded-lg px-4 py-2 text-gray-400 cursor-not-allowed" 
+                value={selectedCliente.tipo_persona === 'fisica' ? 'Física' : 'Moral'} 
+                disabled 
+              />
+            </div>
+            
+            {/* Sector - EDITABLE con combobox */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Sector de actividad</label>
+              {isEditing && editedCliente ? (
+                <select
+                  value={editedCliente.sector_actividad}
+                  onChange={(e) => setEditedCliente({ ...editedCliente, sector_actividad: e.target.value })}
+                  className="w-full bg-gray-900/50 border border-emerald-500 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  {SECTORES_ACTIVIDAD.map(sector => (
+                    <option key={sector} value={sector}>{sector}</option>
+                  ))}
+                </select>
+              ) : (
+                <input 
+                  type="text" 
+                  className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white" 
+                  value={selectedCliente.sector_actividad} 
+                  readOnly 
+                />
+              )}
+            </div>
+            
+            {/* Origen de recursos - EDITABLE con combobox */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Origen de recursos</label>
+              {isEditing && editedCliente ? (
+                <select
+                  value={editedCliente.origen_recursos || ''}
+                  onChange={(e) => setEditedCliente({ ...editedCliente, origen_recursos: e.target.value })}
+                  className="w-full bg-gray-900/50 border border-emerald-500 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  {ORIGENES_RECURSOS.map(origen => (
+                    <option key={origen} value={origen}>{origen}</option>
+                  ))}
+                </select>
+              ) : (
+                <input 
+                  type="text" 
+                  className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white" 
+                  value={selectedCliente.origen_recursos || 'N/A'} 
+                  readOnly 
+                />
+              )}
+            </div>
+          </div>
+
+          {/* Estado y score */}
+          <div className="flex flex-wrap gap-4 items-center mt-4">
+            <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getRiesgoColor(selectedCliente.nivel_riesgo)}`}>{getRiesgoIcon(selectedCliente.nivel_riesgo)} {selectedCliente.nivel_riesgo.toUpperCase()}</span>
+            <span className="text-xs text-gray-400">EBR: {selectedCliente.score_ebr !== null ? selectedCliente.score_ebr.toFixed(3) : 'N/A'}</span>
+            <span className={`px-3 py-1 rounded-full text-xs font-medium ${getEstadoColor(selectedCliente.estado_expediente)}`}>{selectedCliente.estado_expediente}</span>
+          </div>
+            </div>
+          )}
+
+          {/* TAB 2: OPERACIONES DEL CLIENTE */}
+          {detailTab === 'operaciones' && (
+            <div className="space-y-6">
+              {cargandoOps ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 border-2 border-emerald-400 border-t-transparent"></div>
+                  <span className="ml-3 text-gray-400">Cargando operaciones...</span>
+                </div>
+              ) : (
+                <>
+                  {/* RESUMEN DE OPERACIONES */}
+                  {resumenOps && (
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-bold text-white">📊 Resumen</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="bg-gray-900/30 border border-gray-700 rounded-lg p-4">
+                          <div className="flex items-center gap-3">
+                            <FileText className="w-6 h-6 text-amber-400" />
+                            <div>
+                              <p className="text-xs text-gray-400">Total operaciones</p>
+                              <p className="text-2xl font-bold text-white">{resumenOps.total_operaciones}</p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="bg-gray-900/30 border border-gray-700 rounded-lg p-4">
+                          <div className="flex items-center gap-3">
+                            <DollarSign className="w-6 h-6 text-emerald-400" />
+                            <div>
+                              <p className="text-xs text-gray-400">Monto acumulado 6m</p>
+                              <p className="text-2xl font-bold text-white">${resumenOps.monto_6meses_mxn?.toLocaleString('es-MX')}</p>
+                            </div>
+                          </div>
+                        </div>
+                        {resumenOps.ultima_operacion && (
+                          <div className="bg-gray-900/30 border border-gray-700 rounded-lg p-4">
+                            <div className="flex items-center gap-3">
+                              <Clock className="w-6 h-6 text-blue-400" />
+                              <div>
+                                <p className="text-xs text-gray-400">Última operación</p>
+                                <p className="text-sm font-bold text-white">{formatDateShortCDMX(resumenOps.ultima_operacion.fecha)}</p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        <div className="bg-gray-900/30 border border-gray-700 rounded-lg p-4">
+                          <div>
+                            <p className="text-xs text-gray-400 mb-2">Clasificación PLD</p>
+                            <div className="flex gap-2 flex-wrap">
+                              {resumenOps.clasificaciones.normal > 0 && (
+                                <span className="px-2 py-1 bg-emerald-500/20 text-emerald-300 text-xs rounded border border-emerald-500/30">
+                                  ✅ Normal: {resumenOps.clasificaciones.normal}
+                                </span>
+                              )}
+                              {resumenOps.clasificaciones.relevante > 0 && (
+                                <span className="px-2 py-1 bg-yellow-500/20 text-yellow-300 text-xs rounded border border-yellow-500/30">
+                                  ⚠️ Relevante: {resumenOps.clasificaciones.relevante}
+                                </span>
+                              )}
+                              {resumenOps.clasificaciones.preocupante > 0 && (
+                                <span className="px-2 py-1 bg-red-500/20 text-red-300 text-xs rounded border border-red-500/30">
+                                  🚨 Preocupante: {resumenOps.clasificaciones.preocupante}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* HISTORIAL DE OPERACIONES */}
+                  {operacionesDelCliente.length > 0 ? (
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-lg font-bold text-white">Historial de Operaciones</h3>
+                        {selectedOperacionesToDelete.length > 0 && (
+                          <span className="text-xs bg-amber-500/20 text-amber-300 px-2 py-1 rounded border border-amber-500/30">
+                            {selectedOperacionesToDelete.length} seleccionadas
+                          </span>
+                        )}
+                      </div>
+                      <div className="space-y-3">
+                        {operacionesDelCliente.map((op) => (
+                          <div 
+                            key={op.folio_interno} 
+                            className={`bg-gray-900/40 border rounded-lg p-4 hover:border-gray-600 transition-all flex flex-col md:flex-row items-start md:items-center gap-3 md:gap-6 ${
+                              selectedOperacionesToDelete.includes(op.operacion_id || op.folio_interno)
+                                ? 'border-blue-500/60 bg-blue-500/10'
+                                : 'border-gray-700'
+                            }`}
+                          >
+                            {/* Checkbox */}
+                            <input
+                              type="checkbox"
+                              checked={selectedOperacionesToDelete.includes(op.operacion_id || op.folio_interno)}
+                              onChange={(e) => {
+                                const id = op.operacion_id || op.folio_interno;
+                                if (e.target.checked) {
+                                  setSelectedOperacionesToDelete([...selectedOperacionesToDelete, id]);
+                                } else {
+                                  setSelectedOperacionesToDelete(selectedOperacionesToDelete.filter(oid => oid !== id));
+                                }
+                              }}
+                              className="mt-1 w-4 h-4 cursor-pointer accent-blue-500"
+                            />
+
+                            <div className="flex-1 grid grid-cols-2 md:grid-cols-5 items-center gap-2 md:gap-4">
+                              <div>
+                                <p className="text-xs text-gray-400">Folio</p>
+                                <p className="font-mono text-sm text-emerald-400 font-bold">{op.folio_interno}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-400">Fecha</p>
+                                <p className="text-sm text-white">{formatDateShortCDMX(op.fecha_operacion)}</p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-400">Monto</p>
+                                <p className="text-sm font-bold text-white">
+                                  ${(op.monto || 0).toLocaleString('es-MX')} {op.moneda}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-xs text-gray-400">Tipo</p>
+                                <p className="text-sm text-white capitalize">{op.tipo_operacion}</p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <p className="text-xs text-gray-400">PLD</p>
+                                <span className={`px-2 py-1 rounded text-xs font-semibold inline-block ${
+                                  op.clasificacion_pld === 'normal' ? 'bg-emerald-500/20 text-emerald-300' :
+                                  op.clasificacion_pld === 'relevante' ? 'bg-yellow-500/20 text-yellow-300' :
+                                  'bg-red-500/20 text-red-300'
+                                }`}>
+                                  {op.clasificacion_pld?.toUpperCase() || 'N/A'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8">
+                      <p className="text-gray-400">No hay operaciones registradas</p>
+                    </div>
+                  )}
+
+                  {/* Se movió el botón Nueva Operación a la sección de botones finales */}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* TAB 3: DOCUMENTOS */}
+          {detailTab === 'documentos' && (
+            <div className="space-y-6">
+              <h3 className="text-lg font-bold text-white mb-4">📁 Documentos del Cliente</h3>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,.jpg,.jpeg,.png"
+                className="hidden"
+                onChange={onFileSelected}
+              />
+              
+              {/* Instrucción para cargar documentos */}
+              <div className="bg-gray-900/30 border border-gray-700 rounded-lg p-4">
+                <p className="text-gray-400 text-sm">Cargue documentos, identidades, comprobantes de domicilio y otros archivos requeridos por normativa. El botón de carga aparece en la zona de botones inferiores.</p>
+              </div>
+              
+              {/* Listado de documentos */}
+              {documentosDelCliente.length > 0 ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-bold text-white">Archivos Cargados ({documentosDelCliente.length})</h4>
+                    {selectedDocumentsToDelete.length > 0 && (
+                      <span className="text-xs bg-amber-500/20 text-amber-300 px-2 py-1 rounded border border-amber-500/30">
+                        {selectedDocumentsToDelete.length} seleccionados
+                      </span>
+                    )}
+                  </div>
+                  {documentosDelCliente.map((doc) => (
+                    <div
+                      key={doc.documento_id}
+                      className={`bg-gray-900/40 border rounded-lg p-4 hover:border-gray-600 transition-all flex items-start gap-3 ${
+                        selectedDocumentsToDelete.includes(doc.documento_id)
+                          ? 'border-blue-500/60 bg-blue-500/10'
+                          : 'border-gray-700'
+                      }`}
+                    >
+                      {/* Checkbox */}
+                      <input
+                        type="checkbox"
+                        checked={selectedDocumentsToDelete.includes(doc.documento_id)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedDocumentsToDelete([...selectedDocumentsToDelete, doc.documento_id]);
+                          } else {
+                            setSelectedDocumentsToDelete(selectedDocumentsToDelete.filter(did => did !== doc.documento_id));
+                          }
+                        }}
+                        className="mt-1 w-4 h-4 cursor-pointer accent-blue-500"
+                      />
+                      
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-sm font-bold text-white">{doc.nombre}</span>
+                          <span className="text-xs bg-gray-700 text-gray-300 px-2 py-1 rounded">{doc.tipo || 'archivo'}</span>
+                        </div>
+                        <p className="text-xs text-gray-400">
+                          Cargado: {formatDateShortCDMX(doc.fecha_carga)}
+                        </p>
+                      </div>
+                      
+                      {/* Link para descargar */}
+                      <a
+                        href={doc.archivo_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-400 hover:text-blue-300 text-sm whitespace-nowrap"
+                        title="Descargar documento"
+                      >
+                        📥 Ver
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="bg-gray-900/30 border border-gray-700 rounded-lg p-4">
+                  <p className="text-gray-400 text-sm text-center py-8">No hay documentos cargados aún</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 4: VALIDACIONES EN LISTAS */}
+          {detailTab === 'validaciones' && (
+            <div className="space-y-6">
+              <h3 className="text-lg font-bold text-white mb-4">Resultados de Verificación en Listas</h3>
+              
+              {/* Grid de listas críticas y obligatorias */}
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* OFAC */}
+                  <div className="bg-gray-900/30 border border-gray-700 rounded-lg p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-300">🔴 OFAC (US Treasury)</span>
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${selectedCliente.en_lista_ofac ? 'bg-red-500/20 text-red-300' : 'bg-emerald-500/20 text-emerald-200'}`}>
+                        {selectedCliente.en_lista_ofac ? 'En Lista' : 'Limpio'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* ONU/CSNU */}
+                  <div className="bg-gray-900/30 border border-gray-700 rounded-lg p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-300">🟡 ONU/CSNU</span>
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${selectedCliente.en_lista_csnu ? 'bg-orange-500/20 text-orange-300' : 'bg-emerald-500/20 text-emerald-200'}`}>
+                        {selectedCliente.en_lista_csnu ? 'En Lista' : 'Limpio'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Lista 69-B */}
+                  <div className="bg-gray-900/30 border border-gray-700 rounded-lg p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-300">🟠 Lista 69-B (SAT)</span>
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${selectedCliente.en_lista_69b ? 'bg-red-500/20 text-red-300' : 'bg-emerald-500/20 text-emerald-200'}`}>
+                        {selectedCliente.en_lista_69b ? 'En Lista' : 'No encontrado'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* UIF Personas Bloqueadas - CRÍTICO */}
+                  <div className="bg-gray-900/30 border border-red-700/40 rounded-lg p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-300">🔴 UIF Personas Bloqueadas</span>
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${selectedCliente.en_lista_uif ? 'bg-red-500/20 text-red-300' : 'bg-emerald-500/20 text-emerald-200'}`}>
+                        {selectedCliente.en_lista_uif === undefined ? 'Pendiente' : selectedCliente.en_lista_uif ? 'En Lista' : 'Limpio'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* PEPs México - OBLIGATORIO */}
+                  <div className="bg-gray-900/30 border border-yellow-700/40 rounded-lg p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-300">⚠️ PEPs México</span>
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${selectedCliente.en_lista_peps ? 'bg-yellow-500/20 text-yellow-400' : 'bg-emerald-500/20 text-emerald-200'}`}>
+                        {selectedCliente.en_lista_peps === undefined ? 'Pendiente' : selectedCliente.en_lista_peps ? 'PEP' : 'No'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Listas recomendadas */}
+                <div className="mt-4 p-3 bg-blue-500/10 border border-blue-700/30 rounded-lg">
+                  <p className="text-xs font-medium text-blue-300 mb-2">📋 Listas Recomendadas (Próximamente):</p>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-blue-200">
+                    <span>• GAFI (Jurisdicciones alto riesgo)</span>
+                    <span>• FGR (Fiscalía General República)</span>
+                    <span>• INTERPOL (Alertas rojas)</span>
+                    <span>• FBI Most Wanted</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Información de última validación */}
+              <div className="mt-4 p-4 bg-gray-900/40 border border-gray-700 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-400">Última actualización:</span>
+                  <span className="text-sm font-mono text-gray-200">
+                    {selectedCliente.fecha_ultima_busqueda_listas 
+                      ? formatDateTime(selectedCliente.fecha_ultima_busqueda_listas)
+                      : 'Nunca'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
+            {/* Botones de acción del cliente - GLOBAL & CONTEXTUALES */}
+            <div className="mt-6 flex flex-wrap gap-2 justify-start border-t border-gray-700 pt-6">
+              {isEditing ? (
+                <>
+                  <button
+                    onClick={handleGuardarEdicion}
+                    disabled={loading}
+                    className="flex items-center gap-2 px-3 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-all text-sm disabled:opacity-50"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    Guardar Cambios
+                  </button>
+                  <button
+                    onClick={handleCancelarEdicion}
+                    disabled={loading}
+                    className="flex items-center gap-2 px-3 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-all text-sm disabled:opacity-50"
+                  >
+                    <XCircle className="w-4 h-4" />
+                    Cancelar
+                  </button>
+                </>
+              ) : (
+                <>
+                  {/* Botones generales - solo en pestañas que lo permiten */}
+                  {detailTab === 'datosGenerales' && (
+                    <>
+                      <button
+                        onClick={handleEditarCliente}
+                        className="flex items-center gap-2 px-3 py-2 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-500/30 transition-all text-sm"
+                        title="Editar campos permitidos"
+                      >
+                        <Edit className="w-4 h-4" />
+                        Editar
+                      </button>
+                      <button
+                        onClick={handleEliminarCliente}
+                        className="flex items-center gap-2 px-3 py-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-all text-sm"
+                        title="Eliminar cliente (soft delete)"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Eliminar
+                      </button>
+                    </>
+                  )}
+
+                  {/* Botones contextuales por pestaña */}
+                  {detailTab === 'operaciones' && (
+                    <button
+                      onClick={handleNuevaOperacion}
+                      className="flex items-center gap-2 px-3 py-2 bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded-lg hover:bg-amber-500/30 transition-all text-sm"
+                      disabled={loading}
+                      title="Registrar nueva operación"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Nueva Operación
+                    </button>
+                  )}
+
+                  {detailTab === 'operaciones' && selectedOperacionesToDelete.length > 0 && (
+                    <button
+                      onClick={() => {
+                        setDeleteReasonType('operacion');
+                        setShowDeleteReasonModal(true);
+                      }}
+                      className="flex items-center gap-2 px-3 py-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-all text-sm"
+                      title={`Eliminar ${selectedOperacionesToDelete.length} operación(es) seleccionada(s)`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Eliminar Seleccionadas ({selectedOperacionesToDelete.length})
+                    </button>
+                  )}
+
+                  {detailTab === 'operaciones' && selectedOperacionesToDelete.length === 1 && (
+                    <button
+                      onClick={() => {
+                        const op = operacionesDelCliente.find(o => (o.operacion_id || o.folio_interno) === selectedOperacionesToDelete[0]);
+                        if (op) {
+                          setOperacionForm({
+                            fecha_operacion: op.fecha_operacion,
+                            hora_operacion: op.hora_operacion,
+                            folio_interno: op.folio_interno,
+                            tipo_operacion: op.tipo_operacion,
+                            monto: String(op.monto),
+                            moneda: op.moneda,
+                            metodo_pago: op.metodo_pago,
+                            descripcion: op.descripcion || '',
+                            referencia_factura: op.referencia_factura || '',
+                            producto_servicio: op.producto_servicio || '',
+                            banco_origen: op.banco_origen || '',
+                            numero_cuenta: op.numero_cuenta || '',
+                            notas_internas: op.notas_internas || ''
+                          });
+                          setEditingOperacionId(op.operacion_id || op.folio_interno);
+                          setView('operaciones');
+                        }
+                      }}
+                      className="flex items-center gap-2 px-3 py-2 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-lg hover:bg-blue-500/30 transition-all text-sm"
+                      title="Editar operación seleccionada"
+                    >
+                      <Edit className="w-4 h-4" />
+                      Editar Seleccionada
+                    </button>
+                  )}
+
+                  {detailTab === 'documentos' && (
+                    <button
+                      onClick={handleAdministrarExpediente}
+                      className="flex items-center gap-2 px-3 py-2 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-500/30 transition-all text-sm"
+                      title="Cargar nuevos documentos"
+                      disabled={subiendoDocumento}
+                    >
+                      <Upload className="w-4 h-4" />
+                      {subiendoDocumento ? 'Subiendo...' : 'Agregar Documento'}
+                    </button>
+                  )}
+
+                  {detailTab === 'documentos' && selectedDocumentsToDelete.length > 0 && (
+                    <button
+                      onClick={() => {
+                        setDeleteReasonType('documento');
+                        setShowDeleteReasonModal(true);
+                      }}
+                      className="flex items-center gap-2 px-3 py-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-all text-sm"
+                      title={`Eliminar ${selectedDocumentsToDelete.length} documento(s) seleccionado(s)`}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Eliminar Seleccionados ({selectedDocumentsToDelete.length})
+                    </button>
+                  )}
+
+                  {detailTab === 'validaciones' && (
+                    <button
+                      onClick={() => validarListasCliente(selectedCliente)}
+                      disabled={validandoListas}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all text-sm font-medium ${
+                        validandoListas
+                          ? 'bg-gray-700 text-gray-400 cursor-not-allowed opacity-60'
+                          : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30'
+                      }`}
+                    >
+                      {validandoListas ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-2 border-emerald-400 border-t-transparent"></div>
+                          Actualizando...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCcw className="w-4 h-4" />
+                          Actualizar Listas
+                        </>
+                      )}
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+        </div>
+
+        {/* MODAL BLOQUEO: Cuando cliente está en listas negras */}
+        {showBlockModal && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-gray-900 border border-red-500/50 rounded-lg p-8 max-w-md w-full shadow-2xl">
+              <div className="flex items-center gap-3 mb-4">
+                <AlertOctagon className="w-8 h-8 text-red-500" />
+                <h3 className="text-xl font-bold text-white">CLIENTE BLOQUEADO</h3>
+              </div>
+              <div className="space-y-4">
+                <p className="text-red-200 whitespace-pre-wrap text-sm leading-relaxed">
+                  {blockModalMessage}
+                </p>
+                <div className="bg-red-500/10 border border-red-500/30 rounded p-3">
+                  <p className="text-xs text-red-300 font-mono">
+                    Status: BLOQUEADO | PLD: CRÍTICO
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowBlockModal(false)}
+                className="w-full mt-6 px-4 py-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-all font-medium"
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* MODAL RAZÓN DE ELIMINACIÓN: Para documentos y operaciones */}
+        {showDeleteReasonModal && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-gray-900 border border-orange-500/50 rounded-lg p-8 max-w-md w-full shadow-2xl">
+              <div className="flex items-center gap-3 mb-4">
+                <AlertOctagon className="w-8 h-8 text-orange-500" />
+                <h3 className="text-xl font-bold text-white">
+                  Eliminar {deleteReasonType === 'documento' ? 'Documento' : 'Operación'}
+                </h3>
+              </div>
+              <div className="space-y-4">
+                <p className="text-gray-300 text-sm">
+                  {deleteReasonType === 'documento' 
+                    ? `¿Está seguro de que desea eliminar este documento? Se mantendrá un registro en la base de datos para auditoría.`
+                    : `¿Está seguro de que desea eliminar esta operación (${itemToDelete?.folio})? Se mantendrá un registro en la base de datos para auditoría.`}
+                </p>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Razón de eliminación *
+                  </label>
+                  <textarea
+                    value={deleteReasonText}
+                    onChange={(e) => setDeleteReasonText(e.target.value)}
+                    placeholder="Ej: Error de carga, datos incorrectos, solicitud del cliente, etc."
+                    className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 text-sm"
+                    rows={3}
+                  />
+                </div>
+                <div className="bg-orange-500/10 border border-orange-500/30 rounded p-3">
+                  <p className="text-xs text-orange-300 font-mono">
+                    ⚠️ AUDITORÍA: Esta acción será registrada
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2 mt-6">
+                <button
+                  onClick={() => {
+                    setShowDeleteReasonModal(false);
+                    setDeleteReasonText('');
+                    setItemToDelete(null);
+                    setDeleteReasonType(null);
+                  }}
+                  className="flex-1 px-4 py-2 bg-gray-700 text-gray-300 border border-gray-600 rounded-lg hover:bg-gray-600 transition-all font-medium text-sm"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleConfirmDelete}
+                  disabled={!deleteReasonText.trim() || loading}
+                  className="flex-1 px-4 py-2 bg-orange-500/20 text-orange-400 border border-orange-500/30 rounded-lg hover:bg-orange-500/30 transition-all font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {loading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-orange-400 border-t-transparent"></div>
+                      Eliminando...
+                    </>
+                  ) : (
+                    'Confirmar Eliminación'
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ==================== VISTA: OPERACIONES ====================
+  if (view === 'operaciones' && selectedCliente) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setView('detalle')}
+            className="text-emerald-400 hover:text-emerald-300 flex items-center gap-2"
+          >
+            ← Volver al Expediente
+          </button>
+          <h2 className="text-2xl font-bold text-white">
+            {editingOperacionId ? 'Editar Operación' : 'Nueva Operación'}
+          </h2>
+          <div className="ml-auto text-sm text-gray-400">
+            {selectedCliente.nombre_completo}
           </div>
         </div>
 
-        {/* Tabs del expediente */}
+        {error && (
+          <div className="bg-red-500/20 border border-red-500 rounded-lg p-4 text-red-300 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium">Error</p>
+              <p className="text-sm mt-1">{error}</p>
+            </div>
+          </div>
+        )}
+
+        {success && (
+          <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-4 py-3 rounded-lg">
+            {success}
+          </div>
+        )}
+
         <div className="bg-gray-800/40 border border-gray-700 rounded-lg p-6">
-          <p className="text-gray-300">
-            🚧 Vista de expediente completo en construcción...
-          </p>
-          <p className="text-gray-400 text-sm mt-2">
-            Incluirá: datos generales, documentos, validaciones, historial de búsquedas en listas, 
-            operaciones del cliente, alertas, notas, timeline de actividad, etc.
-          </p>
+          <form onSubmit={(e) => { e.preventDefault(); crearOperacionCliente(); }} className="space-y-6">
+            {/* SECCIÓN 1: CAMPOS MÍNIMOS (LFPIORPI) */}
+            <div className="border-b border-gray-700 pb-6">
+              <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                <FileText className="w-5 h-5 text-amber-400" />
+                Campos Mínimos (LFPIORPI)
+              </h3>
+
+              {/* Folio Interno (auto-generado, readonly) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Folio Interno (auto-generado)</label>
+                  <input
+                    type="text"
+                    readOnly
+                    value={operacionResultado?.folio || operacionForm.folio_interno || 'Se generará al guardar'}
+                    className="w-full bg-gray-900/80 border border-gray-600 rounded-lg px-4 py-2 text-gray-400 cursor-not-allowed font-mono"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Ej: OP-2026-001</p>
+                </div>
+              </div>
+
+              {/* Fecha, Hora, Tipo de Operación */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Fecha de Operación *</label>
+                  <input
+                    type="date"
+                    required
+                    value={operacionForm.fecha_operacion}
+                    onChange={(e) => setOperacionForm({ ...operacionForm, fecha_operacion: e.target.value })}
+                    className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-emerald-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Hora *</label>
+                  <input
+                    type="time"
+                    required
+                    value={operacionForm.hora_operacion}
+                    onChange={(e) => setOperacionForm({ ...operacionForm, hora_operacion: e.target.value })}
+                    className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-emerald-500 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Tipo de Operación *</label>
+                  <select
+                    required
+                    value={operacionForm.tipo_operacion}
+                    onChange={(e) => setOperacionForm({ ...operacionForm, tipo_operacion: e.target.value })}
+                    className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-emerald-500 focus:outline-none"
+                  >
+                    <option value="">Seleccionar...</option>
+                    <option value="venta">Venta</option>
+                    <option value="compra">Compra</option>
+                    <option value="servicio">Servicio</option>
+                    <option value="arrendamiento">Arrendamiento</option>
+                    <option value="otro">Otro</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Monto, Moneda, Método de Pago */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Monto *</label>
+                  <input
+                    type="number"
+                    required
+                    step="0.01"
+                    value={operacionForm.monto ?? ''}
+                    onChange={(e) => setOperacionForm({ ...operacionForm, monto: e.target.value })}
+                    className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-emerald-500 focus:outline-none"
+                    min="0"
+                    placeholder="0.00"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Moneda *</label>
+                  <select
+                    required
+                    value={operacionForm.moneda}
+                    onChange={(e) => setOperacionForm({ ...operacionForm, moneda: e.target.value })}
+                    className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-emerald-500 focus:outline-none"
+                  >
+                    <option value="MXN">MXN (Pesos Mexicanos)</option>
+                    <option value="USD">USD (Dólares)</option>
+                    <option value="EUR">EUR (Euros)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Método de Pago *</label>
+                  <select
+                    required
+                    value={operacionForm.metodo_pago}
+                    onChange={(e) => setOperacionForm({ ...operacionForm, metodo_pago: e.target.value })}
+                    className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-emerald-500 focus:outline-none"
+                  >
+                    <option value="">Seleccionar...</option>
+                    <option value="efectivo">Efectivo</option>
+                    <option value="transferencia">Transferencia</option>
+                    <option value="tarjeta">Tarjeta</option>
+                    <option value="cheque">Cheque</option>
+                    <option value="otro">Otro</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* SECCIÓN 2: CAMPOS OPCIONALES/ADICIONALES */}
+            <div className="border-b border-gray-700 pb-6">
+              <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                <Shield className="w-5 h-5 text-blue-400" />
+                Campos Opcionales
+              </h3>
+
+              {/* Descripción */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-300 mb-1">Descripción</label>
+                <textarea
+                  value={operacionForm.descripcion}
+                  onChange={(e) => setOperacionForm({ ...operacionForm, descripcion: e.target.value })}
+                  className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-emerald-500 focus:outline-none"
+                  rows={3}
+                  placeholder="Detalles of the transaction..."
+                />
+              </div>
+
+              {/* Referencia/Factura y Producto/Servicio */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Referencia / Factura</label>
+                  <input
+                    type="text"
+                    value={operacionForm.referencia_factura}
+                    onChange={(e) => setOperacionForm({ ...operacionForm, referencia_factura: e.target.value })}
+                    className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-emerald-500 focus:outline-none"
+                    placeholder="Ej: INV-2026-001, CFDI..."
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">Producto / Servicio</label>
+                  <input
+                    type="text"
+                    value={operacionForm.producto_servicio}
+                    onChange={(e) => setOperacionForm({ ...operacionForm, producto_servicio: e.target.value })}
+                    className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-emerald-500 focus:outline-none"
+                    placeholder="Ej: Asesoría legal, Venta de software..."
+                  />
+                </div>
+              </div>
+
+              {/* Campos de Transferencia (condicional) */}
+              {operacionForm.metodo_pago === 'transferencia' && (
+                <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-1">Banco Origen</label>
+                      <input
+                        type="text"
+                        value={operacionForm.banco_origen}
+                        onChange={(e) => setOperacionForm({ ...operacionForm, banco_origen: e.target.value })}
+                        className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-emerald-500 focus:outline-none"
+                        placeholder="Ej: BBVA, Santander, Banorte..."
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-300 mb-1">Número de Cuenta</label>
+                      <input
+                        type="text"
+                        value={operacionForm.numero_cuenta}
+                        onChange={(e) => setOperacionForm({ ...operacionForm, numero_cuenta: e.target.value })}
+                        className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-emerald-500 focus:outline-none"
+                        placeholder="Últimos 4 dígitos o CLABE..."
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Notas Internas */}
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">Notas Internas</label>
+                <textarea
+                  value={operacionForm.notas_internas}
+                  onChange={(e) => setOperacionForm({ ...operacionForm, notas_internas: e.target.value })}
+                  className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-emerald-500 focus:outline-none"
+                  rows={2}
+                  placeholder="Notas para el cumplimiento normativo..."
+                />
+              </div>
+            </div>
+
+            {/* BOTONES */}
+            <div className="flex gap-3 pt-4">
+              <button
+                type="submit"
+                disabled={creandoOperacion}
+                className="flex items-center gap-2 px-6 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-all disabled:opacity-50 font-medium"
+              >
+                {creandoOperacion ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                    Guardando...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-5 h-5" />
+                    Guardar Operación
+                  </>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setView('detalle')}
+                className="px-6 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-all font-medium"
+              >
+                Cancelar
+              </button>
+            </div>
+
+            {/* RESULTADO */}
+            {operacionResultado && (
+              <div className="mt-6 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
+                <h4 className="font-semibold text-emerald-400 mb-3">📊 Resultado del Análisis:</h4>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Folio:</span>
+                    <span className="text-white font-mono">{operacionResultado.folio}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Clasificación PLD:</span>
+                    <span className={`font-semibold ${
+                      operacionResultado.clasificacion === 'relevante' ? 'text-yellow-400' :
+                      operacionResultado.clasificacion === 'preocupante' ? 'text-red-400' :
+                      'text-gray-400'
+                    }`}>
+                      {operacionResultado.clasificacion?.toUpperCase() || 'Normal'}
+                    </span>
+                  </div>
+                  {operacionResultado.alertas && operacionResultado.alertas.length > 0 && (
+                    <div className="pt-2 border-t border-emerald-500/30">
+                      <p className="text-gray-400 mb-1">Alertas:</p>
+                      <ul className="list-disc list-inside space-y-1">
+                        {operacionResultado.alertas.map((alerta, idx) => (
+                          <li key={idx} className="text-amber-400 text-xs">{alerta}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </form>
         </div>
       </div>
     );

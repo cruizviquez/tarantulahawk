@@ -1,0 +1,10 @@
+{
+  "total_personas": 1,
+  "fecha_actualizacion": "2026-01-26T21:49:26.037260",
+  "fuentes": [
+    "DOF",
+    "datos.gob.mx",
+    "local"
+  ],
+  "advertencia": "Lista en desarrollo - Validar con fuentes oficiales UIF"
+}
