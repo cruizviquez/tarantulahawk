@@ -95,8 +95,12 @@ export async function POST(request: NextRequest) {
       moneda,
       monto_usd: montoUSD, // Guardar conversión a USD
       tipo_operacion: body.tipo_operacion,
+      metodo_pago: body.metodo_pago || null,
+      actividad_vulnerable: body.actividad_vulnerable || null,
+      ubicacion_operacion: body.ubicacion_operacion || null,
       descripcion: body.descripcion || null,
-      referencia: body.referencia_pago || body.referencia || null,
+      referencia_factura: body.referencia_factura || body.referencia_pago || body.referencia || null,
+      notas_internas: body.notas_internas || null,
       numero_cuenta: body.numero_cuenta || null,
       banco_origen: body.banco_origen || null,
       banco_destino: body.banco_destino || null,

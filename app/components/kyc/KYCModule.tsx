@@ -33,6 +33,8 @@ interface Cliente {
   tipo_persona: 'fisica' | 'moral';
   sector_actividad: string;
   origen_recursos?: string;
+  actividad_vulnerable?: string; // Art. 17 LFPIORPI - Default para operaciones
+  multi_actividad_habilitada?: boolean; // Bandera admin para permitir cambio de actividad
   nivel_riesgo: 'bajo' | 'medio' | 'alto' | 'critico' | 'pendiente';
   score_ebr: number | null;
   es_pep: boolean;
@@ -56,6 +58,7 @@ interface ClienteFormData {
   curp?: string;
   sector_actividad: string;
   origen_recursos: string;
+  actividad_vulnerable?: string; // Art. 17 LFPIORPI
 }
 
 interface Operacion {
@@ -72,10 +75,12 @@ interface Operacion {
   alertas?: string[];
   descripcion?: string;
   referencia_factura?: string;
-  producto_servicio?: string;
+  actividad_vulnerable?: string; // Art. 17 LFPIORPI (reemplaza producto_servicio)
+  producto_servicio?: string; // Legacy - mantener para compatibilidad con datos existentes
   banco_origen?: string;
   numero_cuenta?: string;
   notas_internas?: string;
+  ubicacion_operacion?: string; // Ubicación/localidad donde se registra (factor EBR)
 }
 
 interface ResumenOperaciones {
@@ -177,7 +182,8 @@ const KYCModule = () => {
     rfc: '',
     curp: '',
     sector_actividad: '',
-    origen_recursos: ''
+    origen_recursos: '',
+    actividad_vulnerable: ''
   });
 
   // TAB DETALLE: Control de pestaña
@@ -227,14 +233,51 @@ const KYCModule = () => {
       metodo_pago: 'transferencia',
       descripcion: '',
       referencia_factura: '',
-      producto_servicio: '',
+      actividad_vulnerable: '', // Campo obligatorio - Producto/Servicio Art. 17 LFPIORPI
+      ubicacion_operacion: '', // Ubicación/localidad donde se registra la operación (EBR)
       banco_origen: '',
       numero_cuenta: '',
       notas_internas: ''
     };
   });
+  const [actividadesVulnerables, setActividadesVulnerables] = useState<Array<{
+    id: string;
+    nombre: string;
+    aviso_uma: number;
+    efectivo_max_uma: number;
+  }>>([]);
+  const [cargandoActividades, setCargandoActividades] = useState(false);
   const [creandoOperacion, setCreandoOperacion] = useState(false);
   const [operacionResultado, setOperacionResultado] = useState<{ folio?: string; clasificacion?: string; alertas?: string[] } | null>(null);
+
+  // Cargar opciones de actividades vulnerables al montar el componente
+  useEffect(() => {
+    const cargarActividades = async () => {
+      try {
+        setCargandoActividades(true);
+        console.log('[ACTIVIDADES] Fetching from /api/operaciones/opciones-actividades...');
+        const response = await fetch('/api/operaciones/opciones-actividades');
+        console.log('[ACTIVIDADES] Response status:', response.status, response.statusText);
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('[ACTIVIDADES] Error response:', errorText);
+          throw new Error(`Error al cargar opciones: ${response.status} ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        console.log('[ACTIVIDADES] Data received:', data);
+        setActividadesVulnerables(data.opciones || []);
+        console.log('[ACTIVIDADES] Successfully loaded', data.opciones?.length || 0, 'activities');
+      } catch (error) {
+        console.error('[ACTIVIDADES] Error cargando actividades:', error);
+        setActividadesVulnerables([]);
+      } finally {
+        setCargandoActividades(false);
+      }
+    };
+    cargarActividades();
+  }, []);
 
   // Función para obtener el token de autenticación
   const getAuthToken = async () => {
@@ -743,7 +786,8 @@ const KYCModule = () => {
           rfc: '',
           curp: '',
           sector_actividad: '',
-          origen_recursos: ''
+          origen_recursos: '',
+          actividad_vulnerable: ''
         });
         setFieldErrors({});
         setFieldWarnings({});
@@ -777,6 +821,12 @@ const KYCModule = () => {
         return;
       }
 
+      if (!operacionForm.actividad_vulnerable) {
+        setError('Debes seleccionar una actividad vulnerable (Art. 17 LFPIORPI)');
+        setCreandoOperacion(false);
+        return;
+      }
+
       const payload = {
         cliente_id: selectedCliente.cliente_id,
         fecha_operacion: operacionForm.fecha_operacion,
@@ -785,9 +835,10 @@ const KYCModule = () => {
         monto: Number(operacionForm.monto),
         moneda: operacionForm.moneda,
         metodo_pago: operacionForm.metodo_pago,
+        actividad_vulnerable: operacionForm.actividad_vulnerable, // Campo obligatorio Art. 17 LFPIORPI
+        ubicacion_operacion: operacionForm.ubicacion_operacion || null,
         descripcion: operacionForm.descripcion || null,
         referencia_factura: operacionForm.referencia_factura || null,
-        producto_servicio: operacionForm.producto_servicio || null,
         banco_origen: operacionForm.banco_origen || null,
         numero_cuenta: operacionForm.numero_cuenta || null,
         notas_internas: operacionForm.notas_internas || null
@@ -816,30 +867,12 @@ const KYCModule = () => {
       const clasif = data?.operacion?.clasificacion_pld as string | undefined;
       const alertas = data?.operacion?.alertas as string[] | undefined;
       setOperacionResultado({ folio, clasificacion: clasif, alertas });
-      setSuccess(isEdit ? `Operación actualizada: ${folio || 'Folio pendiente'}` : `Operación creada: ${folio || 'Folio pendiente'}`);
-
+      
       // Recargar operaciones del cliente y lista de clientes para actualizar contador
       await cargarOperacionesDelCliente(selectedCliente.cliente_id);
       await cargarClientes(); // Actualizar contador en lista
-
-      // Reset del formulario
-      const timeCDMX = getTimeCDMX();
-      setOperacionForm({
-        fecha_operacion: timeCDMX.date,
-        hora_operacion: timeCDMX.time,
-        folio_interno: '',
-        tipo_operacion: 'venta',
-        monto: '',
-        moneda: 'MXN',
-        metodo_pago: 'transferencia',
-        descripcion: '',
-        referencia_factura: '',
-        producto_servicio: '',
-        banco_origen: '',
-        numero_cuenta: '',
-        notas_internas: ''
-      });
-      setEditingOperacionId(null);
+      
+      // NO resetear formulario - se muestra modal con resultados
     } catch (e: any) {
       setError(e?.message || 'No se pudo crear la operación');
     } finally {
@@ -1015,10 +1048,12 @@ const KYCModule = () => {
       metodo_pago: 'transferencia',
       descripcion: '',
       referencia_factura: '',
-      producto_servicio: '',
+      // 🔒 Usar actividad vulnerable del cliente como default (bloqueada si no hay multi-actividad)
+      actividad_vulnerable: selectedCliente?.actividad_vulnerable || '',
       banco_origen: '',
       numero_cuenta: '',
-      notas_internas: ''
+      notas_internas: '',
+      ubicacion_operacion: ''
     });
     setView('operaciones');
   };
@@ -1787,6 +1822,40 @@ const KYCModule = () => {
               )}
             </div>
 
+            {/* Actividad Vulnerable (Art. 17 LFPIORPI) - Default para todas las operaciones del cliente */}
+            <div>
+              <label className="block text-sm font-medium text-gray-300 mb-2">
+                Actividad Vulnerable (Art. 17 LFPIORPI)
+                <span className="text-xs text-amber-300 ml-2">Default para todas las operaciones</span>
+              </label>
+              <select
+                value={formData.actividad_vulnerable || ''}
+                onChange={(e) => setFormData({ ...formData, actividad_vulnerable: e.target.value })}
+                disabled={cargandoActividades}
+                className={`w-full bg-gray-900/50 border rounded-lg px-4 py-2 text-white focus:outline-none transition-colors ${
+                  cargandoActividades
+                    ? 'border-gray-600 opacity-50 cursor-not-allowed'
+                    : 'border-gray-700 focus:border-emerald-500'
+                }`}
+              >
+                <option value="">
+                  {cargandoActividades ? 'Cargando opciones...' : actividadesVulnerables.length === 0 ? 'No disponible (agregar después)' : 'Selecciona la actividad vulnerable principal'}
+                </option>
+                {actividadesVulnerables.map(actividad => (
+                  <option key={actividad.id} value={actividad.id}>
+                    {actividad.nombre}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-400 mt-2">
+                {actividadesVulnerables.length === 0 ? (
+                  <>⚠️ Opciones no disponibles. Puedes crear el cliente y especificar la actividad vulnerable después desde el panel de edición.</>
+                ) : (
+                  <>ℹ️ Esta actividad será el valor por defecto en todas las operaciones. Solo admin puede permitir cambios.</>
+                )}
+              </p>
+            </div>
+
             {/* Botones */}
             <div className="flex gap-3 pt-4">
               <button
@@ -2102,38 +2171,15 @@ const KYCModule = () => {
                     <div className="space-y-4">
                       <div className="flex items-center justify-between">
                         <h3 className="text-lg font-bold text-white">Historial de Operaciones</h3>
-                        {selectedOperacionesToDelete.length > 0 && (
-                          <span className="text-xs bg-amber-500/20 text-amber-300 px-2 py-1 rounded border border-amber-500/30">
-                            {selectedOperacionesToDelete.length} seleccionadas
-                          </span>
-                        )}
                       </div>
                       <div className="space-y-3">
                         {operacionesDelCliente.map((op) => (
                           <div 
                             key={op.folio_interno} 
-                            className={`bg-gray-900/40 border rounded-lg p-4 hover:border-gray-600 transition-all flex flex-col md:flex-row items-start md:items-center gap-3 md:gap-6 ${
-                              selectedOperacionesToDelete.includes(op.operacion_id || op.folio_interno)
-                                ? 'border-blue-500/60 bg-blue-500/10'
-                                : 'border-gray-700'
-                            }`}
+                            className="bg-gray-900/40 border border-gray-700 rounded-lg p-4 hover:border-gray-600 transition-all flex flex-col md:flex-row items-start md:items-center gap-3 md:gap-6"
                           >
-                            {/* Checkbox */}
-                            <input
-                              type="checkbox"
-                              checked={selectedOperacionesToDelete.includes(op.operacion_id || op.folio_interno)}
-                              onChange={(e) => {
-                                const id = op.operacion_id || op.folio_interno;
-                                if (e.target.checked) {
-                                  setSelectedOperacionesToDelete([...selectedOperacionesToDelete, id]);
-                                } else {
-                                  setSelectedOperacionesToDelete(selectedOperacionesToDelete.filter(oid => oid !== id));
-                                }
-                              }}
-                              className="mt-1 w-4 h-4 cursor-pointer accent-blue-500"
-                            />
 
-                            <div className="flex-1 grid grid-cols-2 md:grid-cols-5 items-center gap-2 md:gap-4">
+                            <div className="flex-1 grid grid-cols-2 md:grid-cols-6 items-center gap-2 md:gap-4">
                               <div>
                                 <p className="text-xs text-gray-400">Folio</p>
                                 <p className="font-mono text-sm text-emerald-400 font-bold">{op.folio_interno}</p>
@@ -2152,6 +2198,17 @@ const KYCModule = () => {
                                 <p className="text-xs text-gray-400">Tipo</p>
                                 <p className="text-sm text-white capitalize">{op.tipo_operacion}</p>
                               </div>
+                              <div>
+                                <p className="text-xs text-gray-400">Método Pago</p>
+                                <p className="text-sm text-white capitalize">
+                                  {op.metodo_pago === 'transferencia' ? '🏦 Transfer' :
+                                   op.metodo_pago === 'efectivo' ? '💵 Efectivo' :
+                                   op.metodo_pago === 'cheque' ? '📝 Cheque' :
+                                   op.metodo_pago === 'tarjeta_credito' ? '💳 T.Créd' :
+                                   op.metodo_pago === 'tarjeta_debito' ? '💳 T.Déb' :
+                                   op.metodo_pago || 'N/A'}
+                                </p>
+                              </div>
                               <div className="flex items-center gap-2">
                                 <p className="text-xs text-gray-400">PLD</p>
                                 <span className={`px-2 py-1 rounded text-xs font-semibold inline-block ${
@@ -2162,6 +2219,48 @@ const KYCModule = () => {
                                   {op.clasificacion_pld?.toUpperCase() || 'N/A'}
                                 </span>
                               </div>
+                            </div>
+                            
+                            {/* Acciones por línea */}
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => {
+                                  const timeCDMX = getTimeCDMX();
+                                  setOperacionForm({
+                                    fecha_operacion: op.fecha_operacion,
+                                    hora_operacion: timeCDMX.time, // Actualizar hora actual del sistema
+                                    folio_interno: op.folio_interno,
+                                    tipo_operacion: op.tipo_operacion,
+                                    monto: String(op.monto),
+                                    moneda: op.moneda,
+                                    metodo_pago: op.metodo_pago || 'transferencia',
+                                    descripcion: op.descripcion || '',
+                                    referencia_factura: op.referencia_factura || '',
+                                    actividad_vulnerable: op.actividad_vulnerable || '',
+                                    ubicacion_operacion: (op as any).ubicacion_operacion || '',
+                                    banco_origen: op.banco_origen || '',
+                                    numero_cuenta: op.numero_cuenta || '',
+                                    notas_internas: op.notas_internas || ''
+                                  });
+                                  setEditingOperacionId(op.operacion_id || op.folio_interno);
+                                  setView('operaciones');
+                                }}
+                                className="p-2 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30 transition-all"
+                                title="Editar operación"
+                              >
+                                <Edit className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setSelectedOperacionesToDelete([op.operacion_id || op.folio_interno]);
+                                  setDeleteReasonType('operacion');
+                                  setShowDeleteReasonModal(true);
+                                }}
+                                className="p-2 rounded bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 transition-all"
+                                title="Eliminar operación"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
                             </div>
                           </div>
                         ))}
@@ -2201,34 +2300,12 @@ const KYCModule = () => {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <h4 className="text-sm font-bold text-white">Archivos Cargados ({documentosDelCliente.length})</h4>
-                    {selectedDocumentsToDelete.length > 0 && (
-                      <span className="text-xs bg-amber-500/20 text-amber-300 px-2 py-1 rounded border border-amber-500/30">
-                        {selectedDocumentsToDelete.length} seleccionados
-                      </span>
-                    )}
                   </div>
                   {documentosDelCliente.map((doc) => (
                     <div
                       key={doc.documento_id}
-                      className={`bg-gray-900/40 border rounded-lg p-4 hover:border-gray-600 transition-all flex items-start gap-3 ${
-                        selectedDocumentsToDelete.includes(doc.documento_id)
-                          ? 'border-blue-500/60 bg-blue-500/10'
-                          : 'border-gray-700'
-                      }`}
+                      className="bg-gray-900/40 border border-gray-700 rounded-lg p-4 hover:border-gray-600 transition-all flex items-start gap-3"
                     >
-                      {/* Checkbox */}
-                      <input
-                        type="checkbox"
-                        checked={selectedDocumentsToDelete.includes(doc.documento_id)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedDocumentsToDelete([...selectedDocumentsToDelete, doc.documento_id]);
-                          } else {
-                            setSelectedDocumentsToDelete(selectedDocumentsToDelete.filter(did => did !== doc.documento_id));
-                          }
-                        }}
-                        className="mt-1 w-4 h-4 cursor-pointer accent-blue-500"
-                      />
                       
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
@@ -2240,16 +2317,29 @@ const KYCModule = () => {
                         </p>
                       </div>
                       
-                      {/* Link para descargar */}
-                      <a
-                        href={doc.archivo_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-400 hover:text-blue-300 text-sm whitespace-nowrap"
-                        title="Descargar documento"
-                      >
-                        📥 Ver
-                      </a>
+                      {/* Acciones por línea */}
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={doc.archivo_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-2 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30 transition-all"
+                          title="Ver documento"
+                        >
+                          📥
+                        </a>
+                        <button
+                          onClick={() => {
+                            setSelectedDocumentsToDelete([doc.documento_id]);
+                            setDeleteReasonType('documento');
+                            setShowDeleteReasonModal(true);
+                          }}
+                          className="p-2 rounded bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 transition-all"
+                          title="Eliminar documento"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -2404,51 +2494,7 @@ const KYCModule = () => {
                     </button>
                   )}
 
-                  {detailTab === 'operaciones' && selectedOperacionesToDelete.length > 0 && (
-                    <button
-                      onClick={() => {
-                        setDeleteReasonType('operacion');
-                        setShowDeleteReasonModal(true);
-                      }}
-                      className="flex items-center gap-2 px-3 py-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-lg hover:bg-red-500/30 transition-all text-sm"
-                      title={`Eliminar ${selectedOperacionesToDelete.length} operación(es) seleccionada(s)`}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                      Eliminar Seleccionadas ({selectedOperacionesToDelete.length})
-                    </button>
-                  )}
-
-                  {detailTab === 'operaciones' && selectedOperacionesToDelete.length === 1 && (
-                    <button
-                      onClick={() => {
-                        const op = operacionesDelCliente.find(o => (o.operacion_id || o.folio_interno) === selectedOperacionesToDelete[0]);
-                        if (op) {
-                          setOperacionForm({
-                            fecha_operacion: op.fecha_operacion,
-                            hora_operacion: op.hora_operacion,
-                            folio_interno: op.folio_interno,
-                            tipo_operacion: op.tipo_operacion,
-                            monto: String(op.monto),
-                            moneda: op.moneda,
-                            metodo_pago: op.metodo_pago,
-                            descripcion: op.descripcion || '',
-                            referencia_factura: op.referencia_factura || '',
-                            producto_servicio: op.producto_servicio || '',
-                            banco_origen: op.banco_origen || '',
-                            numero_cuenta: op.numero_cuenta || '',
-                            notas_internas: op.notas_internas || ''
-                          });
-                          setEditingOperacionId(op.operacion_id || op.folio_interno);
-                          setView('operaciones');
-                        }
-                      }}
-                      className="flex items-center gap-2 px-3 py-2 bg-blue-500/20 text-blue-300 border border-blue-500/30 rounded-lg hover:bg-blue-500/30 transition-all text-sm"
-                      title="Editar operación seleccionada"
-                    >
-                      <Edit className="w-4 h-4" />
-                      Editar Seleccionada
-                    </button>
-                  )}
+                  {/* Botones de operaciones removidos - acciones ahora en cada línea */}
 
                   {detailTab === 'documentos' && (
                     <button
@@ -2462,7 +2508,8 @@ const KYCModule = () => {
                     </button>
                   )}
 
-                  {detailTab === 'documentos' && selectedDocumentsToDelete.length > 0 && (
+                  {/* Botón de eliminar documentos removido - acción ahora en cada línea */}
+                  {detailTab === 'documentos' && false && (
                     <button
                       onClick={() => {
                         setDeleteReasonType('documento');
@@ -2602,7 +2649,7 @@ const KYCModule = () => {
 
   // ==================== VISTA: OPERACIONES ====================
   if (view === 'operaciones' && selectedCliente) {
-    return (
+    const operacionContent = (
       <div className="space-y-6">
         <div className="flex items-center gap-3">
           <button
@@ -2743,6 +2790,51 @@ const KYCModule = () => {
                   </select>
                 </div>
               </div>
+
+              {/* Actividad Vulnerable (Producto/Servicio) - CAMPO OBLIGATORIO Art. 17 LFPIORPI */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Actividad Vulnerable (Producto/Servicio) * 
+                    <span className="text-xs text-amber-400 ml-2">(Art. 17 LFPIORPI)</span>
+                  </label>
+                  <select
+                    required
+                    value={operacionForm.actividad_vulnerable}
+                    onChange={(e) => {
+                      setOperacionForm({ ...operacionForm, actividad_vulnerable: e.target.value });
+                    }}
+                    disabled={cargandoActividades}
+                    className={`w-full rounded-lg px-4 py-2 text-white bg-gray-900/50 border border-gray-700 focus:border-emerald-500 focus:outline-none transition-colors ${
+                      cargandoActividades ? 'cursor-not-allowed opacity-75' : ''
+                    }`}
+                  >
+                    <option value="">{cargandoActividades ? 'Cargando opciones...' : 'Seleccionar actividad vulnerable...'}</option>
+                    {actividadesVulnerables.map((actividad) => (
+                      <option key={actividad.id} value={actividad.id}>
+                        {actividad.nombre}
+                      </option>
+                    ))}
+                  </select>
+                  {operacionForm.actividad_vulnerable && (
+                    <p className="text-xs text-amber-300 mt-1">
+                      ⚙️ MODO PRUEBAS: Campo editable temporalmente (normalmente bloqueado por cliente)
+                    </p>
+                  )}
+                  {!operacionForm.actividad_vulnerable && (
+                    <p className="text-xs text-red-300 mt-1">
+                      ⚠️ Selecciona una actividad vulnerable del catálogo Art. 17 LFPIORPI
+                    </p>
+                  )}
+                  {operacionForm.actividad_vulnerable && actividadesVulnerables.length > 0 && (
+                    <p className="text-xs text-emerald-400 mt-1">
+                      {actividadesVulnerables.find(a => a.id === operacionForm.actividad_vulnerable)?.aviso_uma && 
+                        `⚠️ Umbral de aviso: ${actividadesVulnerables.find(a => a.id === operacionForm.actividad_vulnerable)?.aviso_uma?.toLocaleString('es-MX')} UMA`
+                      }
+                    </p>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* SECCIÓN 2: CAMPOS OPCIONALES/ADICIONALES */}
@@ -2764,7 +2856,7 @@ const KYCModule = () => {
                 />
               </div>
 
-              {/* Referencia/Factura y Producto/Servicio */}
+              {/* Referencia/Factura y Ubicación */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-1">Referencia / Factura</label>
@@ -2777,14 +2869,20 @@ const KYCModule = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Producto / Servicio</label>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Ubicación / Localidad
+                    <span className="text-xs text-gray-400 ml-2">(Factor EBR)</span>
+                  </label>
                   <input
                     type="text"
-                    value={operacionForm.producto_servicio}
-                    onChange={(e) => setOperacionForm({ ...operacionForm, producto_servicio: e.target.value })}
+                    value={operacionForm.ubicacion_operacion}
+                    onChange={(e) => setOperacionForm({ ...operacionForm, ubicacion_operacion: e.target.value })}
                     className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-emerald-500 focus:outline-none"
-                    placeholder="Ej: Asesoría legal, Venta de software..."
+                    placeholder="Ej: CDMX, Monterrey, Guadalajara..."
                   />
+                  <p className="text-xs text-gray-400 mt-1">
+                    📍 Ubicación donde se registra la operación (afecta clasificación de riesgo)
+                  </p>
                 </div>
               </div>
 
@@ -2858,41 +2956,131 @@ const KYCModule = () => {
             </div>
 
             {/* RESULTADO */}
-            {operacionResultado && (
-              <div className="mt-6 p-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg">
-                <h4 className="font-semibold text-emerald-400 mb-3">📊 Resultado del Análisis:</h4>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Folio:</span>
-                    <span className="text-white font-mono">{operacionResultado.folio}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Clasificación PLD:</span>
-                    <span className={`font-semibold ${
-                      operacionResultado.clasificacion === 'relevante' ? 'text-yellow-400' :
-                      operacionResultado.clasificacion === 'preocupante' ? 'text-red-400' :
-                      'text-gray-400'
-                    }`}>
-                      {operacionResultado.clasificacion?.toUpperCase() || 'Normal'}
-                    </span>
-                  </div>
-                  {operacionResultado.alertas && operacionResultado.alertas.length > 0 && (
-                    <div className="pt-2 border-t border-emerald-500/30">
-                      <p className="text-gray-400 mb-1">Alertas:</p>
-                      <ul className="list-disc list-inside space-y-1">
-                        {operacionResultado.alertas.map((alerta, idx) => (
-                          <li key={idx} className="text-amber-400 text-xs">{alerta}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
+            {/* Resultado del Análisis - ahora en modal */}
           </form>
         </div>
       </div>
     );
+
+    return (
+      <>
+        {/* MODAL: RESULTADO ANÁLISIS LFPIORPI */}
+        {operacionResultado && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-900 border border-emerald-500/50 rounded-lg p-8 max-w-2xl w-full shadow-2xl">
+            <div className="flex items-center gap-3 mb-6">
+              <CheckCircle className="w-10 h-10 text-emerald-500" />
+              <div>
+                <h3 className="text-2xl font-bold text-white">
+                  {editingOperacionId ? 'Operación Actualizada' : 'Operación Creada Exitosamente'}
+                </h3>
+                <p className="text-gray-400 text-sm">Análisis LFPIORPI (Art. 17) completado</p>
+              </div>
+            </div>
+            
+            <div className="space-y-4">
+              {/* Folio */}
+              <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400 text-sm">Folio Interno:</span>
+                  <span className="text-emerald-400 font-mono text-lg font-bold">
+                    {operacionResultado.folio || 'Pendiente'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Clasificación PLD */}
+              <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400 text-sm">Clasificación PLD:</span>
+                  <span className={`font-bold text-lg uppercase px-4 py-2 rounded-lg ${
+                    operacionResultado.clasificacion === 'relevante' ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/30' :
+                    operacionResultado.clasificacion === 'preocupante' ? 'bg-red-500/20 text-red-300 border border-red-500/30' :
+                    operacionResultado.clasificacion === 'inusual' ? 'bg-orange-500/20 text-orange-300 border border-orange-500/30' :
+                    'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                  }`}>
+                    {operacionResultado.clasificacion?.toUpperCase() || 'NORMAL'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Alertas */}
+              {operacionResultado.alertas && operacionResultado.alertas.length > 0 && (
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <AlertOctagon className="w-5 h-5 text-amber-400" />
+                    <span className="text-amber-400 font-semibold">Alertas Detectadas:</span>
+                  </div>
+                  <ul className="space-y-2">
+                    {operacionResultado.alertas.map((alerta, idx) => (
+                      <li key={idx} className="flex items-start gap-2 text-amber-200 text-sm">
+                        <span className="text-amber-400 mt-0.5">•</span>
+                        <span>{alerta}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Resumen normativo */}
+              <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+                <p className="text-blue-300 text-sm">
+                  📋 <strong>Nota:</strong> Esta operación ha sido registrada y clasificada según normativa LFPIORPI.
+                  {operacionResultado.clasificacion === 'relevante' && (
+                    <span className="block mt-2 text-yellow-300">
+                      ⚠️ Requiere aviso a la UIF dentro del mes calendario.
+                    </span>
+                  )}
+                  {operacionResultado.clasificacion === 'preocupante' && (
+                    <span className="block mt-2 text-red-300">
+                      🚨 Requiere aviso a la UIF en plazo de 24 horas.
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
+
+            {/* Botón Aceptar */}
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => {
+                  // Resetear formulario y volver al expediente
+                  const timeCDMX = getTimeCDMX();
+                  setOperacionForm({
+                    fecha_operacion: timeCDMX.date,
+                    hora_operacion: timeCDMX.time,
+                    folio_interno: '',
+                    tipo_operacion: 'venta',
+                    monto: '',
+                    moneda: 'MXN',
+                    metodo_pago: 'transferencia',
+                    descripcion: '',
+                    referencia_factura: '',
+                    actividad_vulnerable: selectedCliente?.actividad_vulnerable || '',
+                    ubicacion_operacion: '',
+                    banco_origen: '',
+                    numero_cuenta: '',
+                    notas_internas: ''
+                  });
+                  setEditingOperacionId(null);
+                  setOperacionResultado(null);
+                  setView('detalle'); // Volver al expediente
+                  setDetailTab('operaciones'); // Ir a pestaña operaciones
+                }}
+                className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-all font-medium text-lg"
+              >
+                <CheckCircle className="w-5 h-5" />
+                Aceptar y Volver al Expediente
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Contenido principal */}
+      {operacionContent}
+    </>
+  );
   }
 
   return null;

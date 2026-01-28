@@ -20,6 +20,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 import logging
 import json
+import os
 
 from .utils.validador_lfpiorpi_2025 import (
     ValidadorLFPIORPI2025,
@@ -64,9 +65,12 @@ class OperacionCrearRequest(BaseModel):
     
     @validator("actividad_vulnerable")
     def validar_actividad(cls, v):
-        # Validación básica (en producción, verificar contra config)
-        if not v or v.startswith("_"):
-            raise ValueError(f"Actividad vulnerable inválida: {v}")
+        # Validación contra config_modelos.json
+        if not v or v.startswith("_") or v == "servicios_generales":
+            raise ValueError(
+                f"Actividad vulnerable inválida: {v}. "
+                f"Debe ser una actividad designada en Art. 17 LFPIORPI"
+            )
         return v
 
 
@@ -145,10 +149,71 @@ router = APIRouter(prefix="/api/operaciones", tags=["operaciones"])
 # Dependencias
 def obtener_config() -> Dict[str, Any]:
     """Obtiene configuración LFPIORPI"""
-    # En producción, cargar desde archivo/BD
-    import json
-    with open("/workspaces/tarantulahawk/app/backend/models/config_modelos.json") as f:
+    
+    # Intentar primero con ruta relativa desde el archivo actual
+    config_path = os.path.join(
+        os.path.dirname(__file__),
+        "../models/config_modelos.json"
+    )
+    
+    # Si no existe, intentar ruta absoluta
+    if not os.path.exists(config_path):
+        config_path = "/workspaces/tarantulahawk/app/backend/models/config_modelos.json"
+    
+    # Si aún no existe, intentar búsqueda dinámica
+    if not os.path.exists(config_path):
+        # Buscar desde el directorio del archivo actual hacia arriba
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        while current_dir != os.path.dirname(current_dir):  # While not at root
+            test_path = os.path.join(current_dir, "models", "config_modelos.json")
+            if os.path.exists(test_path):
+                config_path = test_path
+                break
+            current_dir = os.path.dirname(current_dir)
+    
+    logger.debug(f"Cargando configuración desde: {config_path}")
+    
+    if not os.path.exists(config_path):
+        raise FileNotFoundError(f"config_modelos.json no encontrado en: {config_path}")
+    
+    with open(config_path, 'r', encoding='utf-8') as f:
         return json.load(f)
+
+
+def obtener_actividades_dropdown() -> List[Dict[str, Any]]:
+    """
+    Retorna lista de actividades vulnerables para dropdown
+    Excluye: _general, servicios_generales
+    Formato: [{id, nombre, aviso_uma, efectivo_max_uma}, ...]
+    """
+    try:
+        config = obtener_config()
+        umbrales = config.get("lfpiorpi", {}).get("umbrales", {})
+        
+        if not umbrales:
+            logger.warning("No se encontraron umbrales en la configuración")
+            return []
+        
+        opciones = []
+        for key, value in umbrales.items():
+            # Excluir actividades no vulnerables
+            if key.startswith("_") or key == "servicios_generales":
+                continue
+            
+            if value.get("es_actividad_vulnerable", False):
+                opciones.append({
+                    "id": key,
+                    "nombre": value.get("descripcion", key),
+                    "aviso_uma": value.get("aviso_UMA", 0),
+                    "efectivo_max_uma": value.get("efectivo_max_UMA", 0)
+                })
+        
+        opciones_sorted = sorted(opciones, key=lambda x: x["id"])
+        logger.info(f"Cargadas {len(opciones_sorted)} actividades vulnerables")
+        return opciones_sorted
+    except Exception as e:
+        logger.error(f"Error obteniendo actividades dropdown: {e}", exc_info=True)
+        raise
 
 
 def obtener_validador(config: Dict = Depends(obtener_config)) -> ValidadorLFPIORPI2025:
@@ -177,12 +242,13 @@ async def validar_operacion(
     Valida una operación sin guardarla
     
     Ejecuta validación completa LFPIORPI:
-    1. Listas negras (usa datos del cliente precargados)
-    2. Límites efectivo
-    3. Umbral aviso individual
-    4. Acumulado 6 meses
-    5. Indicios procedencia ilícita
-    6. EBR del cliente
+    1. Validación actividad vulnerable contra config
+    2. Listas negras (usa datos del cliente precargados)
+    3. Límites efectivo
+    4. Umbral aviso individual
+    5. Acumulado 6 meses
+    6. Indicios procedencia ilícita
+    7. EBR del cliente
     
     IMPORTANTE: La validación de listas negras debe ejecutarse ANTES
     en el frontend usando POST /api/kyc/validar-listas.
@@ -190,6 +256,22 @@ async def validar_operacion(
     actualizados en request.cliente.
     """
     try:
+        # Paso 0: Validar actividad_vulnerable contra config
+        opciones_actividades = obtener_actividades_dropdown()
+        ids_validas = {opt["id"] for opt in opciones_actividades}
+        
+        if request.operacion.actividad_vulnerable not in ids_validas:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "campo": "actividad_vulnerable",
+                    "error": f"Actividad vulnerable inválida: {request.operacion.actividad_vulnerable}",
+                    "mensaje": "Selecciona una actividad de la lista de opciones válidas",
+                    "opciones_validas": list(ids_validas),
+                    "total_opciones": len(ids_validas)
+                }
+            )
+        
         # Paso 1: Obtener acumulado 6 meses
         acumulado_report = rastreador.obtener_acumulado_cliente(
             request.cliente.cliente_id,
@@ -381,6 +463,40 @@ async def verificar_cliente_listas(
         },
         "timestamp": datetime.now().isoformat()
     }
+
+
+@router.get("/opciones-actividades")
+async def obtener_opciones_actividades_vulnerables() -> Dict[str, Any]:
+    """
+    Retorna opciones de actividades vulnerables para dropdown del formulario
+    
+    Response:
+    {
+      "total": 16,
+      "opciones": [
+        {
+          "id": "I_juegos",
+          "nombre": "Juegos con apuesta, concursos o sorteos (Art. 17 I)",
+          "aviso_uma": 6420,
+          "efectivo_max_uma": 1605
+        },
+        ...
+      ]
+    }
+    
+    Frontend puede usar este endpoint para llenar el dropdown de "Producto/Servicio"
+    """
+    try:
+        opciones = obtener_actividades_dropdown()
+        return {
+            "total": len(opciones),
+            "opciones": opciones,
+            "timestamp": datetime.now().isoformat(),
+            "nota": "Actividades designadas en Art. 17 LFPIORPI (excluyendo servicios generales)"
+        }
+    except Exception as e:
+        logger.error(f"Error obteniendo opciones de actividades: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Error cargando configuración: {str(e)}")
 
 
 @router.get("/health")

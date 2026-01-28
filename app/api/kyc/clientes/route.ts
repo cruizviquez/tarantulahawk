@@ -37,15 +37,20 @@ export async function GET(request: NextRequest) {
     // Enriquecer cada cliente con el conteo dinámico de operaciones activas (no eliminadas)
     const clientesEnriquecidos = await Promise.all(
       (clientes || []).map(async (cliente: any) => {
-        const { count, error: countError } = await supabase
+        // Obtener operaciones no eliminadas
+        const { data: operaciones, error: opsError } = await supabase
           .from('operaciones')
-          .select('*', { count: 'exact', head: true })
+          .select('monto')
           .eq('cliente_id', cliente.cliente_id)
-          .is('eliminada', false); // Contar solo operaciones no eliminadas (soft delete)
+          .is('eliminada', false);
+
+        const num_operaciones = operaciones?.length || 0;
+        const monto_total = operaciones?.reduce((sum: number, op: { monto?: number | null }) => sum + (op.monto || 0), 0) || 0;
 
         return {
           ...cliente,
-          num_operaciones: !countError && count !== null ? count : 0
+          num_operaciones,
+          monto_total
         };
       })
     );
@@ -136,7 +141,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { tipo_persona, nombre_completo, rfc, curp, sector_actividad, origen_recursos } = body;
+    const { tipo_persona, nombre_completo, rfc, curp, sector_actividad, origen_recursos, actividad_vulnerable } = body;
 
     // Validar campos requeridos
     if (!tipo_persona || !nombre_completo || !rfc || !sector_actividad || !origen_recursos) {
@@ -152,6 +157,9 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Actividad vulnerable ya no es obligatoria en registro, puede agregarse después
+    // Pero si se proporciona, debe ser válida (no vacía)
 
     const supabase = getServiceSupabase();
 
@@ -182,6 +190,8 @@ export async function POST(request: NextRequest) {
           curp: curp ? curp.toUpperCase() : null,
           sector_actividad,
           origen_recursos,
+          actividad_vulnerable: actividad_vulnerable || null, // Art. 17 LFPIORPI
+          multi_actividad_habilitada: false, // Solo admin puede habilitar
           nivel_riesgo: 'pendiente',
           score_ebr: null,
           es_pep: false,

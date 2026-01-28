@@ -82,6 +82,20 @@ except Exception as e:
         print(f"❌ Relative import failed: {e2}")
         traceback.print_exc()
 
+# Import Operaciones router
+try:
+    from app.backend.api.operaciones_api import router as operaciones_router
+except Exception as e:
+    try:
+        from .operaciones_api import router as operaciones_router
+    except Exception as e2:
+        import traceback
+        operaciones_router = None
+        print("⚠️  WARNING: Operaciones router no disponible")
+        print(f"❌ Absolute import failed: {e}")
+        print(f"❌ Relative import failed: {e2}")
+        traceback.print_exc()
+
 # Auth helpers (separate module to avoid circular imports)
 try:
     from app.backend.api.auth_supabase import verificar_token_supabase, validar_supabase_jwt
@@ -158,6 +172,12 @@ if kyc_router:
     print("✅ KYC router incluido")
 else:
     print("⚠️  KYC router no disponible")
+
+if operaciones_router:
+    app.include_router(operaciones_router)
+    print("✅ Operaciones router incluido")
+else:
+    print("⚠️  Operaciones router no disponible")
 
 # CORS Configuration
 # In GitHub Codespaces, cross-port requests (3000 -> 8000) often require
