@@ -25,6 +25,12 @@ import {
   type FormDataToValidate
 } from '../../lib/kyc-validators';
 
+// Componentes y hooks LFPIORPI 2025
+import { useAcumuladoCliente } from '../../hooks/useValidacionLFPIORPI';
+import { AlertasLFPIORPI } from '../lfpiorpi/AlertasLFPIORPI';
+import { AcumuladoCliente } from '../lfpiorpi/AcumuladoCliente';
+import type { ValidacionLFPIORPIResponse, OperacionValidarRequest } from '../../lib/lfpiorpi-types';
+
 interface Cliente {
   cliente_id: string;
   nombre_completo: string;
@@ -249,6 +255,16 @@ const KYCModule = () => {
   const [cargandoActividades, setCargandoActividades] = useState(false);
   const [creandoOperacion, setCreandoOperacion] = useState(false);
   const [operacionResultado, setOperacionResultado] = useState<{ folio?: string; clasificacion?: string; alertas?: string[] } | null>(null);
+  
+  // Estados de validación LFPIORPI 2025
+  const [validacionActual, setValidacionActual] = useState<ValidacionLFPIORPIResponse | null>(null);
+  const [validandoTiempoReal, setValidandoTiempoReal] = useState(false);
+
+  // Hook de acumulado 6 meses - recarga automáticamente cuando cambia cliente o actividad
+  const { acumulado, cargando: cargandoAcumulado, recargar: recargarAcumulado } = useAcumuladoCliente(
+    selectedCliente?.cliente_id || null,
+    operacionForm.actividad_vulnerable || undefined
+  );
 
   // Cargar opciones de actividades vulnerables al montar el componente
   useEffect(() => {
@@ -808,10 +824,12 @@ const KYCModule = () => {
     setError(null);
     setSuccess(null);
     setOperacionResultado(null);
+    
     try {
       const token = await getAuthToken();
       if (!token) {
         setError('Por favor inicia sesión para registrar operaciones');
+        setCreandoOperacion(false);
         return;
       }
 
@@ -827,6 +845,73 @@ const KYCModule = () => {
         return;
       }
 
+      // PASO 1: Preparar request de validación LFPIORPI
+      const validacionRequest: OperacionValidarRequest = {
+        operacion: {
+          cliente_id: selectedCliente.cliente_id,
+          fecha_operacion: new Date(`${operacionForm.fecha_operacion}T${operacionForm.hora_operacion}`).toISOString(),
+          hora_operacion: operacionForm.hora_operacion,
+          actividad_vulnerable: operacionForm.actividad_vulnerable,
+          tipo_operacion: operacionForm.tipo_operacion,
+          monto: Number(operacionForm.monto),
+          moneda: operacionForm.moneda,
+          metodo_pago: operacionForm.metodo_pago,
+          producto_servicio: operacionForm.actividad_vulnerable,
+          descripcion: operacionForm.descripcion || undefined
+        },
+        cliente: {
+          cliente_id: selectedCliente.cliente_id,
+          nombre: selectedCliente.nombre_completo,
+          rfc: selectedCliente.rfc || undefined,
+          curp: selectedCliente.curp || undefined,
+          tipo_persona: selectedCliente.tipo_persona,
+          sector_actividad: selectedCliente.sector_actividad,
+          estado: 'CDMX', // TODO: agregar campo estado al cliente
+          origen_recursos: selectedCliente.origen_recursos || 'desconocido',
+          origen_recursos_documentado: !!selectedCliente.origen_recursos,
+          monto_mensual_estimado: selectedCliente.monto_total || 0,
+          en_lista_uif: selectedCliente.en_lista_uif || false,
+          en_lista_ofac: selectedCliente.en_lista_ofac || false,
+          en_lista_csnu: selectedCliente.en_lista_csnu || false,
+          en_lista_69b: selectedCliente.en_lista_69b || false,
+          es_pep: selectedCliente.es_pep || false,
+          beneficiario_controlador_identificado: selectedCliente.tipo_persona === 'moral' ? false : true
+        },
+        operaciones_historicas: operacionesDelCliente.map(op => ({
+          folio_interno: op.folio_interno,
+          cliente_id: selectedCliente.cliente_id,
+          fecha_operacion: op.fecha_operacion,
+          monto: op.monto,
+          actividad_vulnerable: op.actividad_vulnerable || 'servicios_generales'
+        }))
+      };
+
+      // PASO 2: Validar operación con LFPIORPI
+      const respValidacion = await fetch('/api/operaciones/validar', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(validacionRequest)
+      });
+
+      if (!respValidacion.ok) {
+        const errorData = await respValidacion.json().catch(() => ({}));
+        throw new Error(errorData?.detail || `Error en validación: ${respValidacion.status}`);
+      }
+
+      const validacion: ValidacionLFPIORPIResponse = await respValidacion.json();
+      setValidacionActual(validacion);
+
+      // PASO 3: Verificar si está bloqueada
+      if (validacion.debe_bloquearse) {
+        setError('⛔ OPERACIÓN BLOQUEADA: ' + validacion.recomendacion);
+        setCreandoOperacion(false);
+        return;
+      }
+
+      // PASO 4: Si pasa validación, crear operación
       const payload = {
         cliente_id: selectedCliente.cliente_id,
         fecha_operacion: operacionForm.fecha_operacion,
@@ -835,7 +920,7 @@ const KYCModule = () => {
         monto: Number(operacionForm.monto),
         moneda: operacionForm.moneda,
         metodo_pago: operacionForm.metodo_pago,
-        actividad_vulnerable: operacionForm.actividad_vulnerable, // Campo obligatorio Art. 17 LFPIORPI
+        actividad_vulnerable: operacionForm.actividad_vulnerable,
         ubicacion_operacion: operacionForm.ubicacion_operacion || null,
         descripcion: operacionForm.descripcion || null,
         referencia_factura: operacionForm.referencia_factura || null,
@@ -857,22 +942,21 @@ const KYCModule = () => {
         body: JSON.stringify(payload)
       });
 
-      const isJson = (resp.headers.get('content-type') || '').includes('application/json');
-      const data = isJson ? await resp.json() : null;
+      const data = await resp.json().catch(() => ({}));
       if (!resp.ok) {
         throw new Error(data?.error || `Error HTTP ${resp.status}`);
       }
 
-      const folio = data?.operacion?.folio_interno as string | undefined;
-      const clasif = data?.operacion?.clasificacion_pld as string | undefined;
-      const alertas = data?.operacion?.alertas as string[] | undefined;
-      setOperacionResultado({ folio, clasificacion: clasif, alertas });
+      const folio = data?.operacion?.folio_interno || data?.operacion_id;
+      setOperacionResultado({ folio, clasificacion: validacion.recomendacion, alertas: validacion.alertas });
       
-      // Recargar operaciones del cliente y lista de clientes para actualizar contador
+      setSuccess(`✅ Operación ${folio} creada exitosamente. ${validacion.recomendacion}`);
+      
+      // Recargar datos
       await cargarOperacionesDelCliente(selectedCliente.cliente_id);
-      await cargarClientes(); // Actualizar contador en lista
+      await cargarClientes();
+      await recargarAcumulado();
       
-      // NO resetear formulario - se muestra modal con resultados
     } catch (e: any) {
       setError(e?.message || 'No se pudo crear la operación');
     } finally {
@@ -961,6 +1045,79 @@ const KYCModule = () => {
       setDeleteReasonType(null);
     }
   };
+
+  // ==================== VALIDACIÓN EN TIEMPO REAL LFPIORPI ====================
+  const validarEnTiempoReal = React.useCallback(async () => {
+    if (!selectedCliente || !operacionForm.monto || Number(operacionForm.monto) <= 0 || !operacionForm.actividad_vulnerable) {
+      setValidacionActual(null);
+      return;
+    }
+
+    setValidandoTiempoReal(true);
+    try {
+      const validacionRequest: OperacionValidarRequest = {
+        operacion: {
+          cliente_id: selectedCliente.cliente_id,
+          fecha_operacion: new Date(`${operacionForm.fecha_operacion}T${operacionForm.hora_operacion}`).toISOString(),
+          hora_operacion: operacionForm.hora_operacion,
+          actividad_vulnerable: operacionForm.actividad_vulnerable,
+          tipo_operacion: operacionForm.tipo_operacion,
+          monto: Number(operacionForm.monto),
+          moneda: operacionForm.moneda,
+          metodo_pago: operacionForm.metodo_pago,
+          producto_servicio: operacionForm.actividad_vulnerable
+        },
+        cliente: {
+          cliente_id: selectedCliente.cliente_id,
+          nombre: selectedCliente.nombre_completo,
+          rfc: selectedCliente.rfc || undefined,
+          curp: selectedCliente.curp || undefined,
+          tipo_persona: selectedCliente.tipo_persona,
+          sector_actividad: selectedCliente.sector_actividad,
+          estado: 'CDMX',
+          origen_recursos: selectedCliente.origen_recursos || 'desconocido',
+          origen_recursos_documentado: !!selectedCliente.origen_recursos,
+          monto_mensual_estimado: selectedCliente.monto_total || 0,
+          en_lista_uif: selectedCliente.en_lista_uif || false,
+          en_lista_ofac: selectedCliente.en_lista_ofac || false,
+          en_lista_csnu: selectedCliente.en_lista_csnu || false,
+          en_lista_69b: selectedCliente.en_lista_69b || false,
+          es_pep: selectedCliente.es_pep || false
+        },
+        operaciones_historicas: operacionesDelCliente.map(op => ({
+          folio_interno: op.folio_interno,
+          cliente_id: selectedCliente.cliente_id,
+          fecha_operacion: op.fecha_operacion,
+          monto: op.monto,
+          actividad_vulnerable: op.actividad_vulnerable || 'servicios_generales'
+        }))
+      };
+
+      const resp = await fetch('/api/operaciones/validar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(validacionRequest)
+      });
+
+      if (resp.ok) {
+        const validacion: ValidacionLFPIORPIResponse = await resp.json();
+        setValidacionActual(validacion);
+      }
+    } catch (err) {
+      console.error('Error en validación tiempo real:', err);
+    } finally {
+      setValidandoTiempoReal(false);
+    }
+  }, [selectedCliente, operacionForm, operacionesDelCliente]);
+
+  // Ejecutar validación cuando cambien campos relevantes (debounce 500ms)
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      validarEnTiempoReal();
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [validarEnTiempoReal]);
 
   // ==================== NUEVA OPERACIÓN: Flujo con verificación de listas ====================
   const handleNuevaOperacion = async () => {
@@ -2835,6 +2992,37 @@ const KYCModule = () => {
                   )}
                 </div>
               </div>
+
+              {/* VALIDACIÓN EN TIEMPO REAL - LFPIORPI 2025 */}
+              {validandoTiempoReal && (
+                <div className="flex items-center gap-2 text-sm text-blue-400 mb-4">
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-400 border-t-transparent"></div>
+                  Validando operación LFPIORPI...
+                </div>
+              )}
+
+              {/* MOSTRAR VALIDACIÓN LFPIORPI */}
+              {validacionActual && (
+                <div className="mt-4">
+                  <AlertasLFPIORPI
+                    validacion={validacionActual}
+                    monto={Number(operacionForm.monto)}
+                    actividad={operacionForm.actividad_vulnerable}
+                    umbralUMA={actividadesVulnerables.find(a => a.id === operacionForm.actividad_vulnerable)?.aviso_uma}
+                  />
+                </div>
+              )}
+
+              {/* MOSTRAR ACUMULADO 6 MESES */}
+              {selectedCliente && operacionForm.actividad_vulnerable && (
+                <div className="mt-4">
+                  <AcumuladoCliente
+                    acumulado={acumulado}
+                    cargando={cargandoAcumulado}
+                    umbralAvisoUMA={actividadesVulnerables.find(a => a.id === operacionForm.actividad_vulnerable)?.aviso_uma}
+                  />
+                </div>
+              )}
             </div>
 
             {/* SECCIÓN 2: CAMPOS OPCIONALES/ADICIONALES */}
@@ -2931,13 +3119,23 @@ const KYCModule = () => {
             <div className="flex gap-3 pt-4">
               <button
                 type="submit"
-                disabled={creandoOperacion}
-                className="flex items-center gap-2 px-6 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-all disabled:opacity-50 font-medium"
+                disabled={creandoOperacion || (validacionActual?.debe_bloquearse === true)}
+                className={`flex items-center gap-2 px-6 py-2 rounded-lg transition-all font-medium ${
+                  validacionActual?.debe_bloquearse 
+                    ? 'bg-red-500/20 text-red-400 border border-red-500 cursor-not-allowed opacity-60'
+                    : 'bg-emerald-500 text-white hover:bg-emerald-600'
+                } disabled:opacity-50`}
+                title={validacionActual?.debe_bloquearse ? 'Operación bloqueada por LFPIORPI' : ''}
               >
                 {creandoOperacion ? (
                   <>
                     <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
                     Guardando...
+                  </>
+                ) : validacionActual?.debe_bloquearse ? (
+                  <>
+                    <XCircle className="w-5 h-5" />
+                    Operación Bloqueada
                   </>
                 ) : (
                   <>

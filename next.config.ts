@@ -9,6 +9,8 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react', '@supabase/ssr'],
   },
+  // Turbopack config for Next.js 16+
+  turbopack: {},
   webpack: (config, { dev, isServer }) => {
     // Optimize for production builds
     if (!dev && !isServer) {
