@@ -110,7 +110,7 @@ export function useAcumuladoCliente(clienteId: string | null, actividadVulnerabl
       }
 
       const data: AcumuladoCliente = await response.json();
-      console.log('[useAcumuladoCliente] Loaded successfully:', data.total_operaciones, 'operations');
+      console.log('[useAcumuladoCliente] Loaded successfully:', data.resumen.total_operaciones, 'operations');
       setAcumulado(data);
       
       return data;

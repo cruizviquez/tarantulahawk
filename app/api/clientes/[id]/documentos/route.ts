@@ -43,9 +43,33 @@ export async function GET(
       return NextResponse.json({ error: 'Error obteniendo documentos' }, { status: 500 });
     }
 
+    // Generar URLs firmadas para buckets privados (válidas por 1 hora)
+    const documentosConUrls = await Promise.all(
+      (documentos || []).map(async (doc) => {
+        // Extraer el path del archivo desde la URL almacenada
+        const urlParts = doc.archivo_url.split('/');
+        const path = urlParts[urlParts.length - 1];
+        
+        // Generar signed URL (válida por 3600 segundos = 1 hora)
+        const { data: signedUrlData, error: signedError } = await supabase.storage
+          .from(BUCKET_DOCUMENTOS)
+          .createSignedUrl(path, 3600);
+        
+        if (signedError) {
+          console.error('Error creando signed URL:', signedError);
+          return doc; // Devolver documento sin URL firmada si falla
+        }
+        
+        return {
+          ...doc,
+          archivo_url: signedUrlData?.signedUrl || doc.archivo_url
+        };
+      })
+    );
+
     return NextResponse.json({
       success: true,
-      documentos: documentos || []
+      documentos: documentosConUrls
     });
   } catch (err: any) {
     console.error('Error en GET documentos:', err);
@@ -106,7 +130,8 @@ export async function POST(
       return NextResponse.json({ error: 'No se pudo subir el archivo' }, { status: 500 });
     }
 
-    const { data: publicUrl } = supabase.storage.from(BUCKET_DOCUMENTOS).getPublicUrl(storageData?.path || path);
+    // Para buckets privados, guardamos el path y generaremos signed URLs cuando se necesiten
+    const filePath = storageData?.path || path;
 
     // Registrar en tabla documentos
     const ahora = toISOStringCDMX();
@@ -122,7 +147,7 @@ export async function POST(
         cliente_id: clienteId,
         nombre,
         tipo,
-        archivo_url: publicUrl?.publicUrl || '',
+        archivo_url: filePath, // Guardamos solo el path, no la URL pública
         fecha_carga: ahora,
         metadata: {
           size: file.size,
@@ -137,7 +162,18 @@ export async function POST(
       return NextResponse.json({ error: 'No se pudo registrar el documento' }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true, documento: inserted });
+    // Generar signed URL para el documento recién subido
+    const { data: signedUrlData } = await supabase.storage
+      .from(BUCKET_DOCUMENTOS)
+      .createSignedUrl(filePath, 3600);
+
+    return NextResponse.json({ 
+      success: true, 
+      documento: {
+        ...inserted,
+        archivo_url: signedUrlData?.signedUrl || inserted.archivo_url
+      }
+    });
   } catch (err: any) {
     console.error('Error en POST documentos:', err);
     return NextResponse.json(

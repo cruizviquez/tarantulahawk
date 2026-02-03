@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
-import TarantulaHawkWebsite from './components/TarantulaHawkWebsite';
+import TarantulaHawkWebsite from './components/TarantulaHawkWebsite_v2';
 
 export default async function Home({
   searchParams,

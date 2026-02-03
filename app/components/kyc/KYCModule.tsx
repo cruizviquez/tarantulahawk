@@ -224,7 +224,15 @@ const KYCModule = () => {
     fecha_carga: string;
   }>>([]);
   const [subiendoDocumento, setSubiendoDocumento] = useState(false);
+  const [tipoDocumentoSeleccionado, setTipoDocumentoSeleccionado] = useState('identificacion');
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [documentoEnPreview, setDocumentoEnPreview] = useState<{
+    documento_id: string;
+    nombre: string;
+    tipo: string;
+    archivo_url: string;
+    fecha_carga: string;
+  } | null>(null);
 
   // Formulario de nueva operación
   const [operacionForm, setOperacionForm] = useState(() => {
@@ -240,7 +248,7 @@ const KYCModule = () => {
       descripcion: '',
       referencia_factura: '',
       actividad_vulnerable: '', // Campo obligatorio - Producto/Servicio Art. 17 LFPIORPI
-      ubicacion_operacion: '', // Ubicación/localidad donde se registra la operación (EBR)
+      ubicacion_operacion: 'CDMX', // Default a CDMX (obligatorio - Factor EBR)
       banco_origen: '',
       numero_cuenta: '',
       notas_internas: ''
@@ -948,7 +956,18 @@ const KYCModule = () => {
       }
 
       const folio = data?.operacion?.folio_interno || data?.operacion_id;
-      setOperacionResultado({ folio, clasificacion: validacion.recomendacion, alertas: validacion.alertas });
+      
+      // Mapear flags LFPIORPI a clasificación visual
+      let clasificacion: 'preocupante' | 'relevante' | 'inusual' | 'normal' = 'normal';
+      if (validacion.debe_bloquearse) {
+        clasificacion = 'preocupante'; // Bloqueada
+      } else if (validacion.requiere_aviso_24hrs) {
+        clasificacion = 'preocupante'; // Indicios ilícitos
+      } else if (validacion.requiere_aviso_uif) {
+        clasificacion = 'relevante'; // Supera umbral
+      }
+      
+      setOperacionResultado({ folio, clasificacion, alertas: validacion.alertas });
       
       setSuccess(`✅ Operación ${folio} creada exitosamente. ${validacion.recomendacion}`);
       
@@ -1210,7 +1229,7 @@ const KYCModule = () => {
       banco_origen: '',
       numero_cuenta: '',
       notas_internas: '',
-      ubicacion_operacion: ''
+      ubicacion_operacion: 'CDMX' // Default a CDMX
     });
     setView('operaciones');
   };
@@ -1232,7 +1251,15 @@ const KYCModule = () => {
 
       const data = await resp.json();
       if (resp.ok && data.success) {
-        setOperacionesDelCliente(data.operaciones || []);
+        // 🔧 LIMPIAR: valores 'preocupante' inválidos en clasificacion_pld (legacy antes de los cambios)
+        const operacionesLimpiadas = (data.operaciones || []).map((op: any) => {
+          if (op.clasificacion_pld === 'preocupante') {
+            // null las deja sin badge (N/A) - se recalcularán en el backend en futuros accesos
+            return { ...op, clasificacion_pld: null };
+          }
+          return op;
+        });
+        setOperacionesDelCliente(operacionesLimpiadas);
         setResumenOps(data.resumen);
       }
     } catch (err) {
@@ -1258,7 +1285,7 @@ const KYCModule = () => {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('nombre', file.name);
-      formData.append('tipo', file.type || 'desconocido');
+      formData.append('tipo', tipoDocumentoSeleccionado); // Enviar tipo de documento
 
       const resp = await fetch(`/api/clientes/${selectedCliente.cliente_id}/documentos`, {
         method: 'POST',
@@ -1275,6 +1302,7 @@ const KYCModule = () => {
       }
 
       setSuccess(`Documento "${data?.documento?.nombre || file.name}" cargado`);
+      setTipoDocumentoSeleccionado('identificacion'); // Reset tipo
       await cargarDocumentosDelCliente(selectedCliente.cliente_id);
     } catch (err: any) {
       console.error('Upload documento error:', err);
@@ -2311,11 +2339,8 @@ const KYCModule = () => {
                                   ⚠️ Relevante: {resumenOps.clasificaciones.relevante}
                                 </span>
                               )}
-                              {resumenOps.clasificaciones.preocupante > 0 && (
-                                <span className="px-2 py-1 bg-red-500/20 text-red-300 text-xs rounded border border-red-500/30">
-                                  🚨 Preocupante: {resumenOps.clasificaciones.preocupante}
-                                </span>
-                              )}
+                              {/* 🔧 OCULTAR: No mostrar "Preocupante" (valor legacy incorrecto) */}
+                              {/* El EBR del cliente se muestra arriba (score_ebr) */}
                             </div>
                           </div>
                         </div>
@@ -2368,13 +2393,24 @@ const KYCModule = () => {
                               </div>
                               <div className="flex items-center gap-2">
                                 <p className="text-xs text-gray-400">PLD</p>
-                                <span className={`px-2 py-1 rounded text-xs font-semibold inline-block ${
-                                  op.clasificacion_pld === 'normal' ? 'bg-emerald-500/20 text-emerald-300' :
-                                  op.clasificacion_pld === 'relevante' ? 'bg-yellow-500/20 text-yellow-300' :
-                                  'bg-red-500/20 text-red-300'
-                                }`}>
-                                  {op.clasificacion_pld?.toUpperCase() || 'N/A'}
-                                </span>
+                                {op.clasificacion_pld === 'normal' && (
+                                  <span className="px-2 py-1 bg-emerald-500/20 text-emerald-300 text-xs rounded border border-emerald-500/30">
+                                    NORMAL
+                                  </span>
+                                )}
+                                {op.clasificacion_pld === 'relevante' && (
+                                  <span className="px-2 py-1 bg-yellow-500/20 text-yellow-300 text-xs rounded border border-yellow-500/30">
+                                    RELEVANTE
+                                  </span>
+                                )}
+                                {op.clasificacion_pld === 'inusual' && (
+                                  <span className="px-2 py-1 bg-orange-500/20 text-orange-300 text-xs rounded border border-orange-500/30">
+                                    INUSUAL
+                                  </span>
+                                )}
+                                {!op.clasificacion_pld && (
+                                  <span className="px-2 py-1 bg-gray-700/50 text-gray-400 text-xs rounded">N/A</span>
+                                )}
                               </div>
                             </div>
                             
@@ -2451,6 +2487,39 @@ const KYCModule = () => {
               <div className="bg-gray-900/30 border border-gray-700 rounded-lg p-4">
                 <p className="text-gray-400 text-sm">Cargue documentos, identidades, comprobantes de domicilio y otros archivos requeridos por normativa. El botón de carga aparece en la zona de botones inferiores.</p>
               </div>
+
+              {/* Selección de tipo de documento (NUEVO) */}
+              <div className="flex flex-col md:flex-row gap-4 items-start md:items-end bg-gray-800/30 border border-gray-700 rounded-lg p-4">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">Tipo de Documento *</label>
+                  <select
+                    value={tipoDocumentoSeleccionado}
+                    onChange={(e) => setTipoDocumentoSeleccionado(e.target.value)}
+                    className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-emerald-500 focus:outline-none"
+                  >
+                    <option value="identificacion">🪪 Identificación Oficial (INE, Pasaporte)</option>
+                    <option value="comprobante_domicilio">🏠 Comprobante de Domicilio</option>
+                    <option value="rfc">📋 RFC / Cédula Fiscal</option>
+                    <option value="acta_constitutiva">📜 Acta Constitutiva (Personas Morales)</option>
+                    <option value="estados_financieros">📊 Estados Financieros</option>
+                    <option value="comprobante_origen">💰 Comprobante de Origen de Recursos</option>
+                    <option value="certificado_beneficiarios">👥 Certificado de Beneficiarios Finales</option>
+                    <option value="poder_notarial">✍️ Poder Notarial</option>
+                    <option value="otro">📎 Otro Documento</option>
+                  </select>
+                  <p className="text-xs text-gray-400 mt-2">
+                    💡 Según LFPIORPI: Identificación e Identidad son obligatorios. Otros dependen del perfil del cliente.
+                  </p>
+                </div>
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={subiendoDocumento}
+                  className="w-full md:w-auto flex items-center justify-center gap-2 px-6 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium whitespace-nowrap"
+                >
+                  <Upload className="w-4 h-4" />
+                  {subiendoDocumento ? 'Subiendo...' : 'Agregar Documento'}
+                </button>
+              </div>
               
               {/* Listado de documentos */}
               {documentosDelCliente.length > 0 ? (
@@ -2476,15 +2545,27 @@ const KYCModule = () => {
                       
                       {/* Acciones por línea */}
                       <div className="flex items-center gap-2">
-                        <a
-                          href={doc.archivo_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="p-2 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30 transition-all"
-                          title="Ver documento"
+                        <button
+                          onClick={() => window.open(doc.archivo_url, '_blank', 'noopener,noreferrer')}
+                          className="p-2 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/30 transition-all"
+                          title="Previsualizar en nueva pestaña"
                         >
-                          📥
-                        </a>
+                          <Eye className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => {
+                            const link = document.createElement('a');
+                            link.href = doc.archivo_url;
+                            link.download = doc.nombre;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                          }}
+                          className="p-2 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30 hover:bg-blue-500/30 transition-all"
+                          title="Descargar archivo"
+                        >
+                          <Download className="w-4 h-4" />
+                        </button>
                         <button
                           onClick={() => {
                             setSelectedDocumentsToDelete([doc.documento_id]);
@@ -2653,7 +2734,7 @@ const KYCModule = () => {
 
                   {/* Botones de operaciones removidos - acciones ahora en cada línea */}
 
-                  {detailTab === 'documentos' && (
+                  {detailTab === 'documentos' && false && (
                     <button
                       onClick={handleAdministrarExpediente}
                       className="flex items-center gap-2 px-3 py-2 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-500/30 transition-all text-sm"
@@ -2862,8 +2943,8 @@ const KYCModule = () => {
                 </div>
               </div>
 
-              {/* Fecha, Hora, Tipo de Operación */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+              {/* Fecha, Hora, Tipo de Operación, Entidad Federativa */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-1">Fecha de Operación *</label>
                   <input
@@ -2884,6 +2965,9 @@ const KYCModule = () => {
                     className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-emerald-500 focus:outline-none"
                   />
                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-1">Tipo de Operación *</label>
                   <select
@@ -2899,6 +2983,55 @@ const KYCModule = () => {
                     <option value="arrendamiento">Arrendamiento</option>
                     <option value="otro">Otro</option>
                   </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-1">
+                    Entidad Federativa *
+                    <span className="text-xs text-gray-400 ml-2">(Obligatoria - Factor EBR)</span>
+                  </label>
+                  <select
+                    required
+                    value={operacionForm.ubicacion_operacion}
+                    onChange={(e) => setOperacionForm({ ...operacionForm, ubicacion_operacion: e.target.value })}
+                    className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-emerald-500 focus:outline-none"
+                  >
+                    <option value="">-- Seleccionar entidad --</option>
+                    <option value="CDMX">Ciudad de Mexico (CDMX)</option>
+                    <option value="Aguascalientes">Aguascalientes</option>
+                    <option value="Baja California">Baja California</option>
+                    <option value="Baja California Sur">Baja California Sur</option>
+                    <option value="Campeche">Campeche</option>
+                    <option value="Chiapas">Chiapas</option>
+                    <option value="Chihuahua">Chihuahua</option>
+                    <option value="Coahuila">Coahuila</option>
+                    <option value="Colima">Colima</option>
+                    <option value="Durango">Durango</option>
+                    <option value="Guanajuato">Guanajuato</option>
+                    <option value="Guerrero">Guerrero</option>
+                    <option value="Hidalgo">Hidalgo</option>
+                    <option value="Jalisco">Jalisco</option>
+                    <option value="Mexico">Estado de Mexico</option>
+                    <option value="Michoacan">Michoacan</option>
+                    <option value="Morelos">Morelos</option>
+                    <option value="Nayarit">Nayarit</option>
+                    <option value="Nuevo Leon">Nuevo Leon</option>
+                    <option value="Oaxaca">Oaxaca</option>
+                    <option value="Puebla">Puebla</option>
+                    <option value="Queretaro">Queretaro</option>
+                    <option value="Quintana Roo">Quintana Roo</option>
+                    <option value="San Luis Potosi">San Luis Potosi</option>
+                    <option value="Sinaloa">Sinaloa</option>
+                    <option value="Sonora">Sonora</option>
+                    <option value="Tabasco">Tabasco</option>
+                    <option value="Tamaulipas">Tamaulipas</option>
+                    <option value="Tlaxcala">Tlaxcala</option>
+                    <option value="Veracruz">Veracruz</option>
+                    <option value="Yucatan">Yucatan</option>
+                    <option value="Zacatecas">Zacatecas</option>
+                  </select>
+                  <p className="text-xs text-gray-400 mt-1">
+                    📍 Ubicación donde se registra la operación (afecta clasificación de riesgo)
+                  </p>
                 </div>
               </div>
 
@@ -3044,34 +3177,16 @@ const KYCModule = () => {
                 />
               </div>
 
-              {/* Referencia/Factura y Ubicación */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">Referencia / Factura</label>
-                  <input
-                    type="text"
-                    value={operacionForm.referencia_factura}
-                    onChange={(e) => setOperacionForm({ ...operacionForm, referencia_factura: e.target.value })}
-                    className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-emerald-500 focus:outline-none"
-                    placeholder="Ej: INV-2026-001, CFDI..."
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-1">
-                    Ubicación / Localidad
-                    <span className="text-xs text-gray-400 ml-2">(Factor EBR)</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={operacionForm.ubicacion_operacion}
-                    onChange={(e) => setOperacionForm({ ...operacionForm, ubicacion_operacion: e.target.value })}
-                    className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-emerald-500 focus:outline-none"
-                    placeholder="Ej: CDMX, Monterrey, Guadalajara..."
-                  />
-                  <p className="text-xs text-gray-400 mt-1">
-                    📍 Ubicación donde se registra la operación (afecta clasificación de riesgo)
-                  </p>
-                </div>
+              {/* Referencia/Factura */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-300 mb-1">Referencia / Factura</label>
+                <input
+                  type="text"
+                  value={operacionForm.referencia_factura}
+                  onChange={(e) => setOperacionForm({ ...operacionForm, referencia_factura: e.target.value })}
+                  className="w-full bg-gray-900/50 border border-gray-700 rounded-lg px-4 py-2 text-white focus:border-emerald-500 focus:outline-none"
+                  placeholder="Ej: INV-2026-001, CFDI..."
+                />
               </div>
 
               {/* Campos de Transferencia (condicional) */}
@@ -3262,6 +3377,8 @@ const KYCModule = () => {
                   });
                   setEditingOperacionId(null);
                   setOperacionResultado(null);
+                  setSuccess(null); // 🔥 Limpiar mensaje de éxito
+                  setError(null);   // 🔥 Limpiar mensajes de error
                   setView('detalle'); // Volver al expediente
                   setDetailTab('operaciones'); // Ir a pestaña operaciones
                 }}
