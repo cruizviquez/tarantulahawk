@@ -39,6 +39,14 @@ export default function BlogIndexPage() {
     <main className="min-h-screen bg-black text-white">
       <section className="pt-24 pb-12 px-6">
         <div className="max-w-6xl mx-auto">
+          <nav className="text-sm text-gray-400 mb-6 flex flex-wrap gap-2">
+            <Link href="/" className="hover:text-emerald-300 transition">
+              Inicio
+            </Link>
+            <span>›</span>
+            <span className="text-emerald-300">Blog</span>
+          </nav>
+
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600/10 border border-emerald-600/30 rounded-full mb-8">
             <span className="text-sm text-emerald-300 font-semibold">
               México • PLD • LFPIORPI • Sujetos obligados
@@ -57,6 +65,10 @@ export default function BlogIndexPage() {
             <strong>Prevención de Lavado de Dinero (PLD)</strong> en México,
             enfocadas a <strong>sujetos obligados</strong> bajo el{" "}
             <strong>Artículo 17 de la LFPIORPI</strong>.
+            <span className="block mt-3 text-gray-400">
+              <strong>LFPIORPI</strong> significa Ley Federal para la Prevención e
+              Identificación de Operaciones con Recursos de Procedencia Ilícita.
+            </span>
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4">
@@ -73,6 +85,30 @@ export default function BlogIndexPage() {
             >
               Ver artículos
             </a>
+          </div>
+        </div>
+      </section>
+
+      <section className="pb-10 px-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="bg-gray-900/50 border border-gray-800 rounded-2xl p-6">
+            <h2 className="text-xl font-bold text-emerald-300 mb-2">
+              Definiciones rápidas
+            </h2>
+            <ul className="space-y-2 text-gray-300">
+              <li>
+                <strong>LFPIORPI:</strong> marco legal mexicano que regula la
+                identificación de operaciones con recursos de procedencia ilícita.
+              </li>
+              <li>
+                <strong>PLD:</strong> procesos y controles para prevenir, detectar
+                y reportar operaciones de lavado de dinero.
+              </li>
+              <li>
+                <strong>Sujetos obligados:</strong> personas físicas o morales que
+                realizan actividades vulnerables definidas por el Art. 17.
+              </li>
+            </ul>
           </div>
         </div>
       </section>
@@ -120,17 +156,6 @@ export default function BlogIndexPage() {
             ))}
           </div>
 
-          <div className="mt-12 bg-blue-900/10 border border-blue-800/30 rounded-xl p-6">
-            <h3 className="text-lg font-bold text-cyan-300 mb-2">
-              ¿Quieres el enfoque “solo México / LFPIORPI Art. 17”?
-            </h3>
-            <p className="text-gray-300">
-              Este blog está orientado a{" "}
-              <strong>sujetos obligados y actividades vulnerables</strong> en
-              México. Si necesitas una guía o caso específico por sector,
-              podemos estructurar una página o artículo dedicado.
-            </p>
-          </div>
           <section className="mt-14">
   <div className="bg-gray-900/50 border border-gray-800 rounded-2xl p-6">
     <h3 className="text-lg font-bold text-emerald-300 mb-2">

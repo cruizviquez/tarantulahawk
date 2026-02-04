@@ -2,6 +2,8 @@
 
 import React, { useState, useMemo } from 'react';
 import Head from 'next/head';
+import OnboardingForm from './OnboardingForm';
+import AIChat from './AIChat';
 import { 
   Shield, 
   Zap, 
@@ -21,6 +23,16 @@ import {
   Eye,
   Clock
 } from 'lucide-react';
+
+type AuthError =
+  | 'timeout'
+  | 'link_expired'
+  | 'invalid_request'
+  | 'access_denied'
+  | 'server_error'
+  | 'unverified_email'
+  | 'unknown'
+  | string;
 
 const TarantulaHawkLogo = ({ className = 'w-12 h-12' }) => (
   <svg viewBox="0 0 400 400" className={className} xmlns="http://www.w3.org/2000/svg" aria-label="TarantulaHawk logo">
@@ -52,50 +64,9 @@ const TarantulaHawkLogo = ({ className = 'w-12 h-12' }) => (
   </svg>
 );
 
-interface OnboardingFormProps {
-  mode: 'signup' | 'login';
-  onClose: () => void;
-}
 
-const OnboardingForm: React.FC<OnboardingFormProps> = ({ mode, onClose }) => (
-  <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-    <div className="bg-gray-900 border border-emerald-500/30 rounded-2xl p-8 max-w-md w-full relative">
-      <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-white text-2xl">×</button>
-      <h2 className="text-2xl font-bold mb-6 text-center">
-        {mode === 'signup' ? 'Crear cuenta' : 'Iniciar sesión'}
-      </h2>
-      <form className="space-y-4">
-        <input 
-          type="email" 
-          placeholder="Email corporativo" 
-          className="w-full px-4 py-3 bg-black border border-gray-700 rounded-lg focus:border-emerald-500 focus:outline-none text-white"
-        />
-        {mode === 'signup' && (
-          <>
-            <input 
-              type="text" 
-              placeholder="Nombre completo" 
-              className="w-full px-4 py-3 bg-black border border-gray-700 rounded-lg focus:border-emerald-500 focus:outline-none text-white"
-            />
-            <input 
-              type="text" 
-              placeholder="Empresa" 
-              className="w-full px-4 py-3 bg-black border border-gray-700 rounded-lg focus:border-emerald-500 focus:outline-none text-white"
-            />
-          </>
-        )}
-        <button 
-          type="submit"
-          className="w-full py-3 bg-gradient-to-r from-blue-600 to-emerald-500 rounded-lg font-bold hover:from-emerald-600 hover:to-emerald-400 transition"
-        >
-          {mode === 'signup' ? 'Crear cuenta gratis' : 'Enviar magic link'}
-        </button>
-      </form>
-    </div>
-  </div>
-);
 
-export default function TarantulaHawkWebsite() {
+export default function TarantulaHawkWebsite({ authError }: { authError?: AuthError }) {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingMode, setOnboardingMode] = useState<'signup' | 'login'>('signup');
 
@@ -139,6 +110,7 @@ export default function TarantulaHawkWebsite() {
                   <a href="#tecnologia" className="text-gray-300 hover:text-emerald-400 transition">Tecnología</a>
                   <a href="#plataforma" className="text-gray-300 hover:text-emerald-400 transition">Plataforma</a>
                   <a href="#precio" className="text-gray-300 hover:text-emerald-400 transition">Precio</a>
+                  <a href="/blog" className="text-gray-300 hover:text-emerald-400 transition">Blog</a>
                 </nav>
 
                 <div className="flex items-center gap-3">
@@ -435,7 +407,7 @@ export default function TarantulaHawkWebsite() {
                 </div>
                 <div className="rounded-xl overflow-hidden border border-gray-800 shadow-2xl">
                   <img 
-                    src="/api/placeholder/1200/800" 
+                    src="/Dashboard.webp" 
                     alt="Dashboard TarantulaHawk"
                     className="w-full"
                   />
@@ -446,7 +418,7 @@ export default function TarantulaHawkWebsite() {
               <div className="grid md:grid-cols-2 gap-12 items-center">
                 <div className="order-2 md:order-1 rounded-xl overflow-hidden border border-gray-800 shadow-2xl">
                   <img 
-                    src="/api/placeholder/1200/800" 
+                    src="/Clientes KYC.webp" 
                     alt="Clientes y KYC"
                     className="w-full"
                   />
@@ -507,7 +479,7 @@ export default function TarantulaHawkWebsite() {
                 </div>
                 <div className="rounded-xl overflow-hidden border border-gray-800 shadow-2xl">
                   <img 
-                    src="/api/placeholder/1200/800" 
+                    src="/Editar Operaciones.webp" 
                     alt="Operaciones"
                     className="w-full"
                   />
@@ -518,7 +490,7 @@ export default function TarantulaHawkWebsite() {
               <div className="grid md:grid-cols-2 gap-12 items-center">
                 <div className="order-2 md:order-1 rounded-xl overflow-hidden border border-gray-800 shadow-2xl">
                   <img 
-                    src="/api/placeholder/1200/800" 
+                    src="/Reportes UIF.webp" 
                     alt="Reportes UIF"
                     className="w-full"
                   />
@@ -782,6 +754,56 @@ export default function TarantulaHawkWebsite() {
           </div>
         </section>
 
+        {/* BLOG & RECURSOS */}
+        <section id="blog" className="py-20 px-6 bg-gradient-to-b from-gray-900 to-black">
+          <div className="max-w-7xl mx-auto">
+            <div className="text-center mb-12">
+              <h2 className="text-4xl font-black mb-4">
+                <span className="bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
+                  Blog y Recursos PLD
+                </span>
+              </h2>
+              <p className="text-lg text-gray-400 max-w-3xl mx-auto">
+                Contenido para PR, CM y posicionamiento: normativa, mejores prácticas y guías accionables para sujetos obligados.
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-3 gap-6">
+              <a href="/blog" className="bg-gray-900/60 border border-gray-800 rounded-2xl p-6 hover:border-emerald-400/40 transition">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center">
+                    <FileText className="w-5 h-5 text-emerald-400" />
+                  </div>
+                  <h3 className="text-lg font-bold">Centro de recursos</h3>
+                </div>
+                <p className="text-gray-400">Noticias, guías y checklists para cumplimiento LFPIORPI.</p>
+                <span className="inline-flex items-center gap-2 text-emerald-400 mt-4 text-sm">Ver Blog <ChevronRight className="w-4 h-4" /></span>
+              </a>
+
+              <a href="/blog/que-exige-articulo-17-lfpiorpi" className="bg-gray-900/60 border border-gray-800 rounded-2xl p-6 hover:border-emerald-400/40 transition">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-500/20 flex items-center justify-center">
+                    <Shield className="w-5 h-5 text-blue-400" />
+                  </div>
+                  <h3 className="text-lg font-bold">Artículo 17 LFPIORPI</h3>
+                </div>
+                <p className="text-gray-400">Qué exige la ley y cómo cumplir con evidencia y procesos claros.</p>
+                <span className="inline-flex items-center gap-2 text-emerald-400 mt-4 text-sm">Leer artículo <ChevronRight className="w-4 h-4" /></span>
+              </a>
+
+              <div className="bg-gray-900/60 border border-gray-800 rounded-2xl p-6">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center">
+                    <TrendingUp className="w-5 h-5 text-purple-400" />
+                  </div>
+                  <h3 className="text-lg font-bold">SEO & PR listos</h3>
+                </div>
+                <p className="text-gray-400">Contenido enfocado a búsquedas en Google para impulsar autoridad y demanda.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* CTA FINAL */}
         <section className="py-20 px-6 bg-gradient-to-r from-emerald-600 to-blue-600">
           <div className="max-w-4xl mx-auto text-center">
@@ -828,7 +850,7 @@ export default function TarantulaHawkWebsite() {
                 <h4 className="font-bold mb-3">Empresa</h4>
                 <ul className="space-y-2 text-sm text-gray-400">
                   <li><a href="#" className="hover:text-emerald-400 transition">Sobre Nosotros</a></li>
-                  <li><a href="#" className="hover:text-emerald-400 transition">Blog</a></li>
+                  <li><a href="/blog" className="hover:text-emerald-400 transition">Blog</a></li>
                   <li><a href="#" className="hover:text-emerald-400 transition">Contacto</a></li>
                 </ul>
               </div>
@@ -848,6 +870,8 @@ export default function TarantulaHawkWebsite() {
             </div>
           </div>
         </footer>
+
+        <AIChat language="es" />
       </div>
     </>
   );

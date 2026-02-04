@@ -451,14 +451,14 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
 
             {currentMode === 'signup' && (
               <div>
-                <label className="text-gray-400 text-sm">Giro de Negocio</label>
+                <label className="text-gray-400 text-sm">Actividad Vulnerable / Giro de Negocio</label>
                 <select
                   value={giro}
                   onChange={e => setGiro(e.target.value)}
                   required
                   className="w-full rounded-md bg-gray-800 border border-gray-700 text-white p-3 focus:border-emerald-500 outline-none"
                 >
-                  <option value="">Selecciona el giro de negocio</option>
+                  <option value="">Selecciona la actividad vulnerable o giro</option>
                   <option>Venta de vehículos</option>
                   <option>Inmobiliaria</option>
                   <option>Casas de cambio</option>
@@ -467,7 +467,7 @@ export default function OnboardingForm({ onClose, mode = 'signup' }: OnboardingF
                   <option>Servicios profesionales</option>
                   <option>Activos virtuales / Cripto</option>
                 </select>
-                <p className="text-gray-500 text-xs mt-1">Selecciona el giro que mejor describa tu negocio. Este dato es obligatorio.</p>
+                <p className="text-gray-500 text-xs mt-1">Selecciona la actividad que mejor describa tu negocio. Este dato es obligatorio.</p>
               </div>
             )}
             

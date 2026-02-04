@@ -25,7 +25,7 @@ export const metadata: Metadata = {
 const faqs = [
   {
     q: "¿A quién aplica el Artículo 17 de la LFPIORPI?",
-    a: "Aplica a sujetos obligados que realizan actividades vulnerables conforme a los supuestos del Artículo 17. La aplicabilidad concreta depende de la actividad y condiciones específicas.",
+    a: "Aplica a personas físicas o morales que realizan actividades vulnerables listadas en el Artículo 17 y, según el caso, cumplen umbrales o condiciones específicas. La aplicabilidad concreta depende del giro y del supuesto regulatorio.",
   },
   {
     q: "¿Qué obligaciones clave se suelen implementar en la práctica?",
@@ -127,6 +127,15 @@ export default function PostArticulo17() {
             documentarlo y cómo prepararse para auditoría/verificación.
           </p>
 
+          <p className="text-gray-400 mb-8">
+            <strong>LFPIORPI</strong> significa Ley Federal para la Prevención e
+            Identificación de Operaciones con Recursos de Procedencia Ilícita.
+            <span className="block">
+              <strong>PLD</strong> se refiere a la prevención, detección y
+              reporte de operaciones de lavado de dinero.
+            </span>
+          </p>
+
           <div className="flex flex-col sm:flex-row gap-3 mb-10">
             <Link
               href="/blog"
@@ -143,8 +152,21 @@ export default function PostArticulo17() {
             </a>
           </div>
 
-          {/* Resumen / TL;DR */}
           <section className="bg-gray-900/50 border border-gray-800 rounded-2xl p-6 mb-10">
+            <h2 className="text-lg font-bold text-emerald-300 mb-3">Contenido</h2>
+            <ul className="grid sm:grid-cols-2 gap-2 text-gray-300">
+              <li><a href="#resumen" className="hover:text-emerald-300 transition">Resumen rápido</a></li>
+              <li><a href="#aplica" className="hover:text-emerald-300 transition">¿A quién aplica?</a></li>
+              <li><a href="#obligaciones" className="hover:text-emerald-300 transition">Obligaciones clave</a></li>
+              <li><a href="#alto-riesgo" className="hover:text-emerald-300 transition">Sectores de alto riesgo</a></li>
+              <li><a href="#errores" className="hover:text-emerald-300 transition">Errores comunes</a></li>
+              <li><a href="#sistema-pld" className="hover:text-emerald-300 transition">Cómo ayuda un sistema PLD</a></li>
+              <li><a href="#faq" className="hover:text-emerald-300 transition">Preguntas frecuentes</a></li>
+            </ul>
+          </section>
+
+          {/* Resumen / TL;DR */}
+          <section id="resumen" className="bg-gray-900/50 border border-gray-800 rounded-2xl p-6 mb-10">
             <h2 className="text-xl font-bold text-emerald-300 mb-2">
               Resumen rápido
             </h2>
@@ -163,7 +185,7 @@ export default function PostArticulo17() {
           </section>
 
           {/* A quién aplica */}
-          <section className="mb-10">
+          <section id="aplica" className="mb-10">
             <h2 className="text-2xl md:text-3xl font-black mb-3">
               ¿A quién aplica el Artículo 17?
             </h2>
@@ -194,7 +216,7 @@ export default function PostArticulo17() {
           </section>
 
           {/* Obligaciones */}
-          <section className="mb-10">
+          <section id="obligaciones" className="mb-10">
             <h2 className="text-2xl md:text-3xl font-black mb-3">
               Obligaciones clave que se implementan en la práctica
             </h2>
@@ -240,7 +262,7 @@ export default function PostArticulo17() {
           </section>
 
           {/* Alto riesgo */}
-          <section className="mb-10">
+          <section id="alto-riesgo" className="mb-10">
             <h2 className="text-2xl md:text-3xl font-black mb-3">
               Sectores frecuentemente tratados como de alto riesgo (ejemplos)
             </h2>
@@ -262,7 +284,7 @@ export default function PostArticulo17() {
           </section>
 
           {/* Errores comunes */}
-          <section className="mb-10">
+          <section id="errores" className="mb-10">
             <h2 className="text-2xl md:text-3xl font-black mb-3">
               Errores comunes (y cómo evitarlos)
             </h2>
@@ -300,7 +322,7 @@ export default function PostArticulo17() {
           </section>
 
           {/* Soft sell + link a landing */}
-          <section className="mb-10">
+          <section id="sistema-pld" className="mb-10">
             <h2 className="text-2xl md:text-3xl font-black mb-3">
               ¿Cómo puede ayudarte un sistema PLD?
             </h2>
@@ -342,7 +364,7 @@ export default function PostArticulo17() {
 
 
           {/* FAQ */}
-          <section className="mt-14">
+          <section id="faq" className="mt-14">
             <h2 className="text-2xl md:text-3xl font-black mb-4">
               Preguntas frecuentes
             </h2>
